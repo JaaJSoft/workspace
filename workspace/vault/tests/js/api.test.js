@@ -45,12 +45,14 @@ test('listFolders and listTags scope themselves to one vault', async () => {
   assert.equal(calls[1].url, `/api/v1/vault/tags?vault=${VAULT}`);
 });
 
-test('deleteFolder posts its entries rather than issuing a DELETE', () => {
+test('deleteFolder posts its subfolders and entries rather than issuing a DELETE', () => {
   const { api, calls } = withFetch();
-  api.deleteFolder(FOLDER, []);
+  api.deleteFolder(FOLDER, ['f-2'], []);
   assert.equal(calls[0].options.method, 'POST');
   assert.ok(calls[0].url.endsWith('/delete'));
-  assert.deepStrictEqual(JSON.parse(calls[0].options.body), { entries: [] });
+  assert.deepStrictEqual(
+    JSON.parse(calls[0].options.body), { subfolders: ['f-2'], entries: [] },
+  );
 });
 
 test('updateEntry replaces rather than patches', () => {

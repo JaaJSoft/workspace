@@ -72,7 +72,13 @@ class FolderDeleteTests(TestCase):
         return {"uuid": str(entry.uuid), "metadata_sig": sign(self.signer, payload)}
 
     def _post(self, folder, body):
+        body.setdefault("subfolders", [])
         return self.client.post(self.url(folder), body, "application/json")
+
+    def _child(self, parent, name="AQIF"):
+        return VaultFolder.objects.create(
+            vault=self.vault, parent=parent, encrypted_name=name, metadata_sig="AQ"
+        )
 
     # --- the happy path ---------------------------------------------------
 
@@ -176,17 +182,64 @@ class FolderDeleteTests(TestCase):
         response = self._post(self.folder, {"entries": []})
         self.assertIn(response.status_code, (302, 403))
 
-    def test_a_folder_that_still_has_children_is_refused(self):
-        """Deleting it would CASCADE the children away - folders the client
-        never named, whose own signatures would vanish with them - and, when a
-        child still holds entries, the RESTRICT on VaultEntry.folder turns that
-        cascade into a 500."""
-        child = VaultFolder.objects.create(
-            vault=self.vault,
-            parent=self.folder,
-            encrypted_name="AQIF",
-            metadata_sig="AQ",
+    # --- subfolders -------------------------------------------------------
+
+    def test_a_whole_subtree_goes_in_one_request(self):
+        child = self._child(self.folder)
+        grandchild = self._child(child, "AQIG")
+        deeper = [self._entry(child, 5), self._entry(grandchild, 6)]
+        moved = self.entries + deeper
+        body = {
+            "subfolders": [str(child.uuid), str(grandchild.uuid)],
+            "entries": [self.resigned(entry) for entry in moved],
+        }
+        response = self._post(self.folder, body)
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(
+            VaultFolder.objects.filter(
+                uuid__in=[self.folder.uuid, child.uuid, grandchild.uuid]
+            ).exists()
         )
+        self.assertTrue(
+            VaultFolder.objects.filter(uuid=self.empty_folder.uuid).exists()
+        )
+        for entry in moved:
+            entry.refresh_from_db()
+            self.assertIsNone(entry.folder_id)
+
+    def test_one_bad_signature_deep_in_the_subtree_leaves_every_level_untouched(self):
+        """A failure on the deepest level must not leave the levels above it
+        deleted, nor the levels below it emptied."""
+        child = self._child(self.folder)
+        grandchild = self._child(child, "AQIG")
+        deep_entry = self._entry(grandchild, 6)
+        body = {
+            "subfolders": [str(child.uuid), str(grandchild.uuid)],
+            "entries": [self.resigned(entry) for entry in self.entries]
+            + [
+                {
+                    "uuid": str(deep_entry.uuid),
+                    "metadata_sig": self.some_other_signature,
+                }
+            ],
+        }
+        response = self._post(self.folder, body)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            VaultFolder.objects.filter(
+                uuid__in=[self.folder.uuid, child.uuid, grandchild.uuid]
+            ).count(),
+            3,
+        )
+        for entry in [*self.entries, deep_entry]:
+            entry.refresh_from_db()
+            self.assertIsNotNone(entry.folder_id)
+            self.assertEqual(entry.metadata_sig, "AQ")
+
+    def test_a_subfolder_the_client_did_not_name_is_refused(self):
+        """Deleting the folder would CASCADE the child away - a folder the
+        client was never shown, whose own signature would vanish with it."""
+        child = self._child(self.folder)
         body = {"entries": [self.resigned(entry) for entry in self.entries]}
         response = self._post(self.folder, body)
         self.assertEqual(response.status_code, 409)
@@ -196,17 +249,28 @@ class FolderDeleteTests(TestCase):
             entry.refresh_from_db()
             self.assertEqual(entry.folder_id, self.folder.pk)
 
-    def test_a_child_holding_entries_is_refused_rather_than_raising(self):
-        child = VaultFolder.objects.create(
-            vault=self.vault,
-            parent=self.folder,
-            encrypted_name="AQIF",
-            metadata_sig="AQ",
-        )
-        self._entry(child, 7)
-        body = {"entries": [self.resigned(entry) for entry in self.entries]}
+    def test_naming_a_folder_outside_the_subtree_is_refused(self):
+        body = {
+            "subfolders": [str(self.empty_folder.uuid)],
+            "entries": [self.resigned(entry) for entry in self.entries],
+        }
         response = self._post(self.folder, body)
         self.assertEqual(response.status_code, 409)
+        self.assertTrue(
+            VaultFolder.objects.filter(uuid=self.empty_folder.uuid).exists()
+        )
+        self.assertTrue(VaultFolder.objects.filter(uuid=self.folder.uuid).exists())
+
+    def test_a_subfolder_entry_left_out_is_refused_rather_than_raising(self):
+        child = self._child(self.folder)
+        self._entry(child, 7)
+        body = {
+            "subfolders": [str(child.uuid)],
+            "entries": [self.resigned(entry) for entry in self.entries],
+        }
+        response = self._post(self.folder, body)
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultFolder.objects.filter(uuid=child.uuid).exists())
 
     def test_an_entry_that_arrives_after_the_check_answers_409_not_500(self):
         """The occupants are read inside the transaction, but a concurrent

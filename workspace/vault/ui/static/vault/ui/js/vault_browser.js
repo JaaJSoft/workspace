@@ -1677,7 +1677,7 @@ window.vaultBrowser = (function () {
         await this.load();
         if (failed) {
           this.error =
-            'The folder was not deleted. Each of its levels is written whole or not at all, so nothing is half-moved.';
+            'The folder was not deleted. Its entries and subfolders are unchanged - nothing was left half-moved.';
         }
       },
 

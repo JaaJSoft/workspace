@@ -26,8 +26,9 @@ from wsgidav.lock_man.lock_manager import LockManager
 
 from workspace.common.logging import scrub
 from workspace.files.models import File
-from workspace.files.queries import accessible_files_q
 from workspace.files.services.locking import conflicting_lock
+
+from .resources import resolve_path
 
 logger = logging.getLogger(__name__)
 
@@ -108,17 +109,7 @@ def _dav_file(url, principal):
     path = unquote(url).strip("/")
     if not path:
         return None, user
-    file_obj = (
-        File.objects.filter(
-            accessible_files_q(user),
-            path=path,
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-        )
-        .select_related("locked_by")
-        .first()
-    )
-    return file_obj, user
+    return resolve_path(user, path.split("/"), node_type=File.NodeType.FILE), user
 
 
 def _expiry(lock):

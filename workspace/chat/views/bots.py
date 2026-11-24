@@ -12,6 +12,8 @@ from workspace.common.task_priority import INTERACTIVE_PRIORITY
 
 from ..models import Message
 from ..services.conversations import get_active_membership, is_bot_conversation
+from ..services.deletion import remove_message
+from ..services.notifications import notify_conversation_members
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +63,8 @@ class BotRetryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        target.delete()
+        remove_message(target)
+        notify_conversation_members(conversation_id, exclude_user=request.user)
 
         _trigger_bot_response(conversation_id, last_user_msg, request.user)
         return Response({"status": "ok"})

@@ -111,7 +111,7 @@
         </div>
       </div>
 
-      <!-- Groups: select one or more of the user's groups -->
+      <!-- Groups: any group of the instance, at least one of the user's own -->
       <div class="fieldset" x-show="newConvMode === 'groups'" x-cloak>
         <label class="fieldset-legend">
           <span
@@ -127,6 +127,9 @@
           </template>
         </div>
         {% include "ui/partials/group_selector.html" with on_select_event="chat-new-conv-group-selected" local_source="selectableGroups()" %}
+        <p class="text-xs text-base-content/60 mt-1.5">
+          {% translate "The members of the conversation follow these groups. Include at least one you belong to." %}
+        </p>
       </div>
 
       <!-- Group name (shown when 2+ users, or always in Groups mode) -->
@@ -163,7 +166,7 @@
           type="button"
           class="btn btn-module btn-sm gap-1.5"
           @click="createConversation()"
-          :disabled="(newConvMode === 'groups' ? selectedGroups.length === 0 : selectedUsers.length === 0) || creatingConversation"
+          :disabled="(newConvMode === 'groups' ? !hasOwnGroupSelected() : selectedUsers.length === 0) || creatingConversation"
         >
           <template x-if="!creatingConversation">
             <span class="flex items-center gap-1.5">

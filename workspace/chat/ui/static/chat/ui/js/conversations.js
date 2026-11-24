@@ -15,6 +15,14 @@ function chatNotificationLevelLabel(level) {
 }
 window.chatNotificationLevelLabel = chatNotificationLevelLabel;
 
+// The groups a conversation can follow, each of the user's own carrying the
+// hint the group picker shows beside a name.
+function markOwnChatGroups(groups) {
+  const hint = pgettext('group the user belongs to', 'Member');
+  return groups.map(g => (g.mine ? { ...g, hint } : g));
+}
+window.markOwnChatGroups = markOwnChatGroups;
+
 window.chatConversationsMixin = function chatConversationsMixin() {
   // Read the URL-targeted conversation UUID synchronously from the embedded
   // JSON so the first Alpine binding pass already knows we're going to have
@@ -46,7 +54,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     userSearchLoading: false,
     userSearchShowDropdown: false,
     userSearchHighlight: -1,
-    myGroups: [],
+    chatGroups: [],
     selectedGroups: [],
     newConvMode: 'people',
 
@@ -416,7 +424,13 @@ window.chatConversationsMixin = function chatConversationsMixin() {
 
     selectableGroups() {
       const selected = new Set(this.selectedGroups.map(g => g.id));
-      return this.myGroups.filter(g => !selected.has(g.id));
+      return this.chatGroups.filter(g => !selected.has(g.id));
+    },
+
+    // Members follow the groups, so a conversation linked to none of the
+    // creator's would not have its creator in it: the server refuses it.
+    hasOwnGroupSelected() {
+      return this.selectedGroups.some(g => g.mine);
     },
 
     addSelectedGroup(group) {
@@ -430,7 +444,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
 
     async createConversation() {
       const fromGroups = this.newConvMode === 'groups';
-      if (fromGroups ? this.selectedGroups.length === 0 : this.selectedUsers.length === 0) return;
+      if (fromGroups ? !this.hasOwnGroupSelected() : this.selectedUsers.length === 0) return;
       this.creatingConversation = true;
 
       let payload;

@@ -6,7 +6,8 @@
   Parameters:
     - on_select_event: Custom event name dispatched when a group is selected (required)
     - local_source: Alpine expression (evaluated in the parent scope)
-      returning a list of {id, name} (required)
+      returning a list of {id, name} (required). An item may carry a
+      hint, shown after its name (what sets it apart: the user is a member)
     - placeholder: Placeholder text for the search input (default: "Search groups...")
 
   Usage:
@@ -54,6 +55,11 @@
           >
             <i data-lucide="users" class="w-4 h-4 opacity-60"></i>
             <span class="font-medium text-sm" x-text="group.name"></span>
+            <span
+              class="ml-auto text-xs text-base-content/50"
+              x-show="group.hint"
+              x-text="group.hint"
+            ></span>
           </button>
         </li>
       </template>

@@ -2,7 +2,9 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import Group
 from django.db.models import OuterRef, Prefetch, Subquery, prefetch_related_objects
+from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
@@ -37,9 +39,15 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.users.services.settings import get_setting
 
 
-def _user_chat_groups(user):
-    """Groups the user can attach conversations to, shaped for json_script."""
-    return [{"id": g.pk, "name": g.name} for g in user.groups.order_by("name")]
+def _chat_groups(user):
+    """Every group a conversation can follow, the user's own first, shaped for
+    json_script. A conversation needs one of the user's own (group_sync)."""
+    mine = set(user.groups.values_list("pk", flat=True))
+    groups = [
+        {"id": pk, "name": name, "mine": pk in mine}
+        for pk, name in Group.objects.order_by(Lower("name")).values_list("pk", "name")
+    ]
+    return sorted(groups, key=lambda group: not group["mine"])
 
 
 def _display(user):
@@ -201,7 +209,7 @@ def chat_view(request, conversation_uuid=None):
             ),
             "chat_prefs": _chat_prefs(request.user),
             "message_animations": MESSAGE_ANIMATIONS,
-            "chat_groups": _user_chat_groups(request.user),
+            "chat_groups": _chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
     )
@@ -254,7 +262,7 @@ def chat_room_view(request, conversation_uuid):
             "chat_prefs": _chat_prefs(request.user),
             "message_animations": MESSAGE_ANIMATIONS,
             "current_user_id": request.user.id,
-            "chat_groups": _user_chat_groups(request.user),
+            "chat_groups": _chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
     )

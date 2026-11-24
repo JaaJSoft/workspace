@@ -1,10 +1,16 @@
 """Bucket totals: what counts, against which bucket, and who agrees on it."""
 
+from unittest import skipUnless
+
+from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.checks import run_checks
 from django.core.files.base import ContentFile
+from django.db import connection
 from django.db.models import Sum
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from workspace.files.models import (
@@ -241,3 +247,31 @@ class GaugeContextTests(TestCase):
         response = self.client.get(reverse("dashboard:index"))
         self.assertEqual(response.context["storage_quota"], 0)
         self.assertEqual(response.context["storage_percent"], 100)
+
+
+@skipUnless(connection.vendor == "sqlite", "SQLite query plans")
+class BucketUsageIndexTests(TestCase):
+    """The bucket sums read an index alone, never the table, on SQLite too."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="usage", password="pw")
+        self.group = Group.objects.create(name="Design")
+
+    def _plan(self, call):
+        with CaptureQueriesContext(connection) as captured:
+            call()
+        with connection.cursor() as cursor:
+            cursor.execute("EXPLAIN QUERY PLAN " + captured.captured_queries[-1]["sql"])
+            return " ".join(row[-1] for row in cursor.fetchall())
+
+    def test_personal_usage_is_answered_from_its_index(self):
+        plan = self._plan(lambda: quota.personal_usage(self.user))
+        self.assertIn("COVERING INDEX file_personal_usage", plan)
+
+    def test_group_usage_is_answered_from_its_index(self):
+        plan = self._plan(lambda: quota.group_usage(self.group))
+        self.assertIn("COVERING INDEX file_group_usage", plan)
+
+    def test_no_index_relies_on_include(self):
+        warnings = run_checks(app_configs=[apps.get_app_config("files")])
+        self.assertEqual([w for w in warnings if w.id == "models.W040"], [])

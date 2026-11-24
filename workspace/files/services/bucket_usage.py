@@ -3,8 +3,7 @@
 ``quota.personal_usage`` / ``quota.group_usage`` sum ``size`` over every file
 row of a bucket. That is the definition, and the admin and the settings page
 keep reading it; but a quota check runs on every write, and a sum whose cost
-grows with the bucket makes a bulk import quadratic - SQLite ignores the
-covering index's ``INCLUDE`` and reads one row per file.
+grows with the bucket makes a bulk import quadratic, even read from an index.
 
 ``StorageUsage`` holds the same total, one row per bucket. Every write that
 changes a bucket's total moves the row by the difference, inside the

@@ -303,25 +303,24 @@ class File(models.Model):
             models.Index(fields=["owner", "deleted_at"], name="file_owner_del_idx"),
             models.Index(fields=["group", "deleted_at"], name="file_group_del_idx"),
             models.Index(fields=["locked_by", "lock_expires_at"], name="file_lock_idx"),
+            # `size` is a key column of the three indexes below, not INCLUDE
+            # (which SQLite ignores): SUM(size) reads the index alone on both.
             models.Index(
-                fields=["owner", "deleted_at", "node_type"],
-                include=["size"],
+                fields=["owner", "deleted_at", "node_type", "size"],
                 name="file_owner_del_type_size",
             ),
             # Serves quota.personal_usage: SUM(size) over one owner's live and
             # trashed personal files. Partial on `group IS NULL` because the
-            # bucket excludes group files, and covering on `size` so the sum
-            # never touches the heap (PostgreSQL; SQLite ignores INCLUDE).
+            # bucket excludes group files; `group`, always NULL here, is in
+            # the key because SQLite only reads columns an index holds.
             models.Index(
-                fields=["owner", "node_type"],
-                include=["size"],
+                fields=["owner", "node_type", "size", "group"],
                 condition=Q(group__isnull=True),
                 name="file_personal_usage",
             ),
             # Same, for quota.group_usage.
             models.Index(
-                fields=["group", "node_type"],
-                include=["size"],
+                fields=["group", "node_type", "size"],
                 condition=Q(group__isnull=False),
                 name="file_group_usage",
             ),

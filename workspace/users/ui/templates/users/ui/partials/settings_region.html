@@ -15,7 +15,7 @@
       <p class="text-sm text-base-content/60 mt-1">{% translate "The language of the interface. The page reloads to apply it." %}</p>
       <div class="mt-4">
         <select
-          class="select w-full max-w-xs"
+          class="select select-sm w-full max-w-xs"
           x-model="language"
           @change="save()"
           :disabled="saving"
@@ -45,7 +45,7 @@
       <p class="text-sm text-base-content/60 mt-1">{% translate "Dates and times across the app are shown in this timezone." %}</p>
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <select
-          class="select w-full max-w-xs"
+          class="select select-sm w-full max-w-xs"
           x-model="tz"
           @change="save()"
           aria-label="{% translate 'Timezone' %}"
@@ -80,7 +80,7 @@
       <p class="text-sm text-base-content/60 mt-1">{% translate "How times of day are written across the app." %}</p>
       <div class="mt-4">
         <select
-          class="select w-full max-w-xs"
+          class="select select-sm w-full max-w-xs"
           x-model="format"
           @change="save()"
           aria-label="{% translate 'Time format' %}"

@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Rows of the menu a vault carries, in the order the endpoint returned them.
   No fallback list: a vault the caller cannot act on comes back empty, and an
@@ -19,6 +20,6 @@
     </li>
   </template>
   <li x-show="!vaultActionsFor(vaultMenu.vault).length">
-    <span class="opacity-50">Nothing can be done with this vault</span>
+    <span class="opacity-50">{% translate "Nothing can be done with this vault" %}</span>
   </li>
 </ul>

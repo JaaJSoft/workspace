@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   The body of the sidebar's preferences panel, in the shell every module's
   sidebar shares. What sits in it here is not cosmetic: the idle delay had no
@@ -6,21 +7,21 @@
 {% endcomment %}
 <div class="space-y-3">
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Lock after</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Lock after" %}</label>
     <select
       class="select select-sm w-full"
       :value="prefs.lockAfterMinutes"
       @change="updatePref('lock_after_minutes', parseInt($event.target.value))"
     >
-      <option value="1">1 minute</option>
-      <option value="5">5 minutes</option>
-      <option value="15">15 minutes</option>
-      <option value="60">1 hour</option>
+      <option value="1">{% translate "1 minute" %}</option>
+      <option value="5">{% translate "5 minutes" %}</option>
+      <option value="15">{% translate "15 minutes" %}</option>
+      <option value="60">{% translate "1 hour" %}</option>
     </select>
   </div>
   <hr class="border-base-300" />
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Default sort</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Default sort" %}</label>
     <select
       class="select select-sm w-full"
       :value="prefs.defaultSort"
@@ -34,10 +35,12 @@
   <template x-if="secretRemembered">
     <div>
       <hr class="border-base-300 mb-3" />
-      <label class="text-sm text-base-content/60 block mb-1">This device</label>
+      <label class="text-sm text-base-content/60 block mb-1">{% translate "This device" %}</label>
       <p class="text-xs text-base-content/50 mb-2">
-        Your recovery key is remembered here. Anything that can run code on
-        this page can read it.
+        {% blocktranslate trimmed %}
+          Your recovery key is remembered here. Anything that can run code on
+          this page can read it.
+        {% endblocktranslate %}
       </p>
       <button
         type="button"
@@ -45,7 +48,7 @@
         @click="forgetDevice()"
       >
         <i data-lucide="trash-2" class="w-4 h-4"></i>
-        Forget the key
+        {% translate "Forget the key" %}
       </button>
     </div>
   </template>

@@ -1,3 +1,6 @@
+{% load i18n %}
+{% translate "Remembered on this device" as key_remembered %}
+{% translate "Needed on this device, alongside your password" as key_needed %}
 {% comment %}
   The gate in front of the vault. It renders against any component
   spreading vaultUnlockMixin(), which is what keeps the wording of a failed
@@ -15,20 +18,22 @@
         <i data-lucide="lock" class="w-5 h-5"></i>
       </span>
       <div>
-        <h1 class="text-xl font-semibold">Unlock your vaults</h1>
+        <h1 class="text-xl font-semibold">{% translate "Unlock your vaults" %}</h1>
         <p class="text-sm text-base-content/60">
-          Encrypted on this device. Your master password never leaves this
-          browser.
+          {% blocktranslate trimmed %}
+            Encrypted on this device. Your master password never leaves this
+            browser.
+          {% endblocktranslate %}
         </p>
       </div>
     </div>
-    <inline-alert type="success" message="Password changed - unlock with your new password." x-show="passwordChangedNotice" x-cloak></inline-alert>
+    <inline-alert type="success" message="{% translate "Password changed - unlock with your new password." %}" x-show="passwordChangedNotice" x-cloak></inline-alert>
     <inline-alert type="error" x-show="error" x-cloak>
     <span x-text="error"></span>
     </inline-alert>
     <form @submit.prevent="unlock()">
       <label class="fieldset">
-        <span class="text-sm">Master password</span>
+        <span class="text-sm">{% translate "Master password" %}</span>
         <input
           type="password"
           class="input w-full"
@@ -57,10 +62,10 @@
           class="flex items-center gap-2 py-3 cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden"
         >
           <i data-lucide="key-round" class="w-4 h-4 shrink-0 text-base-content/50"></i>
-          <span class="font-medium">Recovery key</span>
+          <span class="font-medium">{% translate "Recovery key" %}</span>
           <span
             class="text-xs text-base-content/50 truncate"
-            x-text="secretRemembered ? 'Remembered on this device' : 'Needed on this device, alongside your password'"
+            x-text="secretRemembered ? '{{ key_remembered|escapejs }}' : '{{ key_needed|escapejs }}'"
           ></span>
           <i
             data-lucide="chevron-down"
@@ -73,8 +78,8 @@
               <input
                 type="text"
                 class="input font-mono placeholder:font-sans w-full"
-                aria-label="Recovery key"
-                placeholder="From your emergency kit. Dashes and case are ignored."
+                aria-label="{% translate "Recovery key" %}"
+                placeholder="{% translate "From your emergency kit. Dashes and case are ignored." %}"
                 autocomplete="off"
                 spellcheck="false"
                 x-model="secretText"
@@ -87,10 +92,12 @@
                   x-model="remember"
                 />
                 <span>
-                  <span class="block text-sm">Remember my recovery key on this device</span>
+                  <span class="block text-sm">{% translate "Remember my recovery key on this device" %}</span>
                   <span class="block text-xs text-base-content/50">
-                    Anything that can run code on this page can then read it, so
-                    leave it off on a shared computer.
+                    {% blocktranslate trimmed %}
+                      Anything that can run code on this page can then read it, so
+                      leave it off on a shared computer.
+                    {% endblocktranslate %}
                   </span>
                 </span>
               </label>
@@ -98,14 +105,14 @@
           </template>
           <template x-if="!secretRequired">
             <div class="flex items-center gap-2 text-sm text-base-content/60">
-              <span class="flex-1">Kept in this browser. It is used without being shown.</span>
+              <span class="flex-1">{% translate "Kept in this browser. It is used without being shown." %}</span>
               <button
                 type="button"
                 class="btn btn-xs btn-ghost"
                 :disabled="state === 'deriving'"
                 @click="replaceSecret()"
               >
-                Replace
+                {% translate "Replace" %}
               </button>
               <button
                 type="button"
@@ -113,7 +120,7 @@
                 :disabled="state === 'deriving'"
                 @click="forgetSecret()"
               >
-                Forget
+                {% translate "Forget" %}
               </button>
             </div>
           </template>
@@ -125,10 +132,10 @@
           class="btn btn-module btn-sm"
           :disabled="state === 'deriving' || !password || secretMissing()"
         >
-          <span x-show="state !== 'deriving'">Unlock</span>
+          <span x-show="state !== 'deriving'">{% translate "Unlock" %}</span>
           <span x-show="state === 'deriving'" x-cloak>
             <span class="loading loading-spinner loading-xs"></span>
-            Unlocking - the wait is deliberate
+            {% translate "Unlocking - the wait is deliberate" %}
           </span>
         </button>
       </div>

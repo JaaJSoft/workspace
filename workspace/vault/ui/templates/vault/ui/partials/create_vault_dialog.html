@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Everything this form offers is inside the signed payload, so a vault gets
   its icon, its colour and its description at the moment it is created rather
@@ -10,7 +11,7 @@
 <template x-if="newVault">
   <div class="modal modal-open">
     <div class="modal-box max-w-md">
-      {% include "ui/partials/dialog_header.html" with icon_expr="selectedIcon" icon_class_expr="'bg-base-200 ' + (selectedColor || 'text-module')" title="New vault" close_expr="closeCreateDialog()" only %}
+      {% include "ui/partials/dialog_header.html" with icon_expr="selectedIcon" icon_class_expr="'bg-base-200 ' + (selectedColor || 'text-module')" title=_("New vault") close_expr="closeCreateDialog()" only %}
 
       <inline-alert type="error" x-show="error" x-cloak class="mb-4">
       <span x-text="error"></span>
@@ -18,11 +19,11 @@
 
       <form @submit.prevent="createVault()">
         <label class="fieldset mb-3">
-          <span class="text-sm font-medium">Name</span>
+          <span class="text-sm font-medium">{% translate "Name" %}</span>
           <input
             type="text"
             class="input input-sm w-full"
-            placeholder="Personal, Work…"
+            placeholder="{% translate "Personal, Work…" %}"
             autocomplete="off"
             spellcheck="false"
             x-model="newVault.name"
@@ -31,12 +32,12 @@
 
         <label class="fieldset mb-3">
           <span class="text-sm font-medium">
-            Description <span class="text-base-content/40">(optional)</span>
+            {% translate "Description" %} <span class="text-base-content/40">{% translate "(optional)" %}</span>
           </span>
           <input
             type="text"
             class="input input-sm w-full"
-            placeholder="A short description…"
+            placeholder="{% translate "A short description…" %}"
             autocomplete="off"
             spellcheck="false"
             x-model="newVault.description"
@@ -49,7 +50,7 @@
           directly, and a vault needs a re-signed body.
         {% endcomment %}
         <div class="mb-3">
-          <span class="text-sm font-medium block mb-2">Icon and colour</span>
+          <span class="text-sm font-medium block mb-2">{% translate "Icon and colour" %}</span>
           {% include "ui/partials/icon_picker.html" %}
         </div>
 
@@ -59,7 +60,7 @@
             class="checkbox checkbox-sm"
             x-model="newVault.favorite"
           />
-          <span>Add to favourites</span>
+          <span>{% translate "Add to favourites" %}</span>
         </label>
 
         <div class="modal-action">
@@ -68,14 +69,14 @@
             class="btn btn-sm btn-ghost"
             @click="closeCreateDialog()"
           >
-            Cancel
+            {% translate "Cancel" %}
           </button>
           <button
             type="submit"
             class="btn btn-sm btn-module"
             :disabled="busy || !newVault.name.trim()"
           >
-            Create
+            {% translate "Create" %}
           </button>
         </div>
       </form>

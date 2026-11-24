@@ -1,3 +1,6 @@
+{% load i18n %}
+{% translate "Rename" as rename_label %}
+{% translate "Create" as create_label %}
 {% comment %}
   Creating and editing share one dialog, because they write the same record:
   a signed entry carries every field on every write, so an edit is a create
@@ -12,11 +15,11 @@
 <template x-if="draft">
   <div class="modal modal-open">
     <div class="modal-box max-w-lg">
-      {% include "ui/partials/dialog_header.html" with icon_expr="typeIcon(draft.type)" title_expr="draft.isNew ? 'New ' + typeLabel(draft.type).toLowerCase() : 'Edit entry'" close_expr="closeEntryDialog()" only %}
+      {% include "ui/partials/dialog_header.html" with icon_expr="typeIcon(draft.type)" title_expr="entryDialogTitle()" close_expr="closeEntryDialog()" only %}
 
       <form @submit.prevent="saveEntry()" class="space-y-3">
         <label class="fieldset">
-          <span class="text-sm">Name</span>
+          <span class="text-sm">{% translate "Name" %}</span>
           <input
             type="text"
             class="input input-sm w-full"
@@ -61,8 +64,8 @@
                   type="button"
                   class="btn btn-sm btn-square"
                   :class="generatorField === field.field_id ? 'btn-module' : 'btn-ghost'"
-                  :title="'Generate a ' + field.label.toLowerCase()"
-                  :aria-label="'Generate a ' + field.label.toLowerCase()"
+                  :title="field.generate_label"
+                  :aria-label="field.generate_label"
                   @click="openGenerator(field.field_id)"
                 >
                   <i data-lucide="dices" class="w-4 h-4"></i>
@@ -104,20 +107,20 @@
         {% endcomment %}
         <div class="fieldset" x-show="totpFieldState() !== 'unsupported'">
           {# for, not a wrapping label: the control's other two states are buttons, and a label around a button steals its click. #}
-          <label class="text-sm" for="entry-totp-input">Authenticator key</label>
+          <label class="text-sm" for="entry-totp-input">{% translate "Authenticator key" %}</label>
 
           <div
             class="flex items-center gap-2 mt-1"
             x-show="totpFieldState() === 'none'"
           >
-            <span class="text-sm opacity-60 flex-1">No authenticator key</span>
+            <span class="text-sm opacity-60 flex-1">{% translate "No authenticator key" %}</span>
             <button
               type="button"
               class="btn btn-xs btn-ghost gap-1"
               @click="startTotpEntry()"
             >
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-              Add
+              {% translate "Add" %}
             </button>
           </div>
 
@@ -125,14 +128,14 @@
             class="flex items-center gap-2 mt-1"
             x-show="totpFieldState() === 'set'"
           >
-            <span class="text-sm opacity-60 flex-1">An authenticator key is set</span>
+            <span class="text-sm opacity-60 flex-1">{% translate "An authenticator key is set" %}</span>
             <button
               type="button"
               class="btn btn-xs btn-ghost gap-1"
               @click="startTotpEntry()"
             >
               <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-              Replace
+              {% translate "Replace" %}
             </button>
             <button
               type="button"
@@ -140,7 +143,7 @@
               @click="removeTotp()"
             >
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-              Remove
+              {% translate "Remove" %}
             </button>
           </div>
 
@@ -157,7 +160,7 @@
                 class="input input-sm flex-1 font-mono"
                 autocomplete="off"
                 spellcheck="false"
-                placeholder="Key or otpauth:// address"
+                placeholder="{% translate "Key or otpauth:// address" %}"
                 x-model="draft.totpInput"
               />
               <button
@@ -166,14 +169,14 @@
                 @click="cancelTotpEntry()"
               >
                 <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                Cancel
+                {% translate "Cancel" %}
               </button>
             </div>
           </template>
         </div>
 
         <label class="fieldset">
-          <span class="text-sm">Notes</span>
+          <span class="text-sm">{% translate "Notes" %}</span>
           <textarea
             class="textarea textarea-sm w-full"
             rows="4"
@@ -183,14 +186,14 @@
             :readonly="!draft.notesOpened"
           ></textarea>
           <span class="text-xs text-warning mt-1" x-show="!draft.notesOpened">
-            These notes could not be opened. Saving keeps them as they are.
+            {% translate "These notes could not be opened. Saving keeps them as they are." %}
           </span>
         </label>
 
         <label class="fieldset">
-          <span class="text-sm">Folder</span>
+          <span class="text-sm">{% translate "Folder" %}</span>
           <select class="select select-sm w-full" x-model="draft.folder">
-            <option :value="null">No folder</option>
+            <option :value="null">{% translate "No folder" %}</option>
             <template x-for="folder in folders" :key="folder.uuid">
               <option :value="folder.uuid" x-text="folder.name"></option>
             </template>
@@ -198,7 +201,7 @@
         </label>
 
         <div x-show="tags.length">
-          <span class="text-sm">Tags</span>
+          <span class="text-sm">{% translate "Tags" %}</span>
           <div class="flex flex-wrap gap-2 mt-1">
             <template x-for="tag in tags" :key="tag.uuid">
               <button
@@ -215,7 +218,7 @@
 
         <label class="label cursor-pointer justify-start gap-3">
           <input type="checkbox" class="checkbox checkbox-sm" x-model="draft.favorite" />
-          <span>Favourite</span>
+          <span>{% translate "Favourite" %}</span>
         </label>
 
         <div class="modal-action">
@@ -224,14 +227,14 @@
             class="btn btn-sm btn-ghost"
             @click="closeEntryDialog()"
           >
-            Cancel
+            {% translate "Cancel" %}
           </button>
           <button
             type="submit"
             class="btn btn-sm btn-module"
             :disabled="busy || !draft.name.trim()"
           >
-            Save
+            {% translate "Save" %}
           </button>
         </div>
       </form>
@@ -242,14 +245,14 @@
 <template x-if="folderDraft">
   <div class="modal modal-open">
     <div class="modal-box max-w-sm">
-      {% include "ui/partials/dialog_header.html" with icon_expr="folderDraft.existing ? 'folder-pen' : 'folder-plus'" title_expr="folderDraft.existing ? 'Rename folder' : 'New folder'" close_expr="closeFolderDialog()" only %}
+      {% include "ui/partials/dialog_header.html" with icon_expr="folderDraft.existing ? 'folder-pen' : 'folder-plus'" title_expr="folderDialogTitle()" close_expr="closeFolderDialog()" only %}
       <form @submit.prevent="saveFolder()">
         <input
           type="text"
           class="input input-sm w-full"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Folder name"
+          placeholder="{% translate "Folder name" %}"
           x-model="folderDraft.name"
         />
         <div class="modal-action">
@@ -258,13 +261,13 @@
             class="btn btn-sm btn-ghost"
             @click="closeFolderDialog()"
           >
-            Cancel
+            {% translate "Cancel" %}
           </button>
           <button
             type="submit"
             class="btn btn-sm btn-module"
             :disabled="busy || !folderDraft.name.trim()"
-            x-text="folderDraft.existing ? 'Rename' : 'Create'"
+            x-text="folderDraft.existing ? '{{ rename_label|escapejs }}' : '{{ create_label|escapejs }}'"
           ></button>
         </div>
       </form>

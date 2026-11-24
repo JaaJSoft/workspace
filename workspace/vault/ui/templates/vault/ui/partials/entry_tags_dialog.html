@@ -1,3 +1,5 @@
+{% load i18n %}
+{% translate "%(count)s of %(total)s" as count_of_total %}
 {% comment %}
   Adding and removing tags on a selection. Mounted under x-if so every opening
   starts from the tags the selection carries. The native checkbox is never
@@ -14,9 +16,9 @@
       aria-labelledby="vault-entry-tags-dialog-title"
       @keydown.escape.window="closeTagsDialog()"
     >
-      {% include "ui/partials/dialog_header.html" with icon="tags" title_expr="'Tags for ' + (tagsDialog.uuids.length === 1 ? ((entries.find((e) => e.uuid === tagsDialog.uuids[0]) || {}).name || '') : tagsDialog.uuids.length + ' entries')" title_id="vault-entry-tags-dialog-title" close_expr="closeTagsDialog()" only %}
+      {% include "ui/partials/dialog_header.html" with icon="tags" title_expr="tagsDialogTitle()" title_id="vault-entry-tags-dialog-title" close_expr="closeTagsDialog()" only %}
       <p class="text-sm opacity-60 mb-4" x-show="tagsDialog.uuids.length > 1">
-        A dash means some of them have the tag. Only the tags you click change; the rest stay as they are on each entry.
+        {% translate "A dash means some of them have the tag. Only the tags you click change; the rest stay as they are on each entry." %}
       </p>
 
       <ul class="space-y-1 max-h-72 overflow-y-auto">
@@ -36,7 +38,7 @@
               <span
                 class="ml-auto text-xs opacity-50"
                 x-show="tagsDialog.uuids.length > 1"
-                x-text="tagsDialog.states[tag.uuid] === 'some' ? dialogTagCount(tag.uuid) + ' of ' + tagsDialog.uuids.length : ''"
+                x-text="tagsDialog.states[tag.uuid] === 'some' ? interpolate('{{ count_of_total|escapejs }}', { count: dialogTagCount(tag.uuid), total: tagsDialog.uuids.length }, true) : ''"
               ></span>
             </label>
           </li>
@@ -53,14 +55,14 @@
       </div>
 
       <div class="modal-action">
-        <button type="button" class="btn btn-sm btn-ghost" @click="closeTagsDialog()">Cancel</button>
+        <button type="button" class="btn btn-sm btn-ghost" @click="closeTagsDialog()">{% translate "Cancel" %}</button>
         <button
           type="button"
           class="btn btn-sm btn-module"
           :disabled="!canConfirmTags()"
           @click="confirmTags()"
         >
-          Apply
+          {% translate "Apply" %}
         </button>
       </div>
     </div>

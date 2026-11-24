@@ -1,3 +1,6 @@
+{% load i18n %}
+{% translate "Sort descending" as sort_descending %}
+{% translate "Sort ascending" as sort_ascending %}
 {% comment %}
   Search, filter, sort, the tile slider and the list/mosaic switch. Every
   control writes to the store, which decides what is shown; nothing here
@@ -15,7 +18,7 @@
       <input
         type="search"
         class="grow"
-        placeholder="Filter by name"
+        placeholder="{% translate "Filter by name" %}"
         x-model.debounce.200ms="search"
         autocomplete="off"
         spellcheck="false"
@@ -25,19 +28,19 @@
     <select
       class="select select-sm w-auto"
       x-model="typeFilter"
-      aria-label="Show"
+      aria-label="{% translate "Show" %}"
     >
-      <option value="all">Everything</option>
-      <option value="folders">Folders</option>
-      <option value="entries">Entries</option>
-      <option value="favorites">Favorites</option>
+      <option value="all">{% translate "Everything" %}</option>
+      <option value="folders">{% translate "Folders" %}</option>
+      <option value="entries">{% translate "Entries" %}</option>
+      <option value="favorites">{% translate "Favorites" %}</option>
     </select>
 
     <div class="join">
       <select
         class="select select-sm w-auto join-item"
         x-model="sortField"
-        aria-label="Sort by"
+        aria-label="{% translate "Sort by" %}"
       >
         {% for value, label in sort_fields %}
           <option value="{{ value }}">{{ label }}</option>
@@ -53,7 +56,7 @@
         class="btn btn-sm btn-outline join-item"
         :disabled="sortField === 'default'"
         @click="toggleSortDir()"
-        :aria-label="sortDir === 'asc' ? 'Sort descending' : 'Sort ascending'"
+        :aria-label="sortDir === 'asc' ? '{{ sort_descending|escapejs }}' : '{{ sort_ascending|escapejs }}'"
       >
         <i data-lucide="arrow-up" class="w-4 h-4" x-show="sortDir === 'asc'"></i>
         <i
@@ -68,10 +71,10 @@
     <button
       type="button"
       class="btn btn-sm btn-ghost"
-      title="Reset filters and sorting"
+      title="{% translate "Reset filters and sorting" %}"
       @click="resetAll()"
     >
-      Reset
+      {% translate "Reset" %}
     </button>
 
     <div class="flex-1"></div>
@@ -95,8 +98,8 @@
           x-model.number="tileSize"
           @change="setTileSize(tileSize)"
           class="range range-xs range-module w-24"
-          title="Tile size"
-          aria-label="Tile size"
+          title="{% translate "Tile size" %}"
+          aria-label="{% translate "Tile size" %}"
         />
         <i data-lucide="grid-2x2" class="w-5 h-5 opacity-60"></i>
       </div>
@@ -107,8 +110,8 @@
           class="btn btn-sm btn-outline join-item"
           :class="viewMode === 'list' ? 'bg-module/15 hover:bg-module/25 text-module' : ''"
           @click="setViewMode('list')"
-          title="List view"
-          aria-label="List view"
+          title="{% translate "List view" %}"
+          aria-label="{% translate "List view" %}"
         >
           <i data-lucide="list" class="w-4 h-4"></i>
         </button>
@@ -117,8 +120,8 @@
           class="btn btn-sm btn-outline join-item"
           :class="viewMode === 'mosaic' ? 'bg-module/15 hover:bg-module/25 text-module' : ''"
           @click="setViewMode('mosaic')"
-          title="Mosaic view"
-          aria-label="Mosaic view"
+          title="{% translate "Mosaic view" %}"
+          aria-label="{% translate "Mosaic view" %}"
         >
           <i data-lucide="grid-2x2" class="w-4 h-4"></i>
         </button>

@@ -1,3 +1,6 @@
+{% load i18n %}
+{% translate "%(label)s copied." as copied_label %}
+{% translate "Clears in %(seconds)s s" as clears_in %}
 {% comment %}
   What is on the clipboard, and how long it stays there. It is a banner rather
   than a toast because it is not a notification: while it is up, a secret is
@@ -11,9 +14,14 @@
 >
   <inline-alert type="success" icon="clipboard-check" toast>
   <span>
-    <span x-text="clipboard.label"></span> copied - clears in
+    <span
+      x-text="interpolate('{{ copied_label|escapejs }}', { label: clipboard.label }, true)"
+    ></span>
     {# Off: inline-alert is role=alert, which would announce every tick. #}
-    <span class="font-medium" aria-live="off" x-text="clipboard.secondsLeft"></span>s
+    <span
+      aria-live="off"
+      x-text="interpolate('{{ clears_in|escapejs }}', { seconds: clipboard.secondsLeft }, true)"
+    ></span>
   </span>
   <button
     slot="actions"
@@ -21,7 +29,7 @@
     class="btn btn-xs btn-ghost"
     @click="cancelCopy()"
   >
-    Clear now
+    {% translate "Clear now" %}
   </button>
   </inline-alert>
 </div>

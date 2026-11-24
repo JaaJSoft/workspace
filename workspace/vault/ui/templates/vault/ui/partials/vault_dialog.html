@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Rename and appearance share one dialog: both rewrite the same signed
   payload, and splitting them would be two screens over one request.
@@ -9,10 +10,10 @@
 <template x-if="vaultDialog">
   <div class="modal modal-open">
     <div class="modal-box max-w-md">
-      {% include "ui/partials/dialog_header.html" with icon_expr="vaultDialog.mode === 'rename' ? 'pencil' : 'palette'" title_expr="vaultDialog.mode === 'rename' ? 'Name and description' : 'Icon and colour'" close_expr="closeVaultDialog()" only %}
+      {% include "ui/partials/dialog_header.html" with icon_expr="vaultDialog.mode === 'rename' ? 'pencil' : 'palette'" title_expr="vaultDialogTitle()" close_expr="closeVaultDialog()" only %}
 
       <label class="fieldset" x-show="vaultDialog.mode === 'rename'">
-        <span class="text-sm">Name</span>
+        <span class="text-sm">{% translate "Name" %}</span>
         <input
           type="text"
           class="input input-sm w-full"
@@ -24,12 +25,12 @@
 
       <label class="fieldset mt-3" x-show="vaultDialog.mode === 'rename'">
         <span class="text-sm">
-          Description <span class="text-base-content/40">(optional)</span>
+          {% translate "Description" %} <span class="text-base-content/40">{% translate "(optional)" %}</span>
         </span>
         <input
           type="text"
           class="input input-sm w-full"
-          placeholder="A short description…"
+          placeholder="{% translate "A short description…" %}"
           autocomplete="off"
           spellcheck="false"
           x-model="vaultDialog.description"
@@ -44,7 +45,7 @@
           class="btn btn-sm btn-ghost"
           @click="closeVaultDialog()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         <button
           type="button"
@@ -52,7 +53,7 @@
           :disabled="busy || !vaultDialog.name.trim()"
           @click="saveVaultDialog()"
         >
-          Save
+          {% translate "Save" %}
         </button>
       </div>
     </div>

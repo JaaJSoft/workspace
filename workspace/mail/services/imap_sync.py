@@ -75,7 +75,7 @@ def sync_folders(account):
     remote_names = set()
 
     with transaction.atomic():
-        for flags, _delim, name in remote_folders:
+        for flags, delim, name in remote_folders:
             # Skip non-selectable containers (e.g. [Gmail])
             if "\\noselect" in flags or "\\nonexistent" in flags:
                 continue
@@ -83,8 +83,8 @@ def sync_folders(account):
             if "\\all" in flags:
                 continue
             remote_names.add(name)
-            folder_type = _detect_folder_type(name, flags)
-            display = _display_name(name)
+            folder_type = _detect_folder_type(name, flags, delim)
+            display = _display_name(name, delim)
 
             if name in existing:
                 folder = existing[name]

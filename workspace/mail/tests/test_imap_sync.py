@@ -207,6 +207,47 @@ class DiscoveryMergeGroupTests(TestCase):
         self.assertFalse(MailFolder.objects.filter(pk=self.sent.pk).exists())
 
 
+class HierarchyDelimiterTests(TestCase):
+    """Only the server's own delimiter separates the levels of a name."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="delims", password="pw")
+        self.account = _make_account(self.user, "delims@test.com")
+
+    def _sync(self, delimiter, *mailboxes):
+        server = FakeImapServer(delimiter=delimiter)
+        for name in mailboxes:
+            server.mailbox(name)
+        with fake_imap(server):
+            sync_folders(self.account)
+
+    def _folder(self, name):
+        return MailFolder.objects.get(account=self.account, name=name)
+
+    def test_a_dot_in_a_folder_name_is_not_a_level_on_a_slash_server(self):
+        self._sync("/", "Clients", "Clients/acme.com")
+
+        self.assertEqual(self._folder("Clients/acme.com").display_name, "acme.com")
+
+    def test_a_slash_in_a_folder_name_is_not_a_level_on_a_dot_server(self):
+        self._sync(".", "INBOX.Clients", "INBOX.Clients.a/b testing")
+
+        folder = self._folder("INBOX.Clients.a/b testing")
+        self.assertEqual(folder.display_name, "a/b testing")
+
+    def test_a_dotted_leaf_is_not_typed_from_its_suffix(self):
+        self._sync("/", "Projects", "Projects/site.archive")
+
+        self.assertEqual(self._folder("Projects/site.archive").folder_type, "other")
+
+    def test_a_nested_special_name_is_still_detected(self):
+        self._sync(".", "INBOX.Trash")
+
+        folder = self._folder("INBOX.Trash")
+        self.assertEqual(folder.display_name, "Trash")
+        self.assertEqual(folder.folder_type, "trash")
+
+
 class UidValidityResetTests(TestCase):
     """A UIDVALIDITY change resets the cursor in the same write as the validity."""
 

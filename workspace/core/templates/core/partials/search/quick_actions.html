@@ -1,11 +1,10 @@
 {% comment %}
-  Partial pour les actions rapides (affiché quand query est vide)
-  Affiche les 5 commandes les plus récemment utilisées (ou des défauts utiles).
-  Paramètres:
-  - on_click: handler supplémentaire lors du clic sur un lien (optionnel)
-  - size: "lg" pour des items plus grands (optionnel)
-  Données dynamiques:
-  - quickActions: array Alpine calculé dans command_palette_dropdown.js
+  Quick actions, shown while the query is empty: the 5 most recently used
+  commands, or useful defaults.
+  Params:
+  - on_click: extra handler run when a link is clicked (optional)
+  - size: "lg" for larger items (optional)
+  Reads quickActions, computed in command_palette_dropdown.js.
 {% endcomment %}
 {% load i18n %}
 <div x-show="showQuickActions()" class="p-2">

@@ -39,11 +39,9 @@
         x-model="sortField"
         aria-label="Sort by"
       >
-        <option value="default">Default</option>
-        <option value="name">Name</option>
-        <option value="favorite">Favorite</option>
-        <option value="created">Created</option>
-        <option value="modified">Modified</option>
+        {% for value, label in sort_fields %}
+          <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
       </select>
       {% comment %}
         The name states what the button does, not the order already in use: it

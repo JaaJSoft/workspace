@@ -26,10 +26,9 @@
       :value="prefs.defaultSort"
       @change="updatePref('default_sort', $event.target.value)"
     >
-      <option value="default">Default</option>
-      <option value="name">Name</option>
-      <option value="favorite">Favorite</option>
-      <option value="created">Created</option>
+      {% for value, label in sort_fields %}
+        <option value="{{ value }}">{{ label }}</option>
+      {% endfor %}
     </select>
   </div>
   <template x-if="secretRemembered">

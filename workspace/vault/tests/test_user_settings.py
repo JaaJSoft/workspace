@@ -11,5 +11,7 @@ class VaultSettingsTests(SettingsApiTestCase):
 
     def test_the_default_sort_is_one_the_panel_offers(self):
         # Any other reaches the listing as a sort nothing implements.
-        self.assertAccepts("default_sort", ["default", "name", "favorite", "created"])
+        self.assertAccepts(
+            "default_sort", ["default", "name", "favorite", "created", "modified"]
+        )
         self.assertRefuses("default_sort", ["size", "", 3, "NAME"])

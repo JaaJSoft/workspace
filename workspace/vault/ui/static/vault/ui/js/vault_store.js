@@ -197,19 +197,16 @@ window.vaultStore = function vaultStore() {
     sorted(rows) {
       if (this.sortField === 'default') return rows;
       const direction = this.sortDir === 'asc' ? 1 : -1;
-      const compare = {
-        name: (a, b) => a.name.localeCompare(b.name),
-        favorite: (a, b) => Number(b.favorite) - Number(a.favorite),
-        modified: (a, b) => String(a.modified).localeCompare(String(b.modified)),
-        // Offered by the preferences panel: a default sort the store did not
-        // know left the listing unsorted, and its select on a value no option
-        // carried.
-        created: (a, b) => String(a.created).localeCompare(String(b.created)),
-      }[this.sortField];
-      if (!compare) return rows;
+      // The field is the entry property to compare: the server names the
+      // sorts on offer (SORT_FIELDS), so no list of them is kept here.
+      const field = this.sortField;
+      const compare = (a, b) =>
+        typeof a === 'boolean' || typeof b === 'boolean'
+          ? Number(b) - Number(a)
+          : String(a).localeCompare(String(b));
       // A copy: sorting the array the caller handed us would reorder the
       // store's own data as a side effect of asking what to display.
-      return [...rows].sort((a, b) => direction * compare(a, b));
+      return [...rows].sort((a, b) => direction * compare(a[field], b[field]));
     },
 
     isEmpty() {

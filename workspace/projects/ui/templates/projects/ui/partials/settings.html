@@ -1,6 +1,7 @@
 {% load i18n %}
 {{ project_data|json_script:"project-settings-data" }}
 {{ columns_data|json_script:"columns-settings-data" }}
+{{ retention_presets|json_script:"retention-presets-data" }}
 <div
   id="settings"
   class="w-full max-w-6xl mx-auto flex flex-col gap-4 pb-8"
@@ -69,7 +70,7 @@
         <input
           type="range"
           min="0"
-          max="5"
+          max="{{ retention_presets|length }}"
           step="1"
           class="range range-sm range-module w-full"
           aria-label="{% translate "Completed tasks visibility" %}"
@@ -80,11 +81,9 @@
         />
         <div class="flex justify-between px-1.5 mt-1 text-xs text-base-content/50">
           {% comment %}Translators: tick labels of the completed tasks visibility slider, a number of days in very few characters.{% endcomment %}
-          <span>{% blocktranslate with days=1 %}{{ days }}d{% endblocktranslate %}</span>
-          <span>{% blocktranslate with days=7 %}{{ days }}d{% endblocktranslate %}</span>
-          <span>{% blocktranslate with days=14 %}{{ days }}d{% endblocktranslate %}</span>
-          <span>{% blocktranslate with days=30 %}{{ days }}d{% endblocktranslate %}</span>
-          <span>{% blocktranslate with days=90 %}{{ days }}d{% endblocktranslate %}</span>
+          {% for preset in retention_presets %}
+            <span>{% blocktranslate with days=preset %}{{ days }}d{% endblocktranslate %}</span>
+          {% endfor %}
           <span>&infin;</span>
         </div>
         <div class="label whitespace-normal">

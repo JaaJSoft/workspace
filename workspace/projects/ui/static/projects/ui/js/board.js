@@ -458,6 +458,7 @@ function projectBoard(config) {
     members: [],
     labels: [],
     epics: [],
+    priorities: [],
     form: emptyTaskForm(),
     formError: '',
     panelTaskUuid: config.initialTask || null,
@@ -518,6 +519,9 @@ function projectBoard(config) {
       );
       this.epics = JSON.parse(
         document.getElementById('epics-data').textContent
+      );
+      this.priorities = JSON.parse(
+        document.getElementById('priorities-data').textContent
       );
       this.filters = taskFiltersFromUrl(window.location.href);
       this.syncSidebarCounts();
@@ -1018,13 +1022,8 @@ function projectBoard(config) {
     },
 
     filterPriorityName() {
-      const names = {
-        urgent: pgettext('task priority', 'Urgent'),
-        high: pgettext('task priority', 'High'),
-        medium: pgettext('task priority', 'Medium'),
-        low: pgettext('task priority', 'Low'),
-      };
-      return names[this.filters.priority] || this.filters.priority;
+      const p = this.priorities.find((x) => x.value === this.filters.priority);
+      return p ? p.label : this.filters.priority;
     },
 
     filterStatusName() {

@@ -19,6 +19,10 @@ class Project(models.Model):
         POINTS = "points", _("Story points")
         HOURS = "hours", _("Hours")
 
+    # Stops of the settings slider for done_retention_days; the API takes any
+    # day count within its bounds.
+    DONE_RETENTION_PRESETS = (1, 7, 14, 30, 90)
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")

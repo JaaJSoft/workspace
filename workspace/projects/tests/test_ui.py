@@ -620,6 +620,15 @@ class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         response = self.client.get(f"/projects/{self.project.uuid}/settings")
         self.assertEqual(response.context["project_data"]["done_retention_days"], 14)
 
+    def test_retention_slider_has_one_stop_per_preset_and_always(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        presets = Project.DONE_RETENTION_PRESETS
+        self.assertContains(response, 'id="retention-presets-data"')
+        self.assertContains(response, f'max="{len(presets)}"')
+        for days in presets:
+            self.assertContains(response, f"<span>{days}d</span>")
+
     def test_member_gets_404(self):
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/settings")

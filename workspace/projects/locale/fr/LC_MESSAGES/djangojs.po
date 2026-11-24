@@ -16,26 +16,6 @@ msgid "Unknown user"
 msgstr "Utilisateur inconnu"
 
 #: ui/static/projects/ui/js/board.js
-msgctxt "task priority"
-msgid "Urgent"
-msgstr "Urgente"
-
-#: ui/static/projects/ui/js/board.js
-msgctxt "task priority"
-msgid "High"
-msgstr "Haute"
-
-#: ui/static/projects/ui/js/board.js
-msgctxt "task priority"
-msgid "Medium"
-msgstr "Moyenne"
-
-#: ui/static/projects/ui/js/board.js
-msgctxt "task priority"
-msgid "Low"
-msgstr "Basse"
-
-#: ui/static/projects/ui/js/board.js
 msgid "Unknown status"
 msgstr "Statut inconnu"
 

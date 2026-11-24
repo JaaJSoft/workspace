@@ -84,11 +84,18 @@ function generalWithFetch(fetchImpl) {
   });
 }
 
+// The settings partial embeds Project.DONE_RETENTION_PRESETS.
+const PRESETS = [1, 7, 14, 30, 90];
+
 function generalWithData(data) {
+  const embedded = {
+    'project-settings-data': data,
+    'retention-presets-data': PRESETS,
+  };
   return settingsWith({
     document: {
       ...CUSTOM_ELEMENT_STUBS.document,
-      getElementById: () => ({ textContent: JSON.stringify(data) }),
+      getElementById: (id) => ({ textContent: JSON.stringify(embedded[id]) }),
     },
   }).projectSettingsGeneral({ apiBase: '/api/v1/projects/p1' });
 }
@@ -111,32 +118,33 @@ test('projectSettingsGeneral.init reads the stored retention as a string', () =>
 
 test('retentionSliderIndex maps always-visible to the last stop', () => {
   const { retentionSliderIndex } = ctx().projectSettingsHelpers;
-  assert.equal(retentionSliderIndex(''), 5);
-  assert.equal(retentionSliderIndex(null), 5);
+  assert.equal(retentionSliderIndex('', PRESETS), 5);
+  assert.equal(retentionSliderIndex(null, PRESETS), 5);
 });
 
 test('retentionSliderIndex maps a preset to its stop', () => {
   const { retentionSliderIndex } = ctx().projectSettingsHelpers;
-  assert.equal(retentionSliderIndex('1'), 0);
-  assert.equal(retentionSliderIndex('7'), 1);
-  assert.equal(retentionSliderIndex('90'), 4);
+  assert.equal(retentionSliderIndex('1', PRESETS), 0);
+  assert.equal(retentionSliderIndex('7', PRESETS), 1);
+  assert.equal(retentionSliderIndex('90', PRESETS), 4);
 });
 
 test('retentionSliderIndex snaps an API-set value to the nearest stop', () => {
   const { retentionSliderIndex } = ctx().projectSettingsHelpers;
-  assert.equal(retentionSliderIndex('21'), 2);
-  assert.equal(retentionSliderIndex('365'), 4);
+  assert.equal(retentionSliderIndex('21', PRESETS), 2);
+  assert.equal(retentionSliderIndex('365', PRESETS), 4);
 });
 
 test('retentionDaysFromIndex maps stops back to day strings', () => {
   const { retentionDaysFromIndex } = ctx().projectSettingsHelpers;
-  assert.equal(retentionDaysFromIndex('0'), '1');
-  assert.equal(retentionDaysFromIndex(3), '30');
-  assert.equal(retentionDaysFromIndex(5), '');
+  assert.equal(retentionDaysFromIndex('0', PRESETS), '1');
+  assert.equal(retentionDaysFromIndex(3, PRESETS), '30');
+  assert.equal(retentionDaysFromIndex(5, PRESETS), '');
 });
 
 test('projectSettingsGeneral.setRetentionIndex drives the canonical value', () => {
   const c = generalWithFetch(async () => ({ ok: true }));
+  c.retentionPresets = PRESETS;
   c.setRetentionIndex(1);
   assert.equal(c.doneRetentionDays, '7');
   c.setRetentionIndex('5');

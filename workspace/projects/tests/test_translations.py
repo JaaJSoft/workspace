@@ -195,6 +195,15 @@ class ProjectPageLanguageTests(ProjectTestMixin, TestCase):
         self.assertContains(response, "Vue d’ensemble")
         self.assertNotContains(response, "Search tasks")
 
+    def test_board_embeds_every_priority_in_french(self):
+        set_setting(self.admin, "core", "language", "fr")
+        response = self.client.get(self.board_url)
+        self.assertEqual(
+            {p["value"]: p["label"] for p in response.context["priorities_data"]},
+            {"low": "Basse", "medium": "Moyenne", "high": "Haute", "urgent": "Urgente"},
+        )
+        self.assertContains(response, 'id="priorities-data"')
+
     def test_board_stays_english_by_default(self):
         response = self.client.get(self.board_url)
         self.assertContains(response, "Search tasks")

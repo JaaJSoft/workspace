@@ -4,10 +4,9 @@ window.sharedLinkUrl = function sharedLinkUrl(token, suffix, params) {
   return `/api/v1/files/shared/${encodeURIComponent(token)}${suffix}${tail ? '?' + tail : ''}`;
 };
 
-window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes, rootName) {
+window.sharedDrop = function sharedDrop(token, maxFileBytes, rootName) {
   return {
     token,
-    accessToken: accessToken || '',
     maxFileBytes: Number(maxFileBytes) || 0,
     rootName: rootName || '',
     targetNode: '',
@@ -98,7 +97,6 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes, rootNa
         xhr.onload = () => resolve(xhr.status);
         xhr.onerror = () => reject(new Error('Network error'));
         xhr.open('POST', window.sharedLinkUrl(this.token, '/upload', {}));
-        if (this.accessToken) xhr.setRequestHeader('X-Share-Access', this.accessToken);
         xhr.send(body);
       });
     },

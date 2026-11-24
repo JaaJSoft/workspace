@@ -3,7 +3,7 @@
 A token reaches the items of its album that the album shows through links
 (``queries.link_files``), nothing else: any other file is a 404, whatever
 uuid the request names. A password-protected link also wants the access
-token ``verify`` hands out, in ``?access_token=``.
+cookie ``verify`` hands out.
 """
 
 from django.contrib.auth.hashers import check_password
@@ -18,7 +18,7 @@ from workspace.core.module_guard import ModuleVisible
 from workspace.files.views.share_links import ShareLinkVerifyThrottle
 
 from ..queries import link_files
-from ..services.album_links import access_token_for, find_link, has_access
+from ..services.album_links import find_link, grant_access, has_access
 from .album_files import (
     THUMBNAIL_SIZE_PARAMETER,
     archive_response,
@@ -38,7 +38,7 @@ def _open_link(request, token):
         return None, Response(
             {"detail": gettext("This link has expired.")}, status=status.HTTP_410_GONE
         )
-    if not has_access(link, request.query_params.get("access_token", "")):
+    if not has_access(link, request):
         return None, Response(
             {"detail": gettext("Password required."), "has_password": True},
             status=status.HTTP_403_FORBIDDEN,
@@ -71,14 +71,14 @@ class AlbumLinkVerifyView(_PublicView):
 
     @extend_schema(
         summary="Unlock a password-protected album link",
-        description="Answers an `access_token` to pass as `?access_token=`.",
+        description="Sets the cookie that unlocks the link for an hour.",
         request={
             "application/json": {
                 "type": "object",
                 "properties": {"password": {"type": "string"}},
             }
         },
-        responses={200: OpenApiResponse(description="The access token.")},
+        responses={204: OpenApiResponse(description="Unlocked.")},
     )
     def post(self, request, token):
         link = find_link(token)
@@ -100,7 +100,9 @@ class AlbumLinkVerifyView(_PublicView):
                 {"detail": gettext("Invalid password.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        return Response({"access_token": access_token_for(link)})
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        grant_access(response, request, link)
+        return response
 
 
 @extend_schema(tags=["Photos - Album links"])

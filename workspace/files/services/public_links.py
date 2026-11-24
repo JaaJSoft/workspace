@@ -10,8 +10,10 @@ import logging
 import posixpath
 import re
 
+from django.core import signing
 from django.db.models import Q
 
+from workspace.common.link_access import access_cookie_name, set_access_cookie
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import File
@@ -28,6 +30,38 @@ _MAX_EXTENSION_LENGTH = 10
 # a maximum-length upload still fits File.name after being renamed.
 _RENAME_SUFFIX_HEADROOM = len(" (Copy 9999)")
 MAX_UPLOAD_NAME_LENGTH = MAX_NAME_LENGTH - _RENAME_SUFFIX_HEADROOM
+
+_ACCESS_SIGNER = signing.TimestampSigner(salt="file-share-link")
+ACCESS_TOKEN_MAX_AGE = 3600
+
+
+def _access_cookie(link):
+    return access_cookie_name("share_access", link.token)
+
+
+def grant_access(response, request, link):
+    """Remember on *response* that the visitor gave *link*'s password."""
+    set_access_cookie(
+        response,
+        request,
+        _access_cookie(link),
+        _ACCESS_SIGNER.sign(link.token),
+        ACCESS_TOKEN_MAX_AGE,
+    )
+
+
+def presented_access_token(request, link):
+    """The access token the visitor's request carries for *link*, or ''."""
+    return request.COOKIES.get(_access_cookie(link), "")
+
+
+def access_token_opens(link, access_token):
+    """Whether *access_token* was signed for *link* within the last hour."""
+    try:
+        value = _ACCESS_SIGNER.unsign(access_token, max_age=ACCESS_TOKEN_MAX_AGE)
+    except signing.BadSignature:
+        return False
+    return value == link.token
 
 
 def scope_q(root):

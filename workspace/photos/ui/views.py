@@ -1273,24 +1273,22 @@ def album_viewer(request, uuid, file_uuid):
     return HttpResponse(render_viewer_panel(html, request))
 
 
-def _link_url(name, link, access_token, *args, **params):
-    """The URL *name* for *link*, carrying the visitor's access token."""
-    if access_token:
-        params["access_token"] = access_token
+def _link_url(name, link, *args, **params):
+    """The URL *name* for *link*."""
     url = reverse(name, args=[link.token, *args])
     return f"{url}?{urlencode(params)}" if params else url
 
 
-def _shared_tiles(link, access_token, photos):
+def _shared_tiles(link, photos):
     """Point each photo of a linked album's page at its thumbnail and at the
     page that shows it, both through the link."""
     for photo in photos:
         photo.shared_thumbnail_url = versioned_thumbnail_url(
-            _link_url("photo-album-link-thumbnail", link, access_token, photo.uuid),
+            _link_url("photo-album-link-thumbnail", link, photo.uuid),
             photo,
         )
         photo.shared_view_url = _link_url(
-            "photos_ui:shared_album", link, access_token, photo=photo.uuid
+            "photos_ui:shared_album", link, photo=photo.uuid
         )
 
 
@@ -1300,7 +1298,7 @@ def _album_tz(album):
     return get_user_timezone(album.owner)
 
 
-def _shared_page_context(link, access_token, cursor):
+def _shared_page_context(link, cursor):
     """The page of the linked album after *cursor* (the first for None).
 
     ValueError on a malformed cursor.
@@ -1308,15 +1306,14 @@ def _shared_page_context(link, access_token, cursor):
     album = link.album
     files = link_files(album).select_related("media_item", "media_info")
     page = _album_page(album, files, cursor, _album_tz(album))
-    _shared_tiles(link, access_token, page.photos)
+    _shared_tiles(link, page.photos)
     page_url = reverse("photos_ui:shared_album_timeline", args=[link.token])
-    params = {"access_token": access_token} if access_token else {}
-    return _paging(page, page_url, params) | {
+    return _paging(page, page_url, {}) | {
         "tile_template": "photos/ui/partials/shared_tile.html",
     }
 
 
-def _shared_neighbours(link, access_token, files, file_obj):
+def _shared_neighbours(link, files, file_obj):
     """Where the photos around *file_obj* are, in the album's order, as
     ``(previous_url, next_url, position, total)``; the URLs are empty at
     either end."""
@@ -1332,26 +1329,18 @@ def _shared_neighbours(link, access_token, files, file_obj):
 
     def url(i):
         if 0 <= i < len(uuids):
-            return _link_url(
-                "photos_ui:shared_album", link, access_token, photo=uuids[i]
-            )
+            return _link_url("photos_ui:shared_album", link, photo=uuids[i])
         return ""
 
     return url(index - 1), url(index + 1), index + 1, len(uuids)
 
 
-def _shared_photo_context(request, link, access_token, files, file_obj):
-    previous_url, next_url, position, total = _shared_neighbours(
-        link, access_token, files, file_obj
-    )
+def _shared_photo_context(request, link, files, file_obj):
+    previous_url, next_url, position, total = _shared_neighbours(link, files, file_obj)
     download_url = ""
     if link.allow_download:
-        download_url = _link_url(
-            "photo-album-link-download", link, access_token, file_obj.uuid
-        )
-    content_url = _link_url(
-        "photo-album-link-content", link, access_token, file_obj.uuid
-    )
+        download_url = _link_url("photo-album-link-download", link, file_obj.uuid)
+    content_url = _link_url("photo-album-link-content", link, file_obj.uuid)
     return {
         "file": file_obj,
         # Blurred as by default, whoever is signed in: the shared page blurs
@@ -1378,8 +1367,7 @@ def shared_album(request, token):
         raise Http404
     if link.is_expired:
         return render(request, "photos/ui/shared_album.html", {"expired": True})
-    access_token = request.GET.get("access_token", "")
-    if not has_access(link, access_token):
+    if not has_access(link, request):
         return render(
             request,
             "photos/ui/shared_album.html",
@@ -1397,14 +1385,11 @@ def shared_album(request, token):
     context = {
         "link": link,
         "album": album,
-        "access_token": access_token,
         "count_label": _count_label(media_type_counts(files), None),
         "date_range": _date_range_label(first, last, _album_tz(album)),
-        "album_url": _link_url("photos_ui:shared_album", link, access_token),
+        "album_url": _link_url("photos_ui:shared_album", link),
         "archive_url": (
-            _link_url("photo-album-link-archive", link, access_token)
-            if link.allow_download
-            else ""
+            _link_url("photo-album-link-archive", link) if link.allow_download else ""
         ),
     }
     if request.GET.get("photo"):
@@ -1416,11 +1401,9 @@ def shared_album(request, token):
             )
         if file_obj is None:
             raise Http404
-        context["photo"] = _shared_photo_context(
-            request, link, access_token, files, file_obj
-        )
+        context["photo"] = _shared_photo_context(request, link, files, file_obj)
     else:
-        context.update(_shared_page_context(link, access_token, None))
+        context.update(_shared_page_context(link, None))
 
     if request.headers.get("X-Alpine-Request"):
         response = render(
@@ -1432,8 +1415,8 @@ def shared_album(request, token):
     record_view(link)
     response = render(request, "photos/ui/shared_album.html", context)
     patch_vary_headers(response, ["X-Alpine-Request"])
-    if access_token:
-        # Every link on the page carries the access token: not for any cache.
+    if link.has_password:
+        # What the page shows depends on the visitor's access cookie.
         patch_cache_control(response, private=True, no_store=True)
     return response
 
@@ -1444,13 +1427,10 @@ def shared_album_timeline(request, token):
     link = find_link(token)
     if link is None or link.is_expired:
         raise Http404
-    access_token = request.GET.get("access_token", "")
-    if not has_access(link, access_token):
+    if not has_access(link, request):
         raise Http404
     try:
-        context = _shared_page_context(
-            link, access_token, request.GET.get("cursor", "")
-        )
+        context = _shared_page_context(link, request.GET.get("cursor", ""))
     except ValueError:
         return HttpResponseBadRequest("Invalid cursor.")
     return render(request, "photos/ui/partials/timeline_page.html", context)

@@ -1,13 +1,15 @@
 """Public album links: resolving a token and its password.
 
 The password flow is the file links' one: a correct password earns a signed
-access token, valid an hour, that the visitor's later requests carry in the
-query string. It is stateless, so no session is needed.
+access token, valid an hour, that the visitor's later requests carry in a
+cookie of that link. It is stateless, so no session is needed.
 """
 
 from django.core import signing
 from django.db.models import F
 from django.utils import timezone
+
+from workspace.common.link_access import access_cookie_name, set_access_cookie
 
 from ..models import AlbumLink
 from .album_revocation import can_share
@@ -34,16 +36,28 @@ def find_link(token):
     return link
 
 
-def access_token_for(link):
-    """The access token a visitor gets for the right password."""
-    return SIGNER.sign(link.token)
+def _access_cookie(link):
+    return access_cookie_name("album_access", link.token)
 
 
-def has_access(link, access_token):
-    """Whether *access_token* opens *link*: always for a link without a
-    password, else only a token signed for this very link, not yet stale."""
+def grant_access(response, request, link):
+    """Remember on *response* that the visitor gave *link*'s password."""
+    set_access_cookie(
+        response,
+        request,
+        _access_cookie(link),
+        SIGNER.sign(link.token),
+        ACCESS_TOKEN_MAX_AGE,
+    )
+
+
+def has_access(link, request):
+    """Whether *request* may open *link*: always for a link without a
+    password, else only with a token signed for this very link, not yet
+    stale."""
     if not link.has_password:
         return True
+    access_token = request.COOKIES.get(_access_cookie(link), "")
     if not access_token:
         return False
     try:

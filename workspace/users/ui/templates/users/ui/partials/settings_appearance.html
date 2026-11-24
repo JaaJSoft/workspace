@@ -189,17 +189,10 @@
         // One bulk PATCH instead of two parallel PUTs: both keys land
         // inside the same DB transaction, so the writer-lock is acquired
         // once for the whole batch on SQLite.
-        fetch('/api/v1/settings/core', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken(),
-          },
-          body: JSON.stringify({
-            [kind + '_theme']: id,
-            theme: id,
-          }),
-        });
+        window.saveUserSettings('core', {
+          [kind + '_theme']: id,
+          theme: id,
+        }).catch(() => {});
       },
     };
   }

@@ -408,27 +408,18 @@
       role: '{{ profile_role|escapejs }}',
       bio: '{{ profile_bio|escapejs }}',
       async saveField(key, value) {
-        const csrfToken = getCSRFToken();
         try {
-          const res = await fetch('/api/v1/settings/profile/' + key, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({
-              value: value || null
-            }),
-          });
-          if (res.ok) {
-            this.showFeedback('success', key === 'role' ? '{{ role_saved_message|escapejs }}' : '{{ bio_saved_message|escapejs }}');
-          } else {
-            const data = await res.json();
-            this.showFeedback('error', (data.value && data.value[0]) || '{{ save_failed_message|escapejs }}');
-          }
+          await window.saveUserSetting('profile', key, value || null);
         } catch (e) {
-          this.showFeedback('error', '{{ network_error_retry_message|escapejs }}');
+          if (!e.response) {
+            this.showFeedback('error', '{{ network_error_retry_message|escapejs }}');
+            return;
+          }
+          const data = await e.response.json().catch(() => ({}));
+          this.showFeedback('error', (data.value && data.value[0]) || '{{ save_failed_message|escapejs }}');
+          return;
         }
+        this.showFeedback('success', key === 'role' ? '{{ role_saved_message|escapejs }}' : '{{ bio_saved_message|escapejs }}');
       },
       showFeedback(type, message) {
         const container = this.$refs.profileFieldsFeedback;
@@ -485,25 +476,11 @@
         }
       },
       async _save(value) {
-        const csrfToken = getCSRFToken();
         try {
-          const res = await fetch('/api/v1/settings/profile/banner_palette', {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({
-              value
-            }),
-          });
-          if (res.ok) {
-            this.showFeedback('success', '{{ palette_saved_message|escapejs }}');
-          } else {
-            this.showFeedback('error', '{{ palette_save_failed_message|escapejs }}');
-          }
+          await window.saveUserSetting('profile', 'banner_palette', value);
+          this.showFeedback('success', '{{ palette_saved_message|escapejs }}');
         } catch (e) {
-          this.showFeedback('error', '{{ network_error_message|escapejs }}');
+          this.showFeedback('error', e.response ? '{{ palette_save_failed_message|escapejs }}' : '{{ network_error_message|escapejs }}');
         }
       },
       showFeedback(type, message) {

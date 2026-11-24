@@ -112,19 +112,8 @@
           this.saving = false;
           if (window.AppAlert) window.AppAlert.error('{{ language_save_failed|escapejs }}');
         };
-        fetch('/api/v1/settings/core/language', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-          },
-          body: JSON.stringify({
-            value: this.language
-          }),
-        }).then((resp) => {
-          if (resp.ok) location.reload();
-          else revert();
-        }).catch(revert);
+        window.saveUserSetting('core', 'language', this.language)
+          .then(() => location.reload(), revert);
       },
     };
   }
@@ -160,18 +149,7 @@
           if (window.convertLocaltimes) window.convertLocaltimes(document);
           if (window.AppAlert) window.AppAlert.error('{{ timezone_save_failed|escapejs }}');
         };
-        fetch('/api/v1/settings/core/timezone', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-          },
-          body: JSON.stringify({
-            value: this.tz
-          }),
-        }).then((resp) => {
-          if (!resp.ok) revert();
-        }).catch(revert);
+        window.saveUserSetting('core', 'timezone', this.tz).catch(revert);
       },
     };
   }
@@ -192,18 +170,7 @@
           apply(previous);
           if (window.AppAlert) window.AppAlert.error('{{ time_format_save_failed|escapejs }}');
         };
-        fetch('/api/v1/settings/core/time_format', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-          },
-          body: JSON.stringify({
-            value: this.format
-          }),
-        }).then((resp) => {
-          if (!resp.ok) revert();
-        }).catch(revert);
+        window.saveUserSetting('core', 'time_format', this.format).catch(revert);
       },
     };
   }

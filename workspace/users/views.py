@@ -272,7 +272,7 @@ class ChangePasswordView(APIView):
             )
 
         request.user.set_password(new_password)
-        request.user.save()
+        request.user.save(update_fields=["password"])
         update_session_auth_hash(request, request.user)
 
         return Response({"message": _("Password updated successfully.")})

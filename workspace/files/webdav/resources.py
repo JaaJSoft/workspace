@@ -6,6 +6,7 @@ import io
 import logging
 import time
 from contextlib import contextmanager
+from urllib.parse import quote
 
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
@@ -192,7 +193,15 @@ class _StreamingWriteBuffer:
         self._writer.abort()
 
 
-class _Collection(DAVCollection):
+class _LockKeyed:
+    """Files the resource's locks under a key of its own (``namespace.lock_key``),
+    not under an address it shares with every other user's resource."""
+
+    def get_ref_url(self):
+        return quote(namespace.lock_key(self._user, self.get_preferred_path()))
+
+
+class _Collection(_LockKeyed, DAVCollection):
     """What every collection does with its members; a subclass says which
     they are, as ``(name, resource)`` pairs."""
 
@@ -255,6 +264,7 @@ class _TreeFolder:
         )
         if file_obj is None:
             _require_permission(self._user, self._file, FilePermission.EDIT, "PUT")
+            self._refuse_new_member_under_a_lock()
             file_obj = tree.create_file(
                 self._user,
                 name,
@@ -262,6 +272,23 @@ class _TreeFolder:
                 acting_user=self._user,
             )
         return FileResource(self._child_path(name), self.environ, file_obj)
+
+    def _refuse_new_member_under_a_lock(self):
+        """Raise 423 when a lock on this folder, or above it, covers a new member.
+
+        wsgidav asks before a PUT. A LOCK on a name nothing holds creates the
+        file first and asks for the lock after: refused, the file would stay
+        in the folder the refusal was protecting.
+        """
+        lock_manager = getattr(self.provider, "lock_manager", None)
+        if lock_manager is None:
+            return
+        lock_manager.check_write_permission(
+            url=self.get_ref_url(),
+            depth="0",
+            token_list=self.environ.get("wsgidav.ifLockTokenList", []),
+            principal=self.environ.get("wsgidav.user_name"),
+        )
 
     @_refuse_overlong_names
     def create_collection(self, name):
@@ -441,7 +468,7 @@ class FolderResource(_TreeFolder, _Collection):
         return True
 
 
-class FileResource(DAVNonCollection):
+class FileResource(_LockKeyed, DAVNonCollection):
     """Wraps a ``File(node_type=FILE)`` instance."""
 
     def __init__(self, path, environ, file_obj):

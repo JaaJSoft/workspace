@@ -646,3 +646,239 @@ class SharedTreeTests(_DavTestCase):
         self.assertEqual(code, 200)
         shared.refresh_from_db()
         self.assertEqual(shared.locked_by, self.user)
+
+
+class LockIsolationTests(_DavTestCase):
+    """A DAV lock binds the people its resource is served to, and nobody else.
+
+    wsgidav files a lock under the address it was taken on, and one address
+    is as many files as there are users. Keyed by the address alone, a lock
+    one user took stopped everyone else writing their own file of that path.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.team = Group.objects.create(name="Team")
+        self.user.groups.add(self.team)
+        self.other.groups.add(self.team)
+        self.root = tree.create_folder(self.other, "Team", group=self.team)
+
+    def _as(self, username):
+        self.auth = test_webdav._basic_auth_header(username, "pass123")
+
+    def _lock(self, path, depth="0", **headers):
+        """LOCK *path*; the status and the token granted, if any."""
+        code, response_headers, _ = self._request(
+            "LOCK",
+            path,
+            body=_LOCK_BODY,
+            headers={"Content-Type": "application/xml", "Depth": depth, **headers},
+        )
+        return code, response_headers.get("Lock-Token", "").strip("<>")
+
+    def _discovered_locks(self, path):
+        code, _, body = self._request(
+            "PROPFIND",
+            path,
+            body=(
+                b'<?xml version="1.0"?><propfind xmlns="DAV:"><prop>'
+                b"<lockdiscovery/></prop></propfind>"
+            ),
+            headers={"Depth": "0", "Content-Type": "application/xml"},
+        )
+        self.assertEqual(code, 207)
+        return body.count(b"activelock>") // 2, body
+
+    def test_a_lock_leaves_another_users_file_of_the_same_path_alone(self):
+        code, _ = self._lock(f"{HOME}/report.txt")
+        self.assertEqual(code, 201)
+
+        self._as("bob")
+        path = f"{HOME}/report.txt"
+        self.assertEqual(self._request("PUT", path, body=b"bob's")[0], 201)
+        self.assertEqual(self._request("PUT", path, body=b"again")[0], 204)
+        code, _, _ = self._request(
+            "MOVE", path, headers={"Destination": f"{DAV_HOME}/renamed.txt"}
+        )
+        self.assertEqual(code, 201)
+        self.assertEqual(self._request("DELETE", f"{HOME}/renamed.txt")[0], 204)
+
+    def test_two_users_lock_their_own_file_of_the_same_path(self):
+        mine = self._file(self.user, "report.txt", b"mine")
+        theirs = self._file(self.other, "report.txt", b"theirs")
+
+        self.assertEqual(self._lock(f"{HOME}/report.txt")[0], 200)
+        self._as("bob")
+        self.assertEqual(self._lock(f"{HOME}/report.txt")[0], 200)
+
+        mine.refresh_from_db()
+        theirs.refresh_from_db()
+        self.assertEqual(mine.locked_by, self.user)
+        self.assertEqual(theirs.locked_by, self.other)
+
+    def test_the_lock_still_binds_its_holders_other_clients(self):
+        self._file(self.user, "report.txt", b"mine")
+        _, token = self._lock(f"{HOME}/report.txt")
+
+        code, _, _ = self._request("PUT", f"{HOME}/report.txt", body=b"no token")
+        self.assertEqual(code, 423)
+        code, _, _ = self._request(
+            "PUT", f"{HOME}/report.txt", body=b"token", headers={"If": f"(<{token}>)"}
+        )
+        self.assertEqual(code, 204)
+
+    def test_the_holder_refreshes_and_releases_the_lock(self):
+        """wsgidav finds the locked resource back from the key of its lock."""
+        mine = self._file(self.user, "report.txt", b"mine")
+        _, token = self._lock(f"{HOME}/report.txt")
+
+        code, _, body = self._request(
+            "LOCK",
+            f"{HOME}/report.txt",
+            headers={"If": f"(<{token}>)", "Timeout": "Second-120"},
+        )
+        self.assertEqual(code, 200)
+        self.assertIn(quote(f"{HOME}/report.txt").encode(), body)
+        self.assertNotIn(b"~", body)
+
+        code, _, _ = self._request(
+            "UNLOCK", f"{HOME}/report.txt", headers={"Lock-Token": f"<{token}>"}
+        )
+        self.assertEqual(code, 204)
+        mine.refresh_from_db()
+        self.assertIsNone(mine.locked_by_id)
+
+    def test_a_lock_on_a_folder_of_the_layout_binds_nobody_else(self):
+        for folder in ("/", HOME, f"/{GROUPS}", f"/{SHARED}"):
+            with self.subTest(folder=folder):
+                self._as("alice")
+                code, token = self._lock(folder, depth="infinity")
+                self.assertIn(code, (200, 201))
+
+                self._as("bob")
+                name = f"{uuid.uuid4().hex}.txt"
+                self.assertEqual(self._request("PUT", f"{HOME}/{name}")[0], 201)
+                self.assertEqual(self._request("PUT", f"/{GROUPS}/Team/{name}")[0], 201)
+
+                self._as("alice")
+                code, _, _ = self._request(
+                    "UNLOCK", folder, headers={"Lock-Token": f"<{token}>"}
+                )
+                self.assertEqual(code, 204)
+
+    def test_a_lock_in_a_group_tree_binds_the_other_members(self):
+        self._file(self.other, "notes.txt", b"notes", parent=self.root)
+        sub = tree.create_folder(self.other, "Sub", parent=self.root)
+        self.assertEqual(self._lock(f"/{GROUPS}/Team/notes.txt")[0], 200)
+        self.assertEqual(self._lock(f"/{GROUPS}/Team/Sub", depth="infinity")[0], 200)
+
+        self._as("bob")
+        code, _, _ = self._request("PUT", f"/{GROUPS}/Team/notes.txt", body=b"mine")
+        self.assertEqual(code, 423)
+        code, _, _ = self._request("PUT", f"/{GROUPS}/Team/Sub/new.txt", body=b"new")
+        self.assertEqual(code, 423)
+        # A file someone else holds is refused before the lock table is read
+        # (``FileResource.prevent_locking``); a name under the locked folder
+        # is refused by the table.
+        self.assertEqual(self._lock(f"/{GROUPS}/Team/notes.txt")[0], 403)
+        self.assertEqual(self._lock(f"/{GROUPS}/Team/Sub/other.txt")[0], 423)
+        self.assertFalse(sub.children.exists())
+        # Elsewhere in the group's tree, and in their own, nothing holds them.
+        self.assertEqual(self._request("PUT", f"/{GROUPS}/Team/free.txt")[0], 201)
+        self.assertEqual(self._request("PUT", f"{HOME}/notes.txt")[0], 201)
+
+    def test_another_users_lock_is_not_disclosed(self):
+        _, token = self._lock(f"{HOME}/report.txt")
+        count, body = self._discovered_locks(f"{HOME}/report.txt")
+        self.assertEqual(count, 1)
+        self.assertIn(token.encode(), body)
+
+        self._as("bob")
+        self._request("PUT", f"{HOME}/report.txt", body=b"bob's")
+        count, body = self._discovered_locks(f"{HOME}/report.txt")
+
+        self.assertEqual(count, 0)
+        self.assertNotIn(token.encode(), body)
+
+    def test_a_group_lock_is_disclosed_to_the_other_members(self):
+        self._file(self.other, "notes.txt", b"notes", parent=self.root)
+        self._lock(f"/{GROUPS}/Team/notes.txt")
+
+        self._as("bob")
+        count, _ = self._discovered_locks(f"/{GROUPS}/Team/notes.txt")
+
+        self.assertEqual(count, 1)
+
+    def test_removing_an_own_file_leaves_another_users_lock_in_place(self):
+        mine = self._file(self.user, "report.txt", b"mine")
+        self._lock(f"{HOME}/report.txt")
+
+        self._as("bob")
+        self._request("PUT", f"{HOME}/report.txt", body=b"bob's")
+        self._request("PUT", f"{HOME}/other.txt", body=b"bob's")
+        self.assertEqual(self._request("DELETE", f"{HOME}/report.txt")[0], 204)
+        code, _, _ = self._request(
+            "MOVE",
+            f"{HOME}/other.txt",
+            headers={"Destination": f"{DAV_HOME}/report.txt"},
+        )
+        self.assertEqual(code, 201)
+        self.assertEqual(self._request("DELETE", f"{HOME}/report.txt")[0], 204)
+
+        mine.refresh_from_db()
+        self.assertEqual(mine.locked_by, self.user)
+        self.assertNotEqual(mine.lock_token, "")
+        self._as("alice")
+        code, _, _ = self._request("PUT", f"{HOME}/report.txt", body=b"no token")
+        self.assertEqual(code, 423)
+
+    def test_another_users_lock_cannot_be_refreshed(self):
+        mine = self._file(self.user, "report.txt", b"mine")
+        _, token = self._lock(f"{HOME}/report.txt")
+        mine.refresh_from_db()
+        expires_at = mine.lock_expires_at
+
+        self._as("bob")
+        self._request("PUT", f"{HOME}/report.txt", body=b"bob's")
+        code, _, _ = self._request(
+            "LOCK",
+            f"{HOME}/report.txt",
+            headers={"If": f"(<{token}>)", "Timeout": "Second-300"},
+        )
+
+        self.assertEqual(code, 412)
+        mine.refresh_from_db()
+        self.assertEqual(mine.lock_expires_at, expires_at)
+
+    def test_a_lock_key_is_the_users_own_outside_a_group_tree(self):
+        for path in ("/", f"{HOME}/", f"{HOME}/a b/c.txt", f"/{SHARED}/x.txt"):
+            with self.subTest(path=path):
+                mine = namespace.lock_key(self.user, path)
+                theirs = namespace.lock_key(self.other, path)
+                self.assertNotEqual(mine, theirs)
+                self.assertEqual(namespace.lock_key_path(mine), path)
+                self.assertEqual(namespace.lock_key_path(theirs), path)
+        # The folder that lists the groups is each user's own; a group's
+        # tree is the same resource for all its members.
+        self.assertNotEqual(
+            namespace.lock_key(self.user, f"/{GROUPS}/"),
+            namespace.lock_key(self.other, f"/{GROUPS}/"),
+        )
+        for path in (f"/{GROUPS}/Team/", f"/{GROUPS}/Team/a b/c.txt"):
+            with self.subTest(path=path):
+                key = namespace.lock_key(self.user, path)
+                self.assertEqual(key, namespace.lock_key(self.other, path))
+                self.assertEqual(namespace.lock_key_path(key), path)
+
+    def test_no_lock_key_of_a_user_sits_under_another_key(self):
+        """A lock covers what is under its key: nobody's root is under the
+        root of someone else, or of a group's tree."""
+        keys = [
+            namespace.lock_key(self.user, "/"),
+            namespace.lock_key(self.other, "/"),
+            namespace.lock_key(self.user, f"/{GROUPS}/Team/"),
+        ]
+        for key in keys:
+            for other in keys:
+                if key is not other:
+                    self.assertFalse(other.startswith(key), (key, other))

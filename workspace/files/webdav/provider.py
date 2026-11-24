@@ -1,6 +1,7 @@
 """DAV provider that maps URL paths to File model instances."""
 
 import logging
+from urllib.parse import unquote
 
 from wsgidav.dav_provider import DAVProvider
 
@@ -45,6 +46,11 @@ class WorkspaceDAVProvider(DAVProvider):
         if file_obj.is_folder():
             return FolderResource(path, environ, file_obj)
         return FileResource(path, environ, file_obj)
+
+    def ref_url_to_path(self, ref_url):
+        """The path of the resource a lock is filed under: wsgidav hands a
+        lock's key back to find the resource it was taken on."""
+        return namespace.lock_key_path(unquote(ref_url))
 
     @staticmethod
     def _get_user(environ):

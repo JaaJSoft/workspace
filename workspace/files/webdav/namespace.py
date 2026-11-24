@@ -31,6 +31,11 @@ PERSONAL = "My Files"
 GROUPS = "Groups"
 SHARED = "Shared"
 
+# First segment of a user's lock keys, ahead of their id. No folder of the
+# layout starts with it, so no user's key sits under a group's or another
+# user's.
+_USER_KEY = "~"
+
 
 def served(nodes):
     """*nodes* without the shortcuts.
@@ -156,6 +161,39 @@ def node_at(user, parts):
     if parts[:1] == [SHARED]:
         return shared_file(user, parts[1]) if len(parts) == 2 else None
     return tree_node(user, parts)
+
+
+def _in_group_tree(path):
+    parts = [part for part in path.split("/") if part]
+    return len(parts) >= 2 and parts[0] == GROUPS
+
+
+def lock_key(user, path):
+    """What the DAV lock table files *path* under, as *user* is served it.
+
+    wsgidav keys a lock by the address it was taken on, and reads a lock as
+    covering every key below its own. One address is as many resources as
+    there are users - ``/My Files/notes.txt`` is each user's own file - so
+    the key carries the user: a lock binds its holder's other clients and
+    nobody else's file of that path.
+
+    A group's tree is the one place where an address is the same resource
+    for everyone it is served to. Its key is the path alone, so a lock taken
+    there binds the group's other members. The folders above it are each
+    user's own, ``/Groups`` included: a lock on one of them stops at its
+    holder's own trees, and never freezes a group.
+    """
+    if _in_group_tree(path):
+        return path
+    return f"/{_USER_KEY}{user.pk}{path}"
+
+
+def lock_key_path(key):
+    """The path :func:`lock_key` made *key* from."""
+    first, _, rest = key.lstrip("/").partition("/")
+    if first.startswith(_USER_KEY):
+        return f"/{rest}"
+    return key
 
 
 def personal_dav_path(tree_path):

@@ -100,14 +100,14 @@ class AppLockManager(LockManager):
 def _dav_file(url, principal):
     """Resolve a DAV lock root to ``(File, User)``, either of which may be None.
 
-    ``url`` is the resource's ref-url: quoted, absolute, and - for the provider
-    mounted at ``/`` - the path the provider resolves.
+    ``url`` is the resource's ref-url: the key its locks are filed under
+    (``namespace.lock_key``), quoted.
     """
     user = get_user_model().objects.filter(username=principal).first()
     if user is None:
         return None, None
-    parts = [part for part in unquote(url).split("/") if part]
-    file_obj = namespace.node_at(user, parts)
+    path = namespace.lock_key_path(unquote(url))
+    file_obj = namespace.node_at(user, [part for part in path.split("/") if part])
     if file_obj is None or not file_obj.is_file():
         return None, user
     return file_obj, user

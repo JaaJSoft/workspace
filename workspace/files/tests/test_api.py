@@ -271,6 +271,43 @@ class FileAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([row["uuid"] for row in response.data], [str(wanted.uuid)])
 
+    def test_the_name_filter_keeps_the_spaces_it_is_given(self):
+        root = File.objects.create(
+            owner=self.user, name="Root", node_type=File.NodeType.FOLDER
+        )
+        spaced = File.objects.create(
+            owner=self.user,
+            name=" report.txt",
+            node_type=File.NodeType.FILE,
+            parent=root,
+        )
+        File.objects.create(
+            owner=self.user,
+            name="report.txt",
+            node_type=File.NodeType.FILE,
+            parent=root,
+        )
+
+        response = self.client.get(
+            f"/api/v1/files?parent={root.uuid}&name=%20report.txt"
+        )
+
+        self.assertEqual([row["uuid"] for row in response.data], [str(spaced.uuid)])
+
+    def test_the_name_filter_matches_a_decomposed_name_to_its_composed_row(self):
+        root = File.objects.create(
+            owner=self.user, name="Root", node_type=File.NodeType.FOLDER
+        )
+        composed = File.objects.create(
+            owner=self.user, name="été.md", node_type=File.NodeType.FILE, parent=root
+        )
+
+        response = self.client.get(
+            f"/api/v1/files?parent={root.uuid}&name=e%CC%81te%CC%81.md"
+        )
+
+        self.assertEqual([row["uuid"] for row in response.data], [str(composed.uuid)])
+
     def test_retrieve_file(self):
         """Test retrieving a specific file."""
         file = File.objects.create(

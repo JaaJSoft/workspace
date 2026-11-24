@@ -44,7 +44,7 @@ from workspace.files.services.trash import trash_item
 from workspace.notifications.services.notifications import notify
 from workspace.users.services.settings import get_user_language
 
-from ..models import File
+from ..models import File, name_forms
 from ..serializers import (
     FileListQuerySerializer,
     FileLocked,
@@ -328,7 +328,6 @@ class FileViewSet(
         "parent": ["exact"],
         "owner": ["exact"],
         "type": ["exact"],
-        "name": ["exact"],
     }
     ordering_fields = ["name", "created_at", "updated_at", "size"]
     ordering_case_insensitive_fields = ["name"]
@@ -354,7 +353,15 @@ class FileViewSet(
                 self.request._request.GET = original
         else:
             queryset = super().filter_queryset(queryset)
-        return self._apply_exclude_subtree(queryset)
+        return self._apply_name(self._apply_exclude_subtree(queryset))
+
+    def _apply_name(self, queryset):
+        """Narrow to one exact name (``?name=``), taken as sent: a filterset
+        field would strip its spaces, and only its composed form is stored."""
+        name = self.request.query_params.get("name")
+        if name is None:
+            return queryset
+        return queryset.filter(name__in=name_forms(name))
 
     def _apply_exclude_subtree(self, queryset):
         """Exclude a folder's entire subtree (the folder itself and all its

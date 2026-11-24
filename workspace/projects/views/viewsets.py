@@ -19,6 +19,7 @@ from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.queries import resolve_accessible_files
 
+from ..actions import ProjectActionRegistry
 from ..models import (
     Epic,
     Label,
@@ -166,9 +167,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def partial_update(self, request, *args, **kwargs):
         project = self.get_object()
-        self._require_admin(project)
-        if project.is_archived:
-            raise PermissionDenied(_("Project is archived."))
+        self._require_action(project, "rename")
+        if "groups" in request.data:
+            self._require_action(project, "attach_group")
         try:
             with transaction.atomic():
                 return super().partial_update(request, *args, **kwargs)
@@ -180,12 +181,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         project = self.get_object()
-        self._require_admin(project)
         if project.type == Project.Type.PERSONAL:
             return Response(
                 {"detail": _("Personal projects cannot be deleted.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        self._require_action(project, "delete")
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"])
@@ -207,24 +208,22 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def archive(self, request, uuid=None):
         project = self.get_object()
-        self._require_admin(project)
         if project.type == Project.Type.PERSONAL:
             return Response(
                 {"detail": _("Personal projects cannot be archived.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if project.archived_at is None:
-            project.archived_at = timezone.now()
-            project.save(update_fields=["archived_at", "updated_at"])
+        self._require_action(project, "archive")
+        project.archived_at = timezone.now()
+        project.save(update_fields=["archived_at", "updated_at"])
         return Response(self.get_serializer(project).data)
 
     @action(detail=True, methods=["post"])
     def unarchive(self, request, uuid=None):
         project = self.get_object()
-        self._require_admin(project)
-        if project.archived_at is not None:
-            project.archived_at = None
-            project.save(update_fields=["archived_at", "updated_at"])
+        self._require_action(project, "unarchive")
+        project.archived_at = None
+        project.save(update_fields=["archived_at", "updated_at"])
         return Response(self.get_serializer(project).data)
 
     def get_object(self):
@@ -244,6 +243,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def _require_admin(self, project):
         if get_project_role(self.request.user, project) != ProjectMember.Role.ADMIN:
             raise PermissionDenied(_("Admin role required."))
+
+    def _require_action(self, project, action_id):
+        role = get_project_role(self.request.user, project)
+        require_action(
+            self.request.user, action_id, project, project=project, role=role
+        )
 
 
 _PROJECT_CHANGES = {"partial_update", "convert", "archive", "unarchive"}
@@ -304,6 +309,68 @@ class ProjectContextMixin:
         if self.project.is_archived:
             raise PermissionDenied(_("Project is archived."))
 
+    def _require_action(self, action_id, target=None):
+        """Gate on *action_id* for *target*, by default a task of the project:
+        no task action reads the row, only the project's state."""
+        if target is None:
+            target = Task(project=self.project)
+        require_action(
+            self.request.user, action_id, target, project=self.project, role=self.role
+        )
+
+    def _require_task_edit(self, data):
+        """Every action a task field write performs, ``edit`` for the rest."""
+        fields = set(data.keys()) if hasattr(data, "keys") else set()
+        for action_id in sorted({_TASK_FIELD_ACTIONS.get(f, "edit") for f in fields}):
+            self._require_action(action_id)
+        if not fields:
+            self._require_action("edit")
+
+    def _require_bulk_edit(self, data):
+        """The action of each operation a bulk edit asks for."""
+        fields = set(data.keys()) if hasattr(data, "keys") else set()
+        actions = {_BULK_EDIT_ACTIONS[f] for f in fields if f in _BULK_EDIT_ACTIONS}
+        for action_id in sorted(actions) or ["edit"]:
+            self._require_action(action_id)
+
+
+# The registry action a write to each task field performs.
+_TASK_FIELD_ACTIONS = {
+    "assignees": "assign",
+    "labels": "set_labels",
+    "epic": "set_epic",
+    "due_date": "set_due",
+    "priority": "set_priority",
+    "status": "move",
+}
+_BULK_EDIT_ACTIONS = {
+    "assign": "assign",
+    "unassign": "assign",
+    "add_labels": "set_labels",
+    "remove_labels": "set_labels",
+    "priority": "set_priority",
+    "due_date": "set_due",
+}
+
+
+def require_action(user, action_id, target, *, project, role):
+    """Raise 403 unless the action registry offers *action_id* on *target*.
+
+    The registry is the write gate, not only the menu: an endpoint asks it
+    what the context menu asks, so the two cannot disagree.
+    """
+    action = ProjectActionRegistry.action_for(action_id, target)
+    if ProjectActionRegistry.is_action_available(
+        action_id, user, target, role=role, archived=project.is_archived
+    ):
+        return
+    if action is not None and action.min_role == ProjectMember.Role.ADMIN:
+        if role != ProjectMember.Role.ADMIN:
+            raise PermissionDenied(_("Admin role required."))
+    if project.is_archived and not (action and action.available_when_archived):
+        raise PermissionDenied(_("Project is archived."))
+    raise PermissionDenied(_("This action is not available on this project."))
+
 
 @extend_schema(tags=["Projects"])
 class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
@@ -334,8 +401,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response(ProjectUserSerializer(users, many=True).data)
 
     def create(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_members", self.project)
         serializer = MemberWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = User.objects.filter(pk=serializer.validated_data["user"]).first()
@@ -354,8 +420,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         )
 
     def partial_update(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_members", self.project)
         member = self.get_object()
         serializer = MemberRoleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -368,8 +433,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     def destroy(self, request, *args, **kwargs):
         member = self.get_object()
         if member.user_id != request.user.pk:
-            self._require_admin()
-            self._require_writable()
+            self._require_action("manage_members", self.project)
         try:
             remove_member(member)
         except ProjectRuleError as exc:
@@ -455,8 +519,7 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         serializer.save(project=self.project)
 
     def create(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_labels", self.project)
         try:
             with transaction.atomic():
                 return super().create(request, *args, **kwargs)
@@ -467,8 +530,7 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             )
 
     def partial_update(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_labels", self.project)
         try:
             with transaction.atomic():
                 return super().partial_update(request, *args, **kwargs)
@@ -479,8 +541,7 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_labels", self.project)
         return super().destroy(request, *args, **kwargs)
 
 
@@ -500,8 +561,7 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         serializer.save(project=self.project)
 
     def create(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_epics", self.project)
         try:
             with transaction.atomic():
                 return super().create(request, *args, **kwargs)
@@ -512,8 +572,7 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             )
 
     def partial_update(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_epics", self.project)
         try:
             with transaction.atomic():
                 return super().partial_update(request, *args, **kwargs)
@@ -524,8 +583,7 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_epics", self.project)
         return super().destroy(request, *args, **kwargs)
 
 
@@ -563,8 +621,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             raise PermissionDenied(_("Sprints require a scrum project."))
 
     def create(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_sprints", self.project)
         self._require_scrum()
         try:
             with transaction.atomic():
@@ -576,8 +633,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             )
 
     def partial_update(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_sprints", self.project)
         self._require_scrum()
         try:
             with transaction.atomic():
@@ -589,8 +645,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_sprints", self.project)
         self._require_scrum()
         sprint = self.get_object()
         try:
@@ -600,8 +655,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def start(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_sprints", self.project)
         self._require_scrum()
         sprint = self.get_object()
         try:
@@ -611,8 +665,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return Response(self.get_serializer(self.get_object()).data)
 
     def complete(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
+        self._require_action("manage_sprints", self.project)
         self._require_scrum()
         sprint = self.get_object()
         serializer = SprintCompleteSerializer(data=request.data)
@@ -808,7 +861,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return Response(self.get_serializer(task).data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_task_edit(request.data)
         return super().partial_update(request, *args, **kwargs)
 
     def perform_update(self, serializer):
@@ -900,7 +953,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             ) from None
 
     def destroy(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("delete")
         return super().destroy(request, *args, **kwargs)
 
     def perform_destroy(self, instance):
@@ -909,7 +962,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def reorder(self, request, *args, **kwargs):
         """Single drag-and-drop endpoint: backlog sort, in-column sort and
         cross-column moves. Idempotent (safe with optimistic UI retries)."""
-        self._require_writable()
+        self._require_action("move")
         serializer = TaskReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         status_obj = self._resolve_status(serializer.validated_data["status"])
@@ -929,7 +982,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def move(self, request, *args, **kwargs):
         """Bulk move (backlog multi-select "send to board"): appends the
         listed tasks to the end of the target column. Idempotent."""
-        self._require_writable()
+        self._require_action("move")
         serializer = TaskMoveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         status_obj = self._resolve_status(serializer.validated_data["status"])
@@ -949,7 +1002,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def assign_sprint(self, request, *args, **kwargs):
         """Bulk sprint assignment (backlog planning): sets or clears the
         sprint of the listed tasks without touching their status. Idempotent."""
-        self._require_writable()
+        self._require_action("move")
         serializer = TaskSprintSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         sprint = None
@@ -976,7 +1029,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         """Bulk field edit (selection toolbars): assign/unassign, add or
         remove labels, set the priority or the due date of the listed tasks
         in one request. Set-oriented, so replaying a payload is a no-op."""
-        self._require_writable()
+        self._require_bulk_edit(request.data)
         serializer = TaskBulkEditSerializer(
             data=request.data, context={"project": self.project}
         )
@@ -998,7 +1051,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def bulk_delete(self, request, *args, **kwargs):
         """Bulk delete (selection toolbars). Unknown UUIDs are skipped, so a
         retry after a partial failure is safe."""
-        self._require_writable()
+        self._require_action("delete")
         serializer = TaskBulkDeleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         deleted = delete_tasks(
@@ -1036,7 +1089,7 @@ class SubtaskViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("edit", self.task)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         subtask = create_subtask(self.task, serializer.validated_data["title"])
@@ -1045,7 +1098,7 @@ class SubtaskViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         )
 
     def partial_update(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("edit", self.task)
         subtask = self.get_object()
         serializer = self.get_serializer(subtask, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -1053,12 +1106,12 @@ class SubtaskViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("edit", self.task)
         self.get_object().delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def reorder(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("edit", self.task)
         serializer = ReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         reorder_subtasks(self.task, serializer.validated_data["order"])
@@ -1095,7 +1148,7 @@ class TaskLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response(links_for_task(request.user, self.task))
 
     def create(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("link", self.task)
         serializer = TaskLinkCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         other = (
@@ -1126,7 +1179,7 @@ class TaskLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         )
 
     def destroy(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("link", self.task)
         link = (
             TaskLink.objects.filter(
                 Q(source=self.task) | Q(target=self.task),
@@ -1197,7 +1250,7 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         )
 
     def create(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("comment", self.task)
         body_ser = TaskCommentBodySerializer(data=request.data)
         body_ser.is_valid(raise_exception=True)
         comment = add_comment(self.task, request.user, body_ser.validated_data["body"])
@@ -1206,7 +1259,7 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         )
 
     def partial_update(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("comment", self.task)
         comment = self._get_own_comment(request)
         body_ser = TaskCommentBodySerializer(data=request.data)
         body_ser.is_valid(raise_exception=True)
@@ -1218,7 +1271,7 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response(self.get_serializer(comment).data)
 
     def destroy(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("comment", self.task)
         comment = self._get_own_comment(request)
         comment.deleted_at = timezone.now()
         comment.save(update_fields=["deleted_at"])
@@ -1258,7 +1311,7 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
 
     @extend_schema(request=TaskAttachmentCreateSerializer)
     def create(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("attach", self.task)
         ser = TaskAttachmentCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         uploads = request.FILES.getlist("files")
@@ -1312,7 +1365,7 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         )
 
     def destroy(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("attach", self.task)
         attachment = self.get_queryset().filter(uuid=kwargs["uuid"]).first()
         if attachment is None:
             raise Http404
@@ -1368,7 +1421,7 @@ class TaskFileLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response({"files": file_links_for_task(self.task)})
 
     def create(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("link_file", self.task)
         serializer = TaskFileLinkCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         files = resolve_accessible_files(
@@ -1394,7 +1447,7 @@ class TaskFileLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         )
 
     def destroy(self, request, *args, **kwargs):
-        self._require_writable()
+        self._require_action("link_file", self.task)
         link = (
             self.task.file_links.select_related(
                 "task", "share__file", "share__shared_with_project"

@@ -27,6 +27,7 @@ from workspace.projects.models import (
     TaskStatus,
 )
 from workspace.projects.queries import (
+    PRIORITIES_BY_URGENCY,
     get_project_role,
     project_users,
     user_project_ids,
@@ -215,6 +216,28 @@ def _task_by_reference(qs, project, raw):
     return qs.filter(number=int(match.group(2))).first()
 
 
+# The icon of each priority in the pickers, with its colour class.
+_PRIORITY_ICONS = {
+    Task.Priority.URGENT: ("flame", "text-error"),
+    Task.Priority.HIGH: ("arrow-up", "text-warning"),
+    Task.Priority.MEDIUM: ("equal", "text-info"),
+    Task.Priority.LOW: ("arrow-down", "opacity-60"),
+}
+
+
+def _priorities_data():
+    """The priorities the pickers offer, most urgent first."""
+    return [
+        {
+            "value": priority.value,
+            "label": str(priority.label),
+            "icon": _PRIORITY_ICONS[priority][0],
+            "icon_class": _PRIORITY_ICONS[priority][1],
+        }
+        for priority in PRIORITIES_BY_URGENCY
+    ]
+
+
 def _base_context(request, project, role, view):
     statuses = list(project.statuses.order_by("position", "created_at"))
     members = project.members.filter(left_at__isnull=True).select_related("user")
@@ -231,10 +254,7 @@ def _base_context(request, project, role, view):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
-        "priorities_data": [
-            {"value": value, "label": str(label)}
-            for value, label in Task.Priority.choices
-        ],
+        "priorities_data": _priorities_data(),
         # In both render paths: the sidebar sits outside #project-content,
         # so every swap carries fresh counts for the shell to pick up after
         # a task moved in or out of the backlog.
@@ -443,6 +463,7 @@ def task_panel(request, project_uuid, task_uuid):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
+        "priorities_data": _priorities_data(),
     }
     context.update(_task_panel_context(request.user, project, role, task))
     return render(request, "projects/ui/partials/task_panel.html", context)

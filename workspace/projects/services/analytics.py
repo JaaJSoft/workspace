@@ -6,15 +6,10 @@ from django.utils import timezone
 from django.utils.translation import gettext
 
 from ..models import Task, TaskEvent, TaskStatus
+from ..queries import PRIORITIES_BY_URGENCY
 
 DEFAULT_WEEKS = 12
 
-_PRIORITY_ORDER = [
-    Task.Priority.URGENT,
-    Task.Priority.HIGH,
-    Task.Priority.MEDIUM,
-    Task.Priority.LOW,
-]
 _PRIORITY_CSS = {
     Task.Priority.URGENT: "bg-error",
     Task.Priority.HIGH: "bg-warning",
@@ -161,5 +156,5 @@ def _by_priority(open_tasks):
             "color": "",
             "css_class": _PRIORITY_CSS[priority],
         }
-        for priority in _PRIORITY_ORDER
+        for priority in PRIORITIES_BY_URGENCY
     ]

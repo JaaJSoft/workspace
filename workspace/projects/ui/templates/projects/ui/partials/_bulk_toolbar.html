@@ -145,42 +145,20 @@ not strip whoever else was on them.
     tabindex="0"
     class="dropdown-content menu z-50 mt-1 w-44 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
   >
-    <li>
-      <button
-        type="button"
-        @click="bulkPriority('urgent'); document.activeElement.blur()"
-      >
-        <i data-lucide="flame" class="w-4 h-4 text-error"></i>
-        {% translate "Urgent" context "task priority" %}
-      </button>
-    </li>
-    <li>
-      <button
-        type="button"
-        @click="bulkPriority('high'); document.activeElement.blur()"
-      >
-        <i data-lucide="arrow-up" class="w-4 h-4 text-warning"></i>
-        {% translate "High" context "task priority" %}
-      </button>
-    </li>
-    <li>
-      <button
-        type="button"
-        @click="bulkPriority('medium'); document.activeElement.blur()"
-      >
-        <i data-lucide="equal" class="w-4 h-4 text-info"></i>
-        {% translate "Medium" context "task priority" %}
-      </button>
-    </li>
-    <li>
-      <button
-        type="button"
-        @click="bulkPriority('low'); document.activeElement.blur()"
-      >
-        <i data-lucide="arrow-down" class="w-4 h-4 opacity-60"></i>
-        {% translate "Low" context "task priority" %}
-      </button>
-    </li>
+    {% for priority in priorities_data %}
+      <li>
+        <button
+          type="button"
+          @click="bulkPriority('{{ priority.value|escapejs }}'); document.activeElement.blur()"
+        >
+          <i
+            data-lucide="{{ priority.icon }}"
+            class="w-4 h-4 {{ priority.icon_class }}"
+          ></i>
+          {{ priority.label }}
+        </button>
+      </li>
+    {% endfor %}
   </ul>
 </div>
 

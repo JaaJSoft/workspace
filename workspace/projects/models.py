@@ -322,6 +322,7 @@ def task_url(project_id, task_id):
 
 
 class Task(models.Model):
+    # Declared from least to most urgent: PRIORITIES_BY_URGENCY reads this order.
     class Priority(models.TextChoices):
         LOW = "low", pgettext_lazy("task priority", "Low")
         MEDIUM = "medium", pgettext_lazy("task priority", "Medium")

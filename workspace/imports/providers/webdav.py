@@ -105,6 +105,32 @@ def _translate_transport_errors(host):
         raise ConnectionFailed(_("Could not reach %(host)s.") % {"host": host}) from exc
 
 
+def multistatus_request(client, host, method, url, body, *, depth):
+    """Send a PROPFIND or REPORT whose only acceptable answer is a 207 multistatus."""
+    with _translate_transport_errors(host):
+        response = client.request(
+            method,
+            url,
+            content=body,
+            headers={"Depth": depth, "Content-Type": "application/xml"},
+        )
+    _raise_for_status(response, url)
+    if response.status_code != 207:
+        raise ProviderError(
+            _(
+                "'%(host)s' answered HTTP %(code)s to %(method)s %(url)s "
+                "instead of a multistatus."
+            )
+            % {
+                "host": host,
+                "code": response.status_code,
+                "method": method,
+                "url": url,
+            }
+        )
+    return response
+
+
 class _ResponseStream(io.RawIOBase):
     """File-like view over an httpx2 byte iterator - pulls one chunk at a time."""
 

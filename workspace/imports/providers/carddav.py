@@ -13,18 +13,17 @@ from urllib.parse import quote, unquote, urlparse
 from xml.etree import ElementTree
 
 import httpx2
-from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
 
 from ..errors import REPORTED_ERRORS
-from .base import ProviderError, RemoteAddressBook, RemoteCard
+from .base import RemoteAddressBook, RemoteCard
 from .webdav import (
     DAV,
-    _raise_for_status,
     _translate_transport_errors,
     build_client,
     entry_id_from_href,
+    multistatus_request,
     ok_props,
     parse_dav_xml,
 )
@@ -91,7 +90,9 @@ class CardDavSource:
     # -- ContactSource -------------------------------------------------
 
     def address_books(self):
-        response = self._request("PROPFIND", "/", _BOOKS_BODY, depth="1")
+        response = multistatus_request(
+            self._client, self._host, "PROPFIND", "/", _BOOKS_BODY, depth="1"
+        )
         for href, props in self._members(response):
             if props.find(f"{DAV}resourcetype/{CARDDAV}addressbook") is None:
                 continue
@@ -109,8 +110,13 @@ class CardDavSource:
             )
 
     def card_refs(self, book_id):
-        response = self._request(
-            "PROPFIND", _collection_url(book_id), _CARDS_BODY, depth="1"
+        response = multistatus_request(
+            self._client,
+            self._host,
+            "PROPFIND",
+            _collection_url(book_id),
+            _CARDS_BODY,
+            depth="1",
         )
         for href, props in self._members(response):
             if props.find(f"{DAV}resourcetype/{DAV}collection") is not None:
@@ -120,7 +126,9 @@ class CardDavSource:
     def fetch_cards(self, book_id, card_ids):
         if not card_ids:
             return
-        response = self._request(
+        response = multistatus_request(
+            self._client,
+            self._host,
             "REPORT",
             _collection_url(book_id),
             self._multiget_body(card_ids),
@@ -190,27 +198,3 @@ class CardDavSource:
             href = ElementTree.SubElement(root, f"{DAV}href")
             href.text = quote(self._base_path + card_id, safe="/")
         return ElementTree.tostring(root, encoding="utf-8", xml_declaration=True)
-
-    def _request(self, method, url, body, *, depth):
-        with _translate_transport_errors(self._host):
-            response = self._client.request(
-                method,
-                url,
-                content=body,
-                headers={"Depth": depth, "Content-Type": "application/xml"},
-            )
-        _raise_for_status(response, url)
-        if response.status_code != 207:
-            raise ProviderError(
-                _(
-                    "'%(host)s' answered HTTP %(code)s to %(method)s %(url)s "
-                    "instead of a multistatus."
-                )
-                % {
-                    "host": self._host,
-                    "code": response.status_code,
-                    "method": method,
-                    "url": url,
-                }
-            )
-        return response

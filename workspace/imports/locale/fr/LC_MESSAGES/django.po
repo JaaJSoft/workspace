@@ -210,7 +210,7 @@ msgstr ""
 msgid "Could not store the file."
 msgstr "Impossible d’enregistrer le fichier."
 
-#: providers/carddav.py providers/nextcloud.py
+#: providers/webdav.py
 #, python-format
 msgid ""
 "'%(host)s' answered HTTP %(code)s to %(method)s %(url)s instead of a "

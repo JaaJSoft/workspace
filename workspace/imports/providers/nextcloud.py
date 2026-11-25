@@ -5,7 +5,6 @@ import logging
 from urllib.parse import quote, urlparse
 
 import httpx2
-from django.utils.translation import gettext as _
 
 from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
@@ -15,10 +14,10 @@ from .carddav import CardDavSource
 from .webdav import (
     DAV,
     WebDavProvider,
-    _raise_for_status,
     _translate_transport_errors,
     build_client,
     entry_id_from_href,
+    multistatus_request,
     ok_props,
     parse_dav_xml,
 )
@@ -127,8 +126,13 @@ class NextcloudMetadataSource:
         yield from self._filter_files(b"<oc:favorite>1</oc:favorite>")
 
     def tags(self):
-        response = self._request(
-            "PROPFIND", _DAV_SYSTEMTAGS, _SYSTEMTAGS_BODY, depth="1"
+        response = multistatus_request(
+            self._client,
+            self._host,
+            "PROPFIND",
+            _DAV_SYSTEMTAGS,
+            _SYSTEMTAGS_BODY,
+            depth="1",
         )
         for element in parse_dav_xml(response.content).iter(f"{DAV}response"):
             props = ok_props(element)
@@ -157,36 +161,19 @@ class NextcloudMetadataSource:
     # -- internals -----------------------------------------------------
 
     def _filter_files(self, rule: bytes):
-        response = self._request("REPORT", self._files_url, _filter_files_body(rule))
+        response = multistatus_request(
+            self._client,
+            self._host,
+            "REPORT",
+            self._files_url,
+            _filter_files_body(rule),
+            depth="0",
+        )
         for element in parse_dav_xml(response.content).iter(f"{DAV}response"):
             href = element.findtext(f"{DAV}href")
             if not href or _member_failed(element):
                 continue
             yield entry_id_from_href(href, self._files_path)
-
-    def _request(self, method, url, body, *, depth="0"):
-        with _translate_transport_errors(self._host):
-            response = self._client.request(
-                method,
-                url,
-                content=body,
-                headers={"Depth": depth, "Content-Type": "application/xml"},
-            )
-        _raise_for_status(response, url)
-        if response.status_code != 207:
-            raise ProviderError(
-                _(
-                    "'%(host)s' answered HTTP %(code)s to %(method)s %(url)s "
-                    "instead of a multistatus."
-                )
-                % {
-                    "host": self._host,
-                    "code": response.status_code,
-                    "method": method,
-                    "url": url,
-                }
-            )
-        return response
 
 
 class NextcloudProvider(WebDavProvider):

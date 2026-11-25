@@ -55,13 +55,12 @@ def _bucket_filter(key):
 
 
 def _aggregate(key):
+    from .quota import group_usage, personal_usage  # quota imports this module
+
     owner_id, group_id = key
-    files = File.objects.filter(node_type=File.NodeType.FILE)
     if group_id is not None:
-        files = files.filter(group_id=group_id)
-    else:
-        files = files.filter(owner_id=owner_id, group__isnull=True)
-    return files.aggregate(total=Sum("size"))["total"] or 0
+        return group_usage(group_id)
+    return personal_usage(owner_id)
 
 
 def charge(totals):

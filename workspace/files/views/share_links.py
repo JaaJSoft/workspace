@@ -129,6 +129,37 @@ class _LinkReadView(APIView):
             keep_private(response)
         return response
 
+    def readable_file(self, request, token, *, with_thumbnail=False):
+        """The file ``?file=`` names in the link, as ``(file, error_response)``.
+
+        Every gate - expiry, read mode, password, subtree, quarantine - runs
+        before the access is counted.
+        """
+        link, err = _resolve_link(token)
+        if err:
+            return None, err
+        read_err = _require_read(link)
+        if read_err:
+            return None, read_err
+        pwd_err = _check_password_access(link, request)
+        if pwd_err:
+            return None, pwd_err
+
+        f, err = _target_node(link, request, "file")
+        if err:
+            return None, err
+        if f.node_type != File.NodeType.FILE or (
+            with_thumbnail and not f.has_thumbnail
+        ):
+            return None, Response(status=status.HTTP_404_NOT_FOUND)
+
+        quarantined = _check_quarantine(f)
+        if quarantined is not None:
+            return None, quarantined
+
+        _record_access(link)
+        return f, None
+
 
 def _check_quarantine(file_obj):
     """403 when the malware policy denies this file, else None.
@@ -258,106 +289,52 @@ class SharedFileVerifyView(APIView):
         return response
 
 
+class _SharedFileBytesView(_LinkReadView):
+    """The file's bytes, inline or as an attachment."""
+
+    attachment = False
+
+    def get(self, request, token):
+        f, err = self.readable_file(request, token)
+        if err:
+            return err
+
+        if not f.content:
+            return Response(
+                {"detail": _("File has no content.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        redirect = signed_redirect(request, f, attachment=self.attachment)
+        if redirect is not None:
+            return redirect
+
+        try:
+            fh = f.content.open("rb")
+        except FileNotFoundError:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        # Range support lets shared videos seek and interrupted downloads
+        # resume, text included.
+        disposition = "attachment_filename" if self.attachment else "inline_filename"
+        return serve_with_ranges(
+            request,
+            file_handle=fh,
+            file_size=f.size or 0,
+            content_type=f.mime_type or "application/octet-stream",
+            **{disposition: f.name},
+        )
+
+
 @extend_schema(tags=["Files - Shared Links"])
-class SharedFileContentView(_LinkReadView):
+class SharedFileContentView(_SharedFileBytesView):
     """GET /api/v1/files/shared/{token}/content - serve file inline."""
 
-    def get(self, request, token):
-        link, err = _resolve_link(token)
-        if err:
-            return err
-        read_err = _require_read(link)
-        if read_err:
-            return read_err
-        pwd_err = _check_password_access(link, request)
-        if pwd_err:
-            return pwd_err
-
-        f, err = _target_node(link, request, "file")
-        if err:
-            return err
-        if f.node_type != File.NodeType.FILE:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        quarantined = _check_quarantine(f)
-        if quarantined is not None:
-            return quarantined
-
-        _record_access(link)
-
-        if not f.content:
-            return Response(
-                {"detail": _("File has no content.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        redirect = signed_redirect(request, f, attachment=False)
-        if redirect is not None:
-            return redirect
-
-        # Streamed with Range support, text included: shared videos can seek.
-        try:
-            fh = f.content.open("rb")
-        except FileNotFoundError:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return serve_with_ranges(
-            request,
-            file_handle=fh,
-            file_size=f.size or 0,
-            content_type=f.mime_type or "application/octet-stream",
-            inline_filename=f.name,
-        )
-
 
 @extend_schema(tags=["Files - Shared Links"])
-class SharedFileDownloadView(_LinkReadView):
+class SharedFileDownloadView(_SharedFileBytesView):
     """GET /api/v1/files/shared/{token}/download - download file."""
 
-    def get(self, request, token):
-        link, err = _resolve_link(token)
-        if err:
-            return err
-        read_err = _require_read(link)
-        if read_err:
-            return read_err
-        pwd_err = _check_password_access(link, request)
-        if pwd_err:
-            return pwd_err
-
-        f, err = _target_node(link, request, "file")
-        if err:
-            return err
-        if f.node_type != File.NodeType.FILE:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        quarantined = _check_quarantine(f)
-        if quarantined is not None:
-            return quarantined
-
-        _record_access(link)
-
-        if not f.content:
-            return Response(
-                {"detail": _("File has no content.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        redirect = signed_redirect(request, f, attachment=True)
-        if redirect is not None:
-            return redirect
-
-        try:
-            fh = f.content.open("rb")
-        except FileNotFoundError:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        # Range support lets the user resume an interrupted download.
-        return serve_with_ranges(
-            request,
-            file_handle=fh,
-            file_size=f.size or 0,
-            content_type=f.mime_type or "application/octet-stream",
-            attachment_filename=f.name,
-        )
+    attachment = True
 
 
 @extend_schema(tags=["Files - Shared Links"])
@@ -368,27 +345,9 @@ class SharedFileThumbnailView(_LinkReadView):
         size = parse_thumbnail_size(request.query_params.get("size"))
         if size is None:
             return Response(status=status.HTTP_400_BAD_REQUEST)
-        link, err = _resolve_link(token)
+        node, err = self.readable_file(request, token, with_thumbnail=True)
         if err:
             return err
-        read_err = _require_read(link)
-        if read_err:
-            return read_err
-        pwd_err = _check_password_access(link, request)
-        if pwd_err:
-            return pwd_err
-
-        node, err = _target_node(link, request, "file")
-        if err:
-            return err
-        if node.node_type != File.NodeType.FILE or not node.has_thumbnail:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        quarantined = _check_quarantine(node)
-        if quarantined is not None:
-            return quarantined
-
-        _record_access(link)
 
         thumb_path = thumbnail_variant_path(node.uuid, size)
         if thumb_path is None:

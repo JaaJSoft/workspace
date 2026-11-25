@@ -1,6 +1,6 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 // A fetch answering from `routes` ("METHOD url" -> body), recording every
 // request.
@@ -33,7 +33,10 @@ function modal(routes = {}, { failing = [] } = {}) {
   const alerts = [];
   const events = [];
   const dialog = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
-  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/album_share.js', {
+  const ctx = loadScripts([
+    'workspace/files/ui/static/files/ui/js/share_modal.js',
+    'workspace/photos/ui/static/photos/ui/js/album_share.js',
+  ], {
     fetch: fakeFetch({
       'GET /api/v1/photos/albums/al1/shares': MEMBERS,
       'GET /api/v1/groups': [{ id: 7, name: 'Team' }, { id: 8, name: 'Family' }],

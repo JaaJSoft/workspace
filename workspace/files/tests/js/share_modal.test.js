@@ -130,3 +130,50 @@ test('a refused link creation shows the reason and keeps the form open', async (
   assert.equal(app.linkError, 'Too short.');
   assert.equal(app.creatingLink, false);
 });
+
+test('a created link sends its expiry day, password and mode, then resets the form', async () => {
+  const requests = [];
+  const ctx = loadScript('workspace/files/ui/static/files/ui/js/share_modal.js', {
+    fetch: async (url, options = {}) => {
+      requests.push([options.method || 'GET', url, options.body ? JSON.parse(options.body) : null]);
+      return reply(options.method === 'POST' ? 201 : 200, []);
+    },
+    getCSRFToken: () => 'token',
+    getUserTimeZone: () => 'Europe/Paris',
+    wallClockToIso: (wall, tz) => `${wall}@${tz}`,
+  });
+  const app = ctx.shareModal();
+  app.fileUuid = 'f1';
+  app.nodeType = 'folder';
+  app.showLinkForm = true;
+  app.newLinkExpiry = '2030-01-31';
+  app.newLinkPassword = 'secret';
+  app.linkPasswordRevealed = true;
+  app.newLinkMode = 'drop';
+  app.newLinkMaxCount = '3';
+
+  await app.createShareLink();
+
+  assert.deepStrictEqual(requests[0], [
+    'POST',
+    '/api/v1/files/f1/share-links',
+    { expires_at: '2030-01-31T23:59:59@Europe/Paris', password: 'secret', mode: 'drop', max_file_count: 3 },
+  ]);
+  assert.deepStrictEqual(
+    [app.showLinkForm, app.newLinkExpiry, app.newLinkPassword, app.linkPasswordRevealed, app.newLinkMode],
+    [false, '', '', false, 'read'],
+  );
+});
+
+test('a copied link is announced', async () => {
+  const copied = [];
+  const alerts = [];
+  const ctx = loadScript('workspace/files/ui/static/files/ui/js/share_modal.js', {
+    navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } },
+    AppAlert: { success: (message) => alerts.push(message) },
+  });
+  const app = ctx.shareModal();
+  app.copyLinkUrl('https://x/s/t');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepStrictEqual([copied, alerts], [['https://x/s/t'], ['Link copied to clipboard']]);
+});

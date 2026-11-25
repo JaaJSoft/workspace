@@ -1,5 +1,52 @@
+// The public-link form both share modals have (this one and the album one,
+// photos/album_share.js): an optional expiry day and password, a link to copy.
+// Pairs with the public_link_fields.html partial.
+window.publicLinkFormMixin = function publicLinkFormMixin() {
+  return {
+    showLinkForm: false,
+    creatingLink: false,
+    newLinkExpiry: '',
+    newLinkPassword: '',
+    // The field is masked until the sender asks otherwise.
+    linkPasswordRevealed: false,
+
+    resetLinkFields() {
+      this.newLinkExpiry = '';
+      this.newLinkPassword = '';
+      this.linkPasswordRevealed = false;
+    },
+
+    // The request fields for what the form holds. The picked day means
+    // "valid through that day" in the user's zone.
+    linkFieldsBody() {
+      const body = {};
+      if (this.newLinkExpiry) {
+        const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+        body.expires_at = window.wallClockToIso(this.newLinkExpiry + 'T23:59:59', tz);
+      }
+      if (this.newLinkPassword) body.password = this.newLinkPassword;
+      return body;
+    },
+
+    // The day a link expires. Expiry is stored as end-of-day in the user's
+    // zone: formatting in that zone shows the day the user picked.
+    linkExpiryDay(expiresAt) {
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+      const locale = window.getUserLocale ? window.getUserLocale() : undefined;
+      return new Date(expiresAt).toLocaleDateString(locale, { timeZone: tz });
+    },
+
+    copyLinkUrl(url) {
+      navigator.clipboard.writeText(url)
+        .then(() => window.AppAlert.success(gettext('Link copied to clipboard'), { duration: 2000 }))
+        .catch(() => {});
+    },
+  };
+};
+
 window.shareModal = function shareModal() {
   return {
+    ...publicLinkFormMixin(),
     fileUuid: null,
     fileName: '',
     nodeType: 'file',
@@ -13,10 +60,6 @@ window.shareModal = function shareModal() {
     // Share links state
     shareLinks: [],
     linksLoading: false,
-    creatingLink: false,
-    showLinkForm: false,
-    newLinkExpiry: '',
-    newLinkPassword: '',
     newLinkMode: 'read',
     newLinkMaxBytes: '',
     newLinkMaxCount: '',
@@ -27,9 +70,6 @@ window.shareModal = function shareModal() {
     // Use rewrites the field only while this holds, so the link is never
     // created with one password while the panel shows, and copies, another.
     linkPasswordFollowsGenerator: false,
-    // The field is masked until the sender asks otherwise or applies a
-    // generated value: they have to pass that one on with the link.
-    linkPasswordRevealed: false,
     // Reported beside the panel, not through AppAlert: the toasts render
     // under the dialog's backdrop, out of sight of whoever pressed Copy.
     linkGeneratorError: '',
@@ -290,14 +330,12 @@ window.shareModal = function shareModal() {
 
     closeLinkForm() {
       this.showLinkForm = false;
-      this.newLinkExpiry = '';
-      this.newLinkPassword = '';
+      this.resetLinkFields();
       this.newLinkMode = 'read';
       this.newLinkMaxBytes = '';
       this.newLinkMaxCount = '';
       this.linkGeneratorOpen = false;
       this.linkPasswordFollowsGenerator = false;
-      this.linkPasswordRevealed = false;
       this.linkGeneratorError = '';
     },
 
@@ -385,13 +423,7 @@ window.shareModal = function shareModal() {
       if (!this.fileUuid) return;
       this.creatingLink = true;
       const csrfToken = getCSRFToken();
-      const body = {};
-      // The picked day means "valid through that day" in the user's zone.
-      if (this.newLinkExpiry) {
-        const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-        body.expires_at = window.wallClockToIso(this.newLinkExpiry + 'T23:59:59', tz);
-      }
-      if (this.newLinkPassword) body.password = this.newLinkPassword;
+      const body = this.linkFieldsBody();
       if (this.canChooseMode()) body.mode = this.newLinkMode;
       if (this.showsCaps()) {
         if (this.newLinkMaxBytes) body.max_file_bytes = Number(this.newLinkMaxBytes);
@@ -449,19 +481,8 @@ window.shareModal = function shareModal() {
       return fallback;
     },
 
-    copyShareLink(url) {
-      navigator.clipboard.writeText(url).then(() => {
-        if (window.AppAlert) window.AppAlert.success(gettext('Link copied to clipboard'));
-      });
-    },
-
     formatLinkExpiry(expiresAt) {
-      if (!expiresAt) return gettext('Permanent');
-      // Expiry is stored as end-of-day in the user's zone: formatting in
-      // that zone shows the day the user picked.
-      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      const locale = window.getUserLocale ? window.getUserLocale() : undefined;
-      return new Date(expiresAt).toLocaleDateString(locale, { timeZone: tz });
+      return expiresAt ? this.linkExpiryDay(expiresAt) : gettext('Permanent');
     },
   };
 };

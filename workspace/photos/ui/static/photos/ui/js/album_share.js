@@ -29,8 +29,10 @@ function albumShareTarget(type, id) {
   return { shared_with: Number(id) };
 }
 
+// The link form comes from publicLinkFormMixin() (files/ui/js/share_modal.js).
 window.albumShareModal = function albumShareModal() {
   return {
+    ...publicLinkFormMixin(),
     roles: albumShareRoles(),
     albumUuid: null,
     albumTitle: '',
@@ -48,12 +50,7 @@ window.albumShareModal = function albumShareModal() {
     saving: false,
     links: [],
     linksLoading: false,
-    showLinkForm: false,
-    creatingLink: false,
-    newLinkExpiry: '',
-    newLinkPassword: '',
     newLinkAllowDownload: false,
-    linkPasswordRevealed: false,
 
     init() {
       window.addEventListener('open-album-share', (e) => this.openModal(e.detail));
@@ -290,22 +287,14 @@ window.albumShareModal = function albumShareModal() {
 
     closeLinkForm() {
       this.showLinkForm = false;
-      this.newLinkExpiry = '';
-      this.newLinkPassword = '';
+      this.resetLinkFields();
       this.newLinkAllowDownload = false;
-      this.linkPasswordRevealed = false;
     },
 
     async createLink() {
       if (!this.albumUuid || this.creatingLink) return;
       this.creatingLink = true;
-      const body = { allow_download: !!this.newLinkAllowDownload };
-      // The picked day means "valid through that day" in the user's zone.
-      if (this.newLinkExpiry) {
-        const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-        body.expires_at = window.wallClockToIso(`${this.newLinkExpiry}T23:59:59`, tz);
-      }
-      if (this.newLinkPassword) body.password = this.newLinkPassword;
+      const body = { allow_download: !!this.newLinkAllowDownload, ...this.linkFieldsBody() };
       try {
         const response = await fetch(this._api('/links'), {
           method: 'POST',
@@ -316,7 +305,7 @@ window.albumShareModal = function albumShareModal() {
         const link = await response.json();
         this.links = [link, ...this.links];
         this.closeLinkForm();
-        this.copyLink(link.url);
+        this.copyLinkUrl(link.url);
       } catch (_) {
         window.AppAlert.error(gettext('Failed to create the link'));
       }
@@ -336,18 +325,9 @@ window.albumShareModal = function albumShareModal() {
       }
     },
 
-    copyLink(url) {
-      navigator.clipboard.writeText(url)
-        .then(() => window.AppAlert.success(gettext('Link copied to clipboard'), { duration: 2000 }))
-        .catch(() => {});
-    },
-
     formatExpiry(expiresAt) {
       if (!expiresAt) return gettext('Permanent');
-      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      const locale = window.getUserLocale ? window.getUserLocale() : undefined;
-      const date = new Date(expiresAt).toLocaleDateString(locale, { timeZone: tz });
-      return interpolate(gettext('Until %(date)s'), { date }, true);
+      return interpolate(gettext('Until %(date)s'), { date: this.linkExpiryDay(expiresAt) }, true);
     },
 
     viewsLabel(count) {

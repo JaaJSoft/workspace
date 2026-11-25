@@ -17,21 +17,7 @@
 {% endcomment %}
 <tr
   class="hover group {% if node.node_type == 'folder' and not is_trash_view or node.node_type == 'file' and node.viewable or node.node_type == 'shortcut' and node.shortcut_opens and not is_trash_view %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-selected:bg-module/15 data-busy:opacity-50 data-busy:pointer-events-none"
-  id="node-{{ node.uuid }}"
-  data-uuid="{{ node.uuid }}"
-  data-name="{{ node.name|lower }}"
-  data-display-name="{{ node.name }}"
-  data-node-type="{{ node.node_type }}"
-  data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
-  data-viewable="{{ node.viewable|yesno:'1,0' }}"
-  data-file-type="{{ node.type }}"
-  data-viewer="{{ node.viewer_slug }}"
-  data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
-  data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
-  data-created="{{ node.created_at|date:'U' }}"
-  data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
-  {% if node.node_type == 'folder' and not is_trash_view %}draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}"{% endif %}
-  {% if node.node_type == 'shortcut' and node.shortcut_opens and not is_trash_view %}data-opens="{{ node.shortcut_opens }}" data-target-uuid="{{ node.resolved_target.uuid }}" data-target-name="{{ node.resolved_target.name }}" data-target-file-type="{{ node.resolved_target.type }}"{% endif %}
+  {% include "files/ui/partials/node_attrs.html" %}
 >
   <td data-col="select" data-stop-row-click>
     <input

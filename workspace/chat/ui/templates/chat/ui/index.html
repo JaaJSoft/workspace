@@ -74,13 +74,13 @@ be defined before the parser reaches the markup using it, or server-rendered
     {% comment %}
       The width is server-rendered so the first paint, before Alpine binds,
       already matches the final state: `w-16` is the rail every viewport
-      starts from (this drawer is open on mobile too), `lg:w-80!` opens it on
+      starts from (this drawer is open on mobile too), `lg:w-72!` opens it on
       desktop unless the stored preference says collapsed. The binding only
       diverges from that on a later toggle.
     {% endcomment %}
     <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col w-16{% if not workspace_sidebar_collapsed %} lg:w-80!{% endif %}"
-      :class="{ 'lg:w-80!': !collapsed }"
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col w-16{% if not workspace_sidebar_collapsed %} lg:w-72!{% endif %}"
+      :class="{ 'lg:w-72!': !collapsed }"
     >
       <!-- Sidebar header -->
       <div class="border-b border-base-300 py-4 px-3 relative">

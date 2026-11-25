@@ -15,7 +15,7 @@
     <div class="flex flex-col h-full relative">
       <!-- Conversation header -->
       <div
-        class="px-4 py-2.5 border-b border-base-300 flex items-center gap-3 bg-base-100"
+        class="px-2 sm:px-4 py-2.5 border-b border-base-300 flex items-center gap-2 sm:gap-3 bg-base-100"
       >
         <!-- Back button (mobile) -->
         <button
@@ -148,9 +148,10 @@
               </li>
             </ul>
           </div>
+          {# On a phone the menu next to it opens the info too; the name needs the room. #}
           <button
             type="button"
-            class="btn btn-ghost btn-sm btn-square"
+            class="btn btn-ghost btn-sm btn-square max-sm:hidden"
             :class="showInfoPanel ? 'bg-base-200 hover:bg-base-300' : ''"
             @click="toggleInfoPanel()"
             title="{% translate 'Conversation info (Alt+I)' %}"

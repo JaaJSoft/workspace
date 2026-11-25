@@ -101,18 +101,20 @@ window.filePreferences = function filePreferences() {
 };
 
 window.sidebarCollapse = function sidebarCollapse() {
+  const mobile = window.matchMedia('(max-width: 1023px)');
   return {
-    // Seeded synchronously so Alpine's first bind matches the width the
-    // server rendered: the rail below `lg`, the stored preference above.
-    collapsed: window.matchMedia('(max-width: 1023px)').matches
-      || window.sidebarPreference.initial(),
+    // The state the sidebar shows: the stored preference on desktop, never
+    // the rail below `lg`, where the drawer opens over the page in full.
+    // Seeded synchronously so Alpine's first bind matches the server's width.
+    collapsed: !mobile.matches && window.sidebarPreference.initial(),
+    _preferCollapsed: window.sidebarPreference.initial(),
     activeView: null,
     showPinned: window._filePrefsCache.showPinned !== false,
     showGroups: window._filePrefsCache.showGroups !== false,
     showTags: window._filePrefsCache.showTags !== false,
 
     isMobile() {
-      return window.matchMedia('(max-width: 1023px)').matches;
+      return mobile.matches;
     },
 
     init() {
@@ -123,10 +125,8 @@ window.sidebarCollapse = function sidebarCollapse() {
         this.showGroups = e.detail.showGroups !== false;
         this.showTags = e.detail.showTags !== false;
       });
-      window.matchMedia('(max-width: 1023px)').addEventListener('change', (event) => {
-        if (event.matches) {
-          this.collapsed = true;
-        }
+      mobile.addEventListener('change', (event) => {
+        this.collapsed = !event.matches && this._preferCollapsed;
       });
 
     },
@@ -136,6 +136,7 @@ window.sidebarCollapse = function sidebarCollapse() {
         return;
       }
       this.collapsed = !this.collapsed;
+      this._preferCollapsed = this.collapsed;
       window.sidebarPreference.save('files', this.collapsed);
     },
 
@@ -143,6 +144,9 @@ window.sidebarCollapse = function sidebarCollapse() {
       const browser = document.getElementById('folder-browser');
       const sidebarActive = browser ? browser.dataset.sidebarActive : null;
       this.activeView = sidebarActive || 'root';
+      // A phone's drawer covers the listing: it goes once the listing changed.
+      const toggle = document.getElementById('files-drawer');
+      if (toggle && this.isMobile()) toggle.checked = false;
     },
 
     setActiveView(view) {

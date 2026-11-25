@@ -461,6 +461,7 @@ window.fileTableControls = function fileTableControls() {
       item.toggleAttribute('data-busy', previous.hasAttribute('data-busy'));
       this._paintDraggable({ [uuid]: this.actionsMap[uuid] || [] });
       if (this.tbody) {
+        if (this._listingTagsChanged()) this.applyColumnVisibility();
         this.applyRowColumns(item);
       } else {
         item.style.display = previous.style.display;
@@ -1211,9 +1212,21 @@ window.fileTableControls = function fileTableControls() {
       this.applyColumnOrder();
     },
 
+    // Across originalRows, filtered-out ones included: a filter must not make the column come and go.
+    _hasTaggedRow() {
+      return !!this.tbody && this.originalRows.some((row) => (row.dataset.tags || '').trim());
+    },
+
+    _listingTagsChanged() {
+      return this._hasTaggedRow() !== this._listingHasTags;
+    },
+
     applyColumnVisibility() {
       if (!this.table) return;
-      this.table.querySelectorAll('tr').forEach((row) => this.applyRowColumnVisibility(row));
+      this._listingHasTags = this._hasTaggedRow();
+      // A filter detaches the rows it hides; they come back with the cells they had.
+      const rows = new Set([...this.table.querySelectorAll('tr'), ...(this.tbody ? this.originalRows : [])]);
+      rows.forEach((row) => this.applyRowColumnVisibility(row));
       this.updateEmptyRowColspan();
     },
 
@@ -1257,6 +1270,8 @@ window.fileTableControls = function fileTableControls() {
     isColumnVisible(id) {
       const column = this.columns.find((col) => col.id === id);
       if (column && column.required) return true;
+      // An empty column is width taken from the names; it comes back with the first tag.
+      if (id === 'tags' && this._listingHasTags === false) return false;
       return this.columnVisibility[id] !== false;
     },
 

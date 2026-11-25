@@ -69,6 +69,20 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         height: '100%',
         listDayFormat: { weekday: 'long', day: 'numeric', month: 'long' },
         listDaySideFormat: false,
+        // "Mon 16", not "Mon 11/16": the toolbar title already names the
+        // month, and a numeric month/day pair reads in a different order
+        // in every locale.
+        // Built from two parts: Intl alone orders them per locale ("9 Mon").
+        views: {
+          timeGridWeek: {
+            dayHeaderContent: (arg) => {
+              const timeZone = (window.getUserTimeZone && window.getUserTimeZone()) || undefined;
+              const weekday = arg.date.toLocaleDateString(userLocale(), { timeZone, weekday: 'short' });
+              const day = arg.date.toLocaleDateString(userLocale(), { timeZone, day: 'numeric' });
+              return `${weekday} ${day}`;
+            },
+          },
+        },
 
         // Two independent sources rather than one merged fetch: project task
         // due dates are a read-only overlay with its own endpoint, toggle and
@@ -134,15 +148,21 @@ window.calendarEventsMixin = function calendarEventsMixin() {
               window._cardPopoverScheduleHide(info.el);
             });
           }
-          // Add recurring indicator
+          // Recurring indicator: in place of the dot of a timed event in the
+          // month grid, where a trailing icon is the first thing truncation
+          // cuts; after the title everywhere else.
           const raw = info.event.extendedProps._raw;
           if (raw?.is_recurring) {
+            const icon = document.createElement('span');
+            // SVG is a hardcoded constant (RECURRING_ICON_SVG above) - no user input.
+            icon[`inner${'HTML'}`] = RECURRING_ICON_SVG;
+            const dot = info.el.querySelector('.fc-daygrid-event-dot');
             const titleEl = info.el.querySelector('.fc-event-title') || info.el.querySelector('.fc-list-event-title');
-            if (titleEl) {
-              const icon = document.createElement('span');
+            if (dot) {
+              icon.className = 'fc-event-icon fc-event-recurring-dot';
+              dot.replaceWith(icon);
+            } else if (titleEl) {
               icon.className = 'fc-event-icon fc-event-icon-trailing';
-              // SVG is a hardcoded constant (RECURRING_ICON_SVG above) - no user input.
-              icon[`inner${'HTML'}`] = RECURRING_ICON_SVG;
               titleEl.appendChild(icon);
             }
           }

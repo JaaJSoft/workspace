@@ -41,7 +41,7 @@
         <p class="text-sm text-base-content/60 mt-3 flex items-center gap-1.5">
           <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
           {% if project.created_by %}
-            {% blocktranslate trimmed with date=project.created_at|date:"DATE_FORMAT" username=project.created_by.username %}
+            {% blocktranslate trimmed with date=project.created_at|date:"DATE_FORMAT" username=project.created_by.get_full_name|default:project.created_by.username %}
               Created {{ date }} by {{ username }}
             {% endblocktranslate %}
           {% else %}
@@ -65,21 +65,20 @@
                 class="w-4 h-4 mt-0.5 shrink-0 text-base-content/60"
               ></i>
               <div class="min-w-0 flex-1">
+                {# The task is what the row is about; what happened to it is the icon and the line below. #}
                 <p class="text-sm truncate">
-                  <span class="font-medium">{{ ev.short_label }}</span>
-                  <span class="text-base-content/70">-</span>
                   {% if ev.task_id %}
                     <button
                       type="button"
-                      class="link link-hover text-base-content/70"
+                      class="link link-hover font-medium text-left"
                       @click="openTask('{{ ev.task_id|escapejs }}')"
-                    >{% if ev.task_number %}<span class="font-mono text-base-content/50">{{ project.key }}-{{ ev.task_number }}</span> {% endif %}{{ ev.task_title }}</button>
+                    >{% if ev.task_number %}<span class="font-mono font-normal text-base-content/50">{{ project.key }}-{{ ev.task_number }}</span> {% endif %}{{ ev.task_title }}</button>
                   {% else %}
-                    <span class="text-base-content/70">{% if ev.task_number %}<span class="font-mono text-base-content/50">{{ project.key }}-{{ ev.task_number }}</span> {% endif %}{{ ev.task_title }}</span>
+                    <span class="font-medium">{% if ev.task_number %}<span class="font-mono font-normal text-base-content/50">{{ project.key }}-{{ ev.task_number }}</span> {% endif %}{{ ev.task_title }}</span>
                   {% endif %}
                 </p>
-                <p class="text-xs text-base-content/50">
-                  {% if ev.actor %}{{ ev.actor.username }} &middot; {% endif %}{{ ev.created_at|time_ago }}{% if ev.from_status and ev.to_status %} &middot; {{ ev.from_status }} &rarr; {{ ev.to_status }}{% endif %}
+                <p class="text-xs text-base-content/50 truncate">
+                  {{ ev.short_label }}{% if ev.actor %} &middot; {{ ev.actor.get_full_name|default:ev.actor.username }}{% endif %} &middot; {{ ev.created_at|time_ago }}{% if ev.from_status and ev.to_status %} &middot; {{ ev.from_status }} &rarr; {{ ev.to_status }}{% endif %}
                 </p>
               </div>
             </li>
@@ -99,7 +98,7 @@
         <ul class="flex flex-col gap-2">
           {% for m in members %}
             <li class="flex items-center gap-2 text-sm">
-              <user-avatar user-id="{{ m.user.id }}" username="{{ m.user.username }}" size="xs" presence card name href="/users/profile/{{ m.user.username }}"></user-avatar>
+              <user-avatar user-id="{{ m.user.id }}" username="{{ m.user.username }}" display-name="{{ m.user.get_full_name|default:m.user.username }}" size="xs" presence card name href="/users/profile/{{ m.user.username }}"></user-avatar>
               {% if m.role == "admin" %}
                 <span class="badge badge-ghost badge-sm">{% translate "Admin" context "project role" %}</span>
               {% endif %}

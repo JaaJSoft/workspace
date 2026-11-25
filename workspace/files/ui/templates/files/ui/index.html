@@ -21,7 +21,7 @@
   {% include "core/partials/navbar.html" with navbar_full_width=True %}
 {% endblock %}
 
-{% block drawer_class %}drawer-open{% endblock %}
+{% block drawer_class %}lg:drawer-open{% endblock %}
 {% block drawer_id %}files-drawer{% endblock %}
 
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
@@ -38,16 +38,10 @@
     ></label>
 
     <!-- Sidebar -->
-    {% comment %}
-      The width is server-rendered so the first paint, before Alpine binds,
-      already matches the final state: `w-16` is the rail every viewport
-      starts from (this drawer is open on mobile too), `lg:w-72` opens it on
-      desktop unless the stored preference says collapsed. The binding only
-      diverges from that on a later toggle.
-    {% endcomment %}
+    {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
     <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col w-16{% if not workspace_sidebar_collapsed %} lg:w-72{% endif %}"
-      :class="{ 'lg:w-72': !collapsed }"
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      :class="{ 'w-16': collapsed, 'w-72': !collapsed }"
     >
       <!-- Sidebar header -->
       <div class="border-b border-base-300 py-3 px-3 relative">
@@ -55,8 +49,8 @@
           class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
           :class="{ 'justify-center': collapsed, 'justify-between': !collapsed }"
         >
-          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/preferences_popover.html" with component="filePreferences()" content="files/ui/partials/_preferences_content.html" accent="text-module" button_class="mr-1 hover:text-module" show_expr="!collapsed" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/preferences_popover.html" with component="filePreferences()" content="files/ui/partials/_preferences_content.html" accent="text-module" button_class="mr-1 hover:text-module" show_expr="!collapsed" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </div>
       </div>
 
@@ -64,12 +58,12 @@
          (group-folders-section, pinned list) so alpine-ajax refreshes never
          re-hide them; "invisible" keeps the space reserved while Alpine boots. -->
       <div
-        class="flex-1 overflow-y-auto py-2 {% if workspace_sidebar_collapsed %}px-2{% else %}px-3 max-lg:px-2{% endif %}"
+        class="flex-1 overflow-y-auto py-2 {% if workspace_sidebar_collapsed %}px-2{% else %}px-3{% endif %}"
         :class="{ 'px-2': collapsed, 'px-3': !collapsed }"
         x-cloak="invisible"
       >
         <h3
-          class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200 {% if workspace_sidebar_collapsed %}max-h-0 mb-0 opacity-0{% else %}max-h-6 mb-1 opacity-100 max-lg:max-h-0 max-lg:mb-0 max-lg:opacity-0{% endif %}"
+          class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200 {% if workspace_sidebar_collapsed %}max-h-0 mb-0 opacity-0{% else %}max-h-6 mb-1 opacity-100{% endif %}"
           :class="{ 'max-h-0 mb-0 opacity-0': collapsed, 'max-h-6 mb-1 opacity-100': !collapsed }"
           :aria-hidden="collapsed"
         >
@@ -79,11 +73,11 @@
           </span>
         </h3>
         <ul class="space-y-0.5">
-          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label=_("My Files") color="module" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True extra_attrs='data-drop-folder=""' %}
-          {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label=_("Favorites") color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label=_("Recent") color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label=_("Trash") color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/drawer_item.html" with href="/files?shared=1" icon="share-2" label=_("Shared with me") color="secondary" active=is_shared_view active_binding="activeView === 'shared'" onclick="setActiveView('shared')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label=_("My Files") color="module" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False extra_attrs='data-drop-folder=""' %}
+          {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label=_("Favorites") color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label=_("Recent") color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label=_("Trash") color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with href="/files?shared=1" icon="share-2" label=_("Shared with me") color="secondary" active=is_shared_view active_binding="activeView === 'shared'" onclick="setActiveView('shared')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
 
         <!-- Pinned Folders -->
@@ -136,7 +130,7 @@
 
         <!-- Tags: favourites, plus the manager for the rest -->
         <div x-show="showTags" x-transition x-data="tagSidebar()">
-          {% include "files/ui/partials/tag_sidebar_section.html" with collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "files/ui/partials/tag_sidebar_section.html" with collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </div>
       </div>
 
@@ -145,9 +139,9 @@
         <ul class="menu p-0 w-full">
           {% translate "My files" as my_files_label %}
           {% with my_files_js=my_files_label|escapejs %}
-            {% include "ui/partials/drawer_item.html" with icon="chart-pie" label=_("Storage") color="module" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: '"|add:my_files_js|add:"' } }))" tooltip=_("Storage") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+            {% include "ui/partials/drawer_item.html" with icon="chart-pie" label=_("Storage") color="module" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: '"|add:my_files_js|add:"' } }))" tooltip=_("Storage") collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% endwith %}
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('help-dialog').showModal()" tooltip=_("Help") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('help-dialog').showModal()" tooltip=_("Help") collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
@@ -158,12 +152,12 @@
         <ul class="menu p-0 hidden lg:block w-full">
           {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
             {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
-              {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
+              {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
             {% endwith %}
           {% endwith %}
         </ul>
         <ul class="menu p-0 lg:hidden w-full">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label=_("Preferences") color="module" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip=_("Preferences") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label=_("Preferences") color="module" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip=_("Preferences") collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
     </aside>
@@ -204,10 +198,11 @@
               <!-- Top Header Bar: navigation and trail above, title and the folder action below -->
               {# Under an open file only the trail shows, so the header tightens around it. #}
               <div
-                class="bg-base-100 border-b border-base-300 px-4 py-3 lg:px-6 lg:py-5 group-data-viewer-covered/viewer:py-2"
+                class="bg-base-100 border-b border-base-300 px-4 py-2.5 lg:px-6 lg:py-3 group-data-viewer-covered/viewer:py-2"
               >
                 {# The trail stays above an open file (data-viewer-keep); the title row goes under the viewer. #}
                 <div class="flex items-center gap-2 min-w-0" data-viewer-keep>
+                  {% include "ui/partials/drawer_toggle.html" with drawer_id="files-drawer" class="lg:hidden -ml-1 shrink-0" %}
                   <div class="join shrink-0" x-data="navButtons('folder-browser')">
                     <button
                       type="button"
@@ -249,9 +244,12 @@
                       <i data-lucide="rotate-cw" class="w-4 h-4"></i>
                     </button>
                   </div>
-                  {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs collapse=True collapse_after=breadcrumb_collapse x_target="folder-browser" x_target_history="push" mobile_compact=True %}
+                  {# At the root the trail is the title below it, said twice. #}
+                  {% if breadcrumbs|length > 1 %}
+                    {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs collapse=True collapse_after=breadcrumb_collapse x_target="folder-browser" x_target_history="push" mobile_compact=True %}
+                  {% endif %}
                 </div>
-                <div class="flex items-center gap-3 mt-1 lg:mt-2">
+                <div class="flex items-center gap-3 mt-1">
                   <h1
                     class="page-title flex-1 min-w-0 truncate text-base-content"
                     title="{{ page_title }}"

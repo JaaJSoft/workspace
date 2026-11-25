@@ -100,14 +100,49 @@
             x-show="actionInProgress"
             x-cloak
           ></span>
-          <!-- Always visible actions -->
+          {% comment %}
+            Three groups, most used first: answering, filing, then the
+            destructive action last, next to the overflow menu. Below lg only
+            Reply, Star, Archive and Delete stay; the rest is in the menu.
+          {% endcomment %}
           <button
             type="button"
-            class="btn btn-ghost btn-xs btn-square"
+            class="btn btn-ghost btn-xs gap-1 px-1.5"
             @click="replyTo(messageDetail)"
             title="{% translate "Reply (R)" %}"
           >
             <i data-lucide="reply" class="w-4 h-4"></i>
+            <span class="hidden xl:inline">{% translate "Reply" %}</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
+            @click="replyAll(messageDetail)"
+            title="{% translate "Reply all (A)" %}"
+            aria-label="{% translate "Reply all" %}"
+          >
+            <i data-lucide="reply-all" class="w-4 h-4"></i>
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
+            @click="forwardMessage(messageDetail)"
+            title="{% translate "Forward (F)" %}"
+            aria-label="{% translate "Forward" %}"
+          >
+            <i data-lucide="forward" class="w-4 h-4"></i>
+          </button>
+          <span class="w-px h-4 bg-base-300 mx-1" aria-hidden="true"></span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square"
+            x-show="canArchive(messageDetail)"
+            @click="fileMessages('archive', [messageDetail.uuid])"
+            :disabled="actionInProgress"
+            title="{% translate "Archive (E)" %}"
+            aria-label="{% translate "Archive" %}"
+          >
+            <i data-lucide="archive" class="w-4 h-4"></i>
           </button>
           <button
             type="button"
@@ -115,6 +150,7 @@
             @click="toggleStar(messageDetail)"
             :disabled="actionInProgress"
             :title="messageDetail.is_starred ? '{{ unstar_label|escapejs }}' : '{{ star_label|escapejs }}'"
+            :aria-label="messageDetail.is_starred ? '{{ unstar_label|escapejs }}' : '{{ star_label|escapejs }}'"
           >
             <i
               data-lucide="star"
@@ -124,51 +160,16 @@
           </button>
           <button
             type="button"
-            class="btn btn-ghost btn-xs btn-square"
-            x-show="canArchive(messageDetail)"
-            @click="fileMessages('archive', [messageDetail.uuid])"
-            :disabled="actionInProgress"
-            title="{% translate "Archive (E)" %}"
-          >
-            <i data-lucide="archive" class="w-4 h-4"></i>
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs btn-square text-error"
-            @click="deleteMessage(messageDetail)"
-            :disabled="actionInProgress"
-            title="{% translate "Delete" %}"
-          >
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
-          <!-- Desktop-only actions -->
-          <button
-            type="button"
             class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
             @click="toggleRead(messageDetail)"
             :disabled="actionInProgress"
             :title="messageDetail.is_read ? '{{ mark_unread_label|escapejs }}' : '{{ mark_read_label|escapejs }}'"
+            :aria-label="messageDetail.is_read ? '{{ mark_unread_label|escapejs }}' : '{{ mark_read_label|escapejs }}'"
           >
             <i
               :data-lucide="messageDetail.is_read ? 'mail' : 'mail-open'"
               class="w-4 h-4"
             ></i>
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
-            @click="replyAll(messageDetail)"
-            title="{% translate "Reply all (A)" %}"
-          >
-            <i data-lucide="reply-all" class="w-4 h-4"></i>
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
-            @click="forwardMessage(messageDetail)"
-            title="{% translate "Forward (F)" %}"
-          >
-            <i data-lucide="forward" class="w-4 h-4"></i>
           </button>
           {% if ai_enabled %}
             <button
@@ -177,11 +178,23 @@
               @click="summarizeMessage(messageDetail)"
               :disabled="actionInProgress || aiSummarizing"
               title="{% translate "Summarize with AI" %}"
+              aria-label="{% translate "Summarize with AI" %}"
             >
               <span x-show="!aiSummarizing"><i data-lucide="sparkles" class="w-4 h-4"></i></span>
               <span x-show="aiSummarizing" class="loading loading-spinner loading-xs"></span>
             </button>
           {% endif %}
+          <span class="w-px h-4 bg-base-300 mx-1" aria-hidden="true"></span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square hover:text-error"
+            @click="deleteMessage(messageDetail)"
+            :disabled="actionInProgress"
+            title="{% translate "Delete" %}"
+            aria-label="{% translate "Delete" %}"
+          >
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
           <!-- Overflow menu: the actions the toolbar has no room for, plus the
                desktop-only ones on mobile -->
           <div class="dropdown dropdown-end">

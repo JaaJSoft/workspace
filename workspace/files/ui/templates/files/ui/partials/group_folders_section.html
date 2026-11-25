@@ -16,7 +16,7 @@ Context variables:
 <div id="group-folders-section">
   {% if group_folders or available_groups %}
     <hr
-      class="my-2 border-base-300{% if workspace_sidebar_collapsed %} hidden{% else %} max-lg:hidden{% endif %}"
+      class="my-2 border-base-300{% if workspace_sidebar_collapsed %} hidden{% endif %}"
       :class="{ hidden: collapsed }"
       x-show="!collapsed"
     />
@@ -25,7 +25,7 @@ Context variables:
          shrink below its heading and button, and x-show alone would leave it
          sticking out of the rail for one frame. -->
     <div
-      class="flex items-center mb-1{% if workspace_sidebar_collapsed %} hidden{% else %} max-lg:hidden{% endif %}"
+      class="flex items-center mb-1{% if workspace_sidebar_collapsed %} hidden{% endif %}"
       :class="{ hidden: collapsed }"
       x-show="!collapsed"
       x-transition

@@ -22,7 +22,7 @@ def _stylesheet_without_whitespace() -> str:
 
 class NavbarLayoutScrollLockTests(TestCase):
     """DaisyUI emits ``html:has(.drawer-open.drawer-open) { overflow-y: auto }``
-    which lets the html element scroll on pages using ``drawer-open`` (files,
+    which lets the html element scroll on pages using ``drawer-open`` (the
     chat). Combined with ``body { overflow: hidden }`` from ``base_with_navbar``,
     a wheel scroll on mobile then dragged the sticky navbar off-screen. The
     fix is a CSS rule locking ``html { overflow: hidden }`` whenever the body

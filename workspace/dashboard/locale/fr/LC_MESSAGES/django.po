@@ -38,10 +38,6 @@ msgid "Recent Activity"
 msgstr "Activité récente"
 
 #: templates/dashboard/index.html
-msgid "What's happening across your workspace."
-msgstr "Ce qui se passe dans votre Workspace."
-
-#: templates/dashboard/index.html
 #, python-format
 msgid "Good night, %%(name)s."
 msgstr "Bonsoir, %%(name)s."

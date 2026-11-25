@@ -57,7 +57,7 @@
           @click="createAlbum()"
         >
           <span
-            class="w-6 h-6 rounded-sm border border-dashed border-base-content/30 flex items-center justify-center shrink-0"
+            class="w-5 h-5 rounded-sm border border-dashed border-base-content/30 flex items-center justify-center shrink-0"
           >
             <i data-lucide="plus" class="w-3.5 h-3.5"></i>
           </span>
@@ -110,7 +110,7 @@
               href="{{ item.url }}"
               x-target.push="photos-nav photos-content"
               @click="closeDrawer()"
-              class="flex items-center gap-3 p-2 rounded-lg text-base transition-colors {% if item.active %}bg-module/15 text-module hover:bg-module/25{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-module{% endif %}"
+              class="flex items-center gap-3 px-2 py-1.5 rounded-lg text-sm transition-colors {% if item.active %}bg-module/15 text-module hover:bg-module/25{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-module{% endif %}"
             >
               {# The tag color is free text: bound as a style property, never written into the attribute. #}
               <i

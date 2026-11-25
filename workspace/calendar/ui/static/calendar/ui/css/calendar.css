@@ -113,10 +113,6 @@
   border: none;
 }
 
-.fc .fc-daygrid-event-dot {
-  border-color: var(--color-primary);
-}
-
 /* Per-calendar color classes */
 .fc .fc-event.event-color-primary { background-color: var(--color-primary); color: var(--color-primary-content); }
 .fc .fc-event.event-color-secondary { background-color: var(--color-secondary); color: var(--color-secondary-content); }
@@ -125,6 +121,52 @@
 .fc .fc-event.event-color-success { background-color: var(--color-success); color: var(--color-success-content); }
 .fc .fc-event.event-color-warning { background-color: var(--color-warning); color: var(--color-warning-content); }
 .fc .fc-event.event-color-error { background-color: var(--color-error); color: var(--color-error-content); }
+
+/* Timed events in the month grid: a light tint of the calendar's colour
+   behind the text, the dot (or the repeat icon) in full colour. A solid fill
+   is kept for all-day events: a month of daily repeats in solid chips turned
+   every cell into a wall that read as all-day blocks, while plain text on the
+   page lost the colour that tells the calendars apart. */
+.fc .event-color-primary { --event-color: var(--color-primary); }
+.fc .event-color-secondary { --event-color: var(--color-secondary); }
+.fc .event-color-accent { --event-color: var(--color-accent); }
+.fc .event-color-info { --event-color: var(--color-info); }
+.fc .event-color-success { --event-color: var(--color-success); }
+.fc .event-color-warning { --event-color: var(--color-warning); }
+.fc .event-color-error { --event-color: var(--color-error); }
+
+.fc .fc-event.fc-daygrid-dot-event {
+  background-color: color-mix(in oklab, var(--event-color, var(--color-primary)) 16%, transparent);
+  color: var(--color-base-content);
+  padding: 0 2px;
+  margin-top: 1px;
+}
+.fc .fc-event.fc-daygrid-dot-event:hover {
+  background-color: color-mix(in oklab, var(--event-color, var(--color-primary)) 28%, transparent);
+}
+.fc .fc-daygrid-dot-event .fc-event-time {
+  font-weight: 400;
+  margin-right: 3px;
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+}
+.fc .fc-daygrid-dot-event .fc-event-title { font-weight: 500; }
+.fc .fc-daygrid-event-dot {
+  margin: 0 4px 0 2px;
+  border-color: var(--event-color, var(--color-primary));
+}
+
+/* A repeating event wears the repeat icon in place of its dot: a one-off
+   meeting and a daily repeat no longer look alike. */
+.fc .fc-event-recurring-dot {
+  opacity: 1;
+  margin: 0 3px 0 1px;
+  color: var(--event-color, var(--color-primary));
+}
+
+/* A phone's month cell is about 50px wide: the title, not the time. */
+@media (max-width: 639px) {
+  .fc .fc-daygrid-dot-event .fc-event-time { display: none; }
+}
 
 /* Inline icons next to an event title (task marker, recurring marker).
    A box exactly one line tall, aligned to the top of the line box, centres

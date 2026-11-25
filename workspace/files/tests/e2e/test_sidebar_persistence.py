@@ -26,8 +26,8 @@ from workspace.users.services.settings import get_setting
 
 
 def re_expanded():
-    """Tailwind class opening the sidebar on desktop (the ``w-16`` rail is always there)."""
-    return re.compile(r"\blg:w-72\b")
+    """Tailwind class of the expanded sidebar (``w-16`` is the collapsed rail)."""
+    return re.compile(r"\bw-72\b")
 
 
 class FilesSidebarPersistenceTests(PlaywrightTestCase):
@@ -41,12 +41,9 @@ class FilesSidebarPersistenceTests(PlaywrightTestCase):
         user = self.create_user(username="alice")
         self.login_as(user)
 
-        # ``sidebarCollapse()`` forces ``collapsed = true`` when the
-        # viewport is below the ``lg`` breakpoint (1024 px), which would
-        # mask any persistence bug. Playwright's default viewport is
-        # 1280×720 so we're already in desktop mode, but pin it
-        # explicitly so the test doesn't silently flip into "mobile
-        # always collapsed" mode if the default ever changes.
+        # Below the ``lg`` breakpoint (1024 px) the drawer is off-canvas and
+        # ``sidebarCollapse()`` ignores the preference, which would mask any
+        # persistence bug: pin a desktop viewport.
         self.page.set_viewport_size({"width": 1280, "height": 800})
         self.page.goto(f"{self.live_server_url}/files")
 

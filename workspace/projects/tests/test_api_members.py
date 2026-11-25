@@ -18,6 +18,15 @@ class MemberListTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual({m["username"] for m in response.data}, {"admin1", "member1"})
 
+    def test_member_carries_the_name_people_know_them_by(self):
+        self.member.first_name, self.member.last_name = "Ada", "Lovelace"
+        self.member.save(update_fields=["first_name", "last_name"])
+        self.client.force_authenticate(self.member)
+        response = self.client.get(f"/api/v1/projects/{self.project.uuid}/members")
+        names = {m["username"]: m["display_name"] for m in response.data}
+        # The username stands in for a user who never gave a name.
+        self.assertEqual(names, {"admin1": "admin1", "member1": "Ada Lovelace"})
+
     def test_outsider_gets_404(self):
         self.client.force_authenticate(self.outsider)
         response = self.client.get(f"/api/v1/projects/{self.project.uuid}/members")

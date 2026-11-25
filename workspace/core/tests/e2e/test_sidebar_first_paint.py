@@ -26,22 +26,22 @@ from workspace.users.services.settings import set_setting
 
 DESKTOP = {"width": 1280, "height": 900}
 
-# Width utility each module's sidebar wears when expanded. The drawers that
-# stay open on mobile (files, chat) always carry the `w-16` rail and open on
+# Width utility each module's sidebar wears when expanded. The drawer that
+# stays open on mobile (chat) always carries the `w-16` rail and opens on
 # desktop through a `lg:` variant; the others swap the two.
 EXPANDED = {
-    "files": "lg:w-72",
+    "files": "w-72",
     "notes": "w-72",
     "mail": "w-72",
     "calendar": "w-72",
     "projects": "w-72",
     "people": "w-72",
-    "chat": "lg:w-80!",
+    "chat": "lg:w-72!",
 }
 COLLAPSED = "w-16"
 
 # Drawers that are off-canvas below `lg` (the `lg:drawer-open` shells).
-OFF_CANVAS_ON_MOBILE = ("notes", "mail", "calendar", "projects", "people")
+OFF_CANVAS_ON_MOBILE = ("files", "notes", "mail", "calendar", "projects", "people")
 MOBILE = {"width": 375, "height": 667}
 FULL_WIDTH = 288  # w-72
 OPEN_DRAWER = """() => {

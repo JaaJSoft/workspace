@@ -124,7 +124,8 @@
       }
 
       const column = el('div', `flex flex-col ${own ? 'items-end' : 'items-start'} gap-0.5 min-w-0 max-w-[75%]`);
-      if (!own) column.appendChild(this._header());
+      const continues = this.hasAttribute('continues');
+      if (!own && !continues) column.appendChild(this._header());
 
       if (this._pending) {
         column.appendChild(this._pendingMessage());
@@ -133,14 +134,19 @@
       }
 
       column.appendChild(this._footer(footerNodes));
-      this.replaceChildren(this._avatarColumn(), column);
+      // Your own messages are already marked by side and colour: an avatar
+      // there repeats who you are and costs the bubble its width.
+      if (own) this.replaceChildren(column);
+      else this.replaceChildren(this._avatarColumn(continues), column);
     }
 
     // ── Group chrome ─────────────────────────────────────────
 
-    _avatarColumn() {
+    // A continuation keeps the column, empty, so its bubbles line up.
+    _avatarColumn(empty = false) {
       const wrap = el('div', 'shrink-0 mt-auto');
       wrap.setAttribute(':class', "chatPrefs.compactMessageView ? 'w-6' : 'w-8'");
+      if (empty) return wrap;
       const userId = this.getAttribute('author-id') || '';
       const username = this.getAttribute('author-username') || '';
       // Avatar size follows density; x-if (not x-show) so only one

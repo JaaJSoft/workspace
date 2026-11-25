@@ -308,7 +308,7 @@ class GanttChartTests(SimpleTestCase):
 
     def test_height_counts_the_header_the_group_row_and_each_task_row(self):
         chart = _gantt()
-        expected = 40 + 30 + 2 * 28 + 8
+        expected = 40 + 32 + 2 * 32 + 8
         self.assertEqual(chart["height"], expected)
 
     def test_bar_spans_its_days_inclusive(self):
@@ -497,7 +497,7 @@ class GanttChartTests(SimpleTestCase):
             ]
         )
         label = chart["groups"][0]["rows"][0]["label"]
-        self.assertEqual(len(label), 30)
+        self.assertEqual(len(label), 34)
         self.assertTrue(label.endswith("…"))
 
     def test_unknown_scale_raises(self):

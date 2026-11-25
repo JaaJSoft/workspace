@@ -83,8 +83,8 @@ class MessageShellRenderingTests(PlaywrightTestCase):
         self.assertIn("flex-row-reverse", self._classes(own_group))
         self.assertIn("bg-module/15", self._classes(own_bubble))
         expect(own_bubble).to_have_attribute("data-body", "an own message")
-        # The sender's avatar rides along in the avatar column.
-        expect(own_group.locator("user-avatar").first).to_be_visible()
+        # Your own messages carry no avatar: side and colour already say who.
+        expect(own_group.locator("user-avatar")).to_have_count(0)
         # A settled group shows the timestamp footer, not the pending spinner.
         expect(own_group.locator(".loading-dots")).to_have_count(0)
 
@@ -97,6 +97,7 @@ class MessageShellRenderingTests(PlaywrightTestCase):
         self.assertIn("bg-base-200", self._classes(other_bubble))
         # Only the other side gets the author header.
         expect(other_group.get_by_text("shell-peer", exact=True)).to_be_visible()
+        expect(other_group.locator("user-avatar").first).to_be_visible()
 
     def test_reply_quote_links_to_the_quoted_message(self):
         self._open_conversation()

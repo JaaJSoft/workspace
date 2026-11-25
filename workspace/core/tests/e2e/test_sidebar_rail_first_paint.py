@@ -34,7 +34,7 @@ MOBILE = {"width": 375, "height": 667}
 MODULES = ("files", "notes", "chat", "mail", "calendar", "projects")
 # Drawers that stay open below `lg` as the rail; the others are off-canvas
 # there, so their content is not painted at all until the drawer opens.
-RAIL_ON_MOBILE = ("files", "chat")
+RAIL_ON_MOBILE = ("chat",)
 
 OBSERVER = """
 window.__rail = { overflow: 0, offenders: [], measured: 0, text: '' };

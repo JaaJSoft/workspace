@@ -5,7 +5,7 @@ function chatApp(currentUserId) {
     // Seeded synchronously so Alpine's first bind matches the width the
     // server rendered: the rail below `lg`, the stored preference above.
     // Without the viewport check, a mobile load with an expanded preference
-    // would bind w-80 first and snap to w-16 once init() ran.
+    // would bind w-72 first and snap to w-16 once init() ran.
     collapsed: window.matchMedia('(max-width: 1023px)').matches
       || window.sidebarPreference.initial(),
 

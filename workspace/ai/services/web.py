@@ -527,7 +527,7 @@ def fetch_and_extract(
 
     Four kinds of document are read: HTML through *trafilatura* (editorial
     content, navigation and ads stripped, hyperlinks kept so a follow-up fetch
-    can navigate), PDF through *pypdf*, RSS/Atom feeds as a dated entry list,
+    can navigate), PDF through *Tika*, RSS/Atom feeds as a dated entry list,
     and JSON as compact JSON. Everything but JSON opens with a header naming
     the page's title, date and final URL, and HTML closes with its links
     gathered into a list.

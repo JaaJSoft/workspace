@@ -1,0 +1,28 @@
+name: Set up the Python environment
+description: >-
+  Python, uv and the project's locked dependencies, installed the same way in
+  every job that runs the project's code. Needs the repository checked out.
+
+inputs:
+  sync-args:
+    description: The arguments of uv sync, space-separated.
+    default: --frozen
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.14'
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v10.4.0
+
+    - name: Install dependencies
+      shell: bash
+      env:
+        SYNC_ARGS: ${{ inputs.sync-args }}
+      # The argument list is split into words on purpose.
+      # shellcheck disable=SC2086
+      run: uv sync $SYNC_ARGS

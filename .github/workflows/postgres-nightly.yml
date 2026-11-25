@@ -42,16 +42,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       # As in the test matrix: the media tests skip without the binaries.
       - name: Install ffmpeg

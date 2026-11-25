@@ -657,7 +657,6 @@ class AppearanceAnalysis(models.Model):
     # spaces, never compared.
     model = models.CharField(max_length=128)
     version = models.PositiveSmallIntegerField()
-    appearance_count = models.PositiveSmallIntegerField(default=0)
     analyzed_at = models.DateTimeField()
 
     def __str__(self):

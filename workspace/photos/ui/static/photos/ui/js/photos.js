@@ -785,11 +785,6 @@ window.photosApp = function photosApp() {
       if (!photo) return;
 
       switch (action.id) {
-        case 'view':
-          window.dispatchEvent(new CustomEvent('open-file-viewer', {
-            detail: { uuid: photo.uuid, name: photo.name, type: photo.type },
-          }));
-          break;
         case 'copy_link':
           this.copyLink(photo.uuid);
           break;

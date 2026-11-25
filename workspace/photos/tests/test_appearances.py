@@ -80,7 +80,6 @@ class AnalyzeAppearancesTests(FacesTestMixin, TestCase):
         self.assertGreater(vector[0], 0)
         self.assertLess(vector[2], 0)
         analysis = AppearanceAnalysis.objects.get(file=photo)
-        self.assertEqual(analysis.appearance_count, 1)
         self.assertEqual(analysis.model, "fake")
         self.assertNotIn(photo, pending_appearances_qs())
 
@@ -90,7 +89,8 @@ class AnalyzeAppearancesTests(FacesTestMixin, TestCase):
         with people(FAR):
             self.assertEqual(analyze_appearances(photo), [])
 
-        self.assertEqual(AppearanceAnalysis.objects.get(file=photo).appearance_count, 0)
+        self.assertFalse(Appearance.objects.filter(file=photo).exists())
+        self.assertNotIn(photo, pending_appearances_qs())
 
     def test_a_photo_with_nobody_is_recorded_as_analyzed(self):
         photo = upload(self.user, "empty.png", torso_png())

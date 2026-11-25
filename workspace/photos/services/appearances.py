@@ -294,7 +294,6 @@ def _store(file_obj, model_key, found):
                     "content_hash": read_hash,
                     "model": model_key,
                     "version": APPEARANCE_ANALYSIS_VERSION,
-                    "appearance_count": len(rows),
                     "analyzed_at": timezone.now(),
                 },
             )

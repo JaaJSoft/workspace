@@ -257,19 +257,35 @@ def is_active_member(user_id, conversation_id):
     ).exists()
 
 
-def is_bot_conversation(conversation_id):
-    """Whether the conversation includes an active AI bot member.
-
-    Used to disable features that make no sense with a bot, such as calls. A
-    bot that has left does not count: the people remaining can still call.
-    """
+def _active_bot_members(conversation_id):
     from ..models import ConversationMember
 
     return ConversationMember.objects.filter(
         conversation_id=conversation_id,
         left_at__isnull=True,
         user__bot_profile__isnull=False,
-    ).exists()
+    )
+
+
+def is_bot_conversation(conversation_id):
+    """Whether the conversation includes an active AI bot member.
+
+    Used to disable features that make no sense with a bot, such as calls. A
+    bot that has left does not count: the people remaining can still call.
+    """
+    return _active_bot_members(conversation_id).exists()
+
+
+def conversation_bot(conversation_id, *, other_than=None):
+    """The bot user active in the conversation, or None.
+
+    *other_than* leaves a user out, so a bot never answers its own message.
+    """
+    members = _active_bot_members(conversation_id)
+    if other_than is not None:
+        members = members.exclude(user=other_than)
+    member = members.select_related("user").first()
+    return member.user if member else None
 
 
 def can_join_group(candidates):

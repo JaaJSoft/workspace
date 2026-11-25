@@ -26,12 +26,14 @@ from ..services.conversations import (
     active_members_queryset,
     can_add_users,
     can_join_group,
+    conversation_bot,
     default_group_title,
     end_membership,
     get_active_membership,
     get_conversation_role,
     get_or_create_dm,
     get_unread_counts,
+    is_bot_conversation,
     lock_conversation,
     set_member_role,
     user_conversation_ids,
@@ -51,17 +53,8 @@ GROUP_ADMINS_ONLY = gettext_lazy("Only group admins can do this.")
 
 def _trigger_bot_response(conversation_id, message, sender):
     """If the conversation includes a bot, trigger an AI response."""
-    bot_member = (
-        ConversationMember.objects.filter(
-            conversation_id=conversation_id,
-            left_at__isnull=True,
-            user__bot_profile__isnull=False,
-        )
-        .exclude(user=sender)
-        .select_related("user")
-        .first()
-    )
-    if bot_member:
+    bot = conversation_bot(conversation_id, other_than=sender)
+    if bot:
         # Dispatched rather than enqueued: the AITask exists from this point,
         # so a stream that reconnects while the job still waits in the queue
         # keeps showing the typing bubble the sender just raised.
@@ -70,7 +63,7 @@ def _trigger_bot_response(conversation_id, message, sender):
             from workspace.ai.services.dispatch import dispatch
 
             dispatch(
-                owner=bot_member.user,
+                owner=bot,
                 task_type=AITask.TaskType.CHAT,
                 input_data={
                     "conversation_id": str(conversation_id),
@@ -335,11 +328,9 @@ class ConversationDetailView(APIView):
 
         # A title belongs to groups and bot conversations; a description to all.
         if "title" in changes:
-            is_bot_conv = conversation.members.filter(
-                user__bot_profile__isnull=False,
-                left_at__isnull=True,
-            ).exists()
-            if conversation.kind != Conversation.Kind.GROUP and not is_bot_conv:
+            if conversation.kind != Conversation.Kind.GROUP and not is_bot_conversation(
+                conversation.pk
+            ):
                 return Response(
                     {"detail": gettext("Only group conversations can be renamed.")},
                     status=status.HTTP_400_BAD_REQUEST,

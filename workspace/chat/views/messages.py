@@ -32,7 +32,11 @@ from ..serializers import (
     MessageSerializer,
     ReactionToggleSerializer,
 )
-from ..services.conversations import get_active_membership, user_conversation_ids
+from ..services.conversations import (
+    get_active_membership,
+    is_bot_conversation,
+    user_conversation_ids,
+)
 from ..services.deletion import soft_delete_message
 from ..services.editing import edit_message
 from ..services.message_lists import PAGE_SIZE
@@ -295,12 +299,7 @@ class MessageListView(CacheControlMixin, APIView):
             )
 
         if created_attachments and any(a.is_image for a in created_attachments):
-            has_bot_member = ConversationMember.objects.filter(
-                conversation_id=conversation_id,
-                left_at__isnull=True,
-                user__bot_profile__isnull=False,
-            ).exists()
-            if has_bot_member:
+            if is_bot_conversation(conversation_id):
                 from workspace.ai.tasks.captions import enqueue_caption_if_image
 
                 for att in created_attachments:

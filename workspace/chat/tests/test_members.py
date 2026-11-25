@@ -299,6 +299,23 @@ class RenameConversationTests(ChatTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_a_conversation_with_a_bot_can_be_renamed(self):
+        bot = User.objects.create_user(username="renamebot", password="pw")
+        BotProfile.objects.create(user=bot, system_prompt="x", is_public=True)
+        ConversationMember.objects.filter(conversation=self.dm).exclude(
+            user=self.creator
+        ).delete()
+        ConversationMember.objects.create(conversation=self.dm, user=bot)
+        self.client.force_authenticate(self.creator)
+
+        resp = self.client.patch(
+            self.url(self.dm.uuid), {"title": "Assistant"}, format="json"
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.dm.refresh_from_db()
+        self.assertEqual(self.dm.title, "Assistant")
+
     def test_empty_title_rejected(self):
         self.client.force_authenticate(self.creator)
         resp = self.client.patch(

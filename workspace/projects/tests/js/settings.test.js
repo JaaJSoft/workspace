@@ -822,3 +822,51 @@ test('projectSprints.load asks the server again each time', async () => {
 
   assert.equal(c.items[0].state, 'active');
 });
+
+// Each section's request() surfaces the server's message: `detail`, then the
+// first error of the fields that section's forms send, then a generic text.
+function refusing(body) {
+  return settingsWith({
+    fetch: async () => ({ ok: false, json: async () => body }),
+  });
+}
+
+async function refusalMessage(loaded, factory) {
+  const c = loaded[factory]({ apiBase: '/x' });
+  await assert.rejects(c.request('/x/anything', {}), (error) => {
+    assert.equal(c.busy, false);
+    c.message = error.message;
+    return true;
+  });
+  return c.message;
+}
+
+const SURFACED_FIELDS = {
+  projectColumns: ['name'],
+  projectLabels: ['name'],
+  projectEpics: ['name', 'target_date'],
+  projectSprints: ['name', 'end_date'],
+  projectMembers: [],
+};
+
+for (const [factory, fields] of Object.entries(SURFACED_FIELDS)) {
+  test(`${factory}.request prefers detail over field errors`, async () => {
+    const loaded = refusing({ detail: 'Nope.', name: ['Taken.'] });
+    assert.equal(await refusalMessage(loaded, factory), 'Nope.');
+  });
+
+  for (const field of ['name', 'target_date', 'end_date', 'color']) {
+    test(`${factory}.request on a ${field} error`, async () => {
+      const loaded = refusing({ [field]: [`Bad ${field}.`] });
+      const expected = fields.includes(field) ? `Bad ${field}.` : 'Request failed.';
+      assert.equal(await refusalMessage(loaded, factory), expected);
+    });
+  }
+
+  test(`${factory}.request on an unreadable body`, async () => {
+    const loaded = settingsWith({
+      fetch: async () => ({ ok: false, json: async () => { throw new Error('html'); } }),
+    });
+    assert.equal(await refusalMessage(loaded, factory), 'Request failed.');
+  });
+}

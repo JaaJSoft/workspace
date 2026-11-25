@@ -27,7 +27,7 @@ class QuarantinedSource(Exception):
 
 def scan_enabled():
     """True when the malware scanning feature is switched on."""
-    return bool(getattr(settings, "FILES_MALWARE_SCAN_ENABLED", False))
+    return settings.FILES_MALWARE_SCAN_ENABLED
 
 
 def blocked_statuses():
@@ -35,9 +35,9 @@ def blocked_statuses():
     if not scan_enabled():
         return frozenset()
     statuses = set()
-    if getattr(settings, "FILES_MALWARE_ON_DETECTION", "block") == "block":
+    if settings.FILES_MALWARE_ON_DETECTION == "block":
         statuses.add(FileScan.Status.INFECTED)
-    if getattr(settings, "FILES_MALWARE_ON_ERROR", "open") == "closed":
+    if settings.FILES_MALWARE_ON_ERROR == "closed":
         statuses.add(FileScan.Status.ERROR)
     return frozenset(statuses)
 

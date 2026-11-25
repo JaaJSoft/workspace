@@ -31,11 +31,6 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
           uuid: e.detail.uuid,
           name: e.detail.name,
           nodeType: 'folder',
-          fileType: '',
-          isFavorite: e.detail.isFavorite,
-          isViewable: false,
-          isTrash: false,
-          isPinned: true
         });
       });
 
@@ -45,11 +40,6 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
           uuid: e.detail.uuid,
           name: e.detail.name,
           nodeType: 'folder',
-          fileType: '',
-          isFavorite: e.detail.isFavorite,
-          isViewable: false,
-          isTrash: false,
-          isPinned: false,
           isGroupFolder: true,
         });
       });

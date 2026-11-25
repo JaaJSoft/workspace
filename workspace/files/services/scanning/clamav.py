@@ -46,12 +46,8 @@ class ClamAVScanner(Scanner):
     """Scans by streaming to a clamd daemon over a Unix or TCP socket."""
 
     def _client(self, timeout=None):
-        socket_path = getattr(settings, "FILES_CLAMAV_SOCKET", "")
-        effective = (
-            timeout
-            if timeout is not None
-            else float(getattr(settings, "FILES_CLAMAV_TIMEOUT", 60))
-        )
+        socket_path = settings.FILES_CLAMAV_SOCKET
+        effective = timeout if timeout is not None else settings.FILES_CLAMAV_TIMEOUT
         if socket_path:
             # The setting takes a bare path or a unix:// URL; the client
             # connects to whatever string it is handed.
@@ -59,8 +55,8 @@ class ClamAVScanner(Scanner):
                 path=socket_path.removeprefix("unix://"), timeout=effective
             )
         return ClamdNetworkSocket(
-            host=getattr(settings, "FILES_CLAMAV_HOST", "127.0.0.1"),
-            port=int(getattr(settings, "FILES_CLAMAV_PORT", 3310)),
+            host=settings.FILES_CLAMAV_HOST,
+            port=settings.FILES_CLAMAV_PORT,
             timeout=effective,
         )
 

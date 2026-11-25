@@ -1120,10 +1120,6 @@ window.fileBrowser = function fileBrowser() {
       window.folderNav.navigateTo(this.tagViewHref(tag));
     },
 
-    isTagViewActive(tag) {
-      return this.activeView === 'tag:' + tag.uuid;
-    },
-
     // --- Tag picker (context menu "Tags" action) ---
     // The tags mixin operates on `selectedFile`, which the properties panel
     // also owns. The picker borrows it while open and hands it back on close.

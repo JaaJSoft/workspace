@@ -215,7 +215,7 @@ class ActionsMixin:
         import base64
         import binascii
 
-        if not getattr(settings, "AI_IMAGE_MODEL", ""):
+        if not settings.AI_IMAGE_MODEL:
             raise Http404
 
         file_obj = self.get_object()

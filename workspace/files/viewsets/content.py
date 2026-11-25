@@ -357,7 +357,7 @@ class ContentMixin:
         # Folder download as ZIP - streamed so RAM usage stays bounded
         # (the previous BytesIO-then-getvalue() held the full archive in
         # memory before the first byte hit the socket).
-        prefix = f"{file_obj.path or file_obj.get_path()}/"
+        prefix = f"{file_obj.path}/"
         # The folder's own tree, not request.user's: a folder shared from
         # another user still expands its descendants.
         descendants = exclude_blocked(
@@ -461,7 +461,7 @@ class ContentMixin:
                         yield obj, obj.name
                 elif obj.node_type == File.NodeType.FOLDER:
                     # Add all descendant files under <folder name>/
-                    folder_path = obj.path or obj.get_path()
+                    folder_path = obj.path
                     prefix = f"{folder_path}/"
                     descendants = exclude_blocked(
                         File.objects.filter(

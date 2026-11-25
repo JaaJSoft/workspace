@@ -29,7 +29,7 @@ User = get_user_model()
 # guard meaningful under a very short configured interval; a healthy run
 # releases the lock on exit, so the TTL only bounds recovery after a
 # worker is killed outright.
-SYNC_USER_LOCK_TTL = max(int(2 * getattr(settings, "FILES_SYNC_INTERVAL", 1800)), 1800)
+SYNC_USER_LOCK_TTL = max(int(2 * settings.FILES_SYNC_INTERVAL), 1800)
 
 # Rows fetched per page when indexing a subtree (see index_search_document).
 _INDEX_PAGE_SIZE = 500
@@ -179,7 +179,7 @@ def purge_trash():
     from workspace.files.models import File
     from workspace.files.services.hard_delete import hard_delete_in_batches
 
-    retention_days = getattr(settings, "TRASH_RETENTION_DAYS", 30)
+    retention_days = settings.TRASH_RETENTION_DAYS
     cutoff = timezone.now() - timedelta(days=retention_days)
 
     qs = File.objects.filter(deleted_at__lte=cutoff)

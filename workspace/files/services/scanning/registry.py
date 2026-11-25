@@ -60,9 +60,9 @@ def get_scanner():
     yields a MisconfiguredScanner rather than nothing, so the caller cannot
     mistake "we could not scan" for "we were not asked to".
     """
-    if not getattr(settings, "FILES_MALWARE_SCAN_ENABLED", False):
+    if not settings.FILES_MALWARE_SCAN_ENABLED:
         return None
-    key = getattr(settings, "FILES_MALWARE_SCANNER", "clamav")
+    key = settings.FILES_MALWARE_SCANNER
     factory = _BACKENDS.get(key)
     if factory is None:
         logger.error("Unknown malware scanner backend %s", scrub(key))

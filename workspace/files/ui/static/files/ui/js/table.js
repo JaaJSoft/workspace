@@ -95,7 +95,6 @@ window.fileTableControls = function fileTableControls() {
 
     // Bulk actions (computed from actionsMap intersection)
     bulkActions: [],
-    bulkActionsLoading: false,
 
     // Plain method, not an ES getter: fileTableWithView() merges its mixins
     // with object spread, which invokes getters once at spread time and
@@ -1440,10 +1439,6 @@ window.fileTableControls = function fileTableControls() {
       this.tagFilter = this.hasTagFilter(uuid)
         ? this.tagFilter.filter((id) => id !== uuid)
         : [...this.tagFilter, uuid];
-    },
-
-    clearTagFilter() {
-      this.tagFilter = [];
     },
 
     compareRows(a, b, dir) {

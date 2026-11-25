@@ -461,7 +461,7 @@ class ImageViewer(BaseViewer):
         context = super().get_context(request)
         parent_id = getattr(self.file, "parent_id", None)
         context["ai_edit_available"] = getattr(self, "_user_can_edit", True) and bool(
-            getattr(settings, "AI_IMAGE_MODEL", "")
+            settings.AI_IMAGE_MODEL
         )
         context["file_uuid"] = str(self.file.uuid)
         context["file_parent"] = str(parent_id) if parent_id else ""

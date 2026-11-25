@@ -585,8 +585,7 @@ class File(models.Model):
     @classmethod
     def _build_path_for(cls, name, parent_id):
         if parent_id:
-            parent = cls.objects.only("path", "name", "parent_id").get(pk=parent_id)
-            parent_path = parent.path or parent.get_path()
+            parent_path = cls.objects.values_list("path", flat=True).get(pk=parent_id)
             return f"{parent_path}/{name}"
         return name
 
@@ -642,9 +641,6 @@ class File(models.Model):
             self.ProcessingStatus.PROCESSING,
         )
 
-    def is_deleted(self):
-        return self.deleted_at is not None
-
     def is_locked(self):
         """Return True if this file has an active (non-expired) lock."""
         if self.locked_by_id is None:
@@ -654,7 +650,7 @@ class File(models.Model):
     def _descendant_filter(self, *, include_self=True):
         """This node's subtree, within its own tree only."""
         own = models.Q(pk=self.pk)
-        path = self.path or self.get_path()
+        path = self.path
         if self.node_type != self.NodeType.FOLDER or not path:
             return own if include_self else models.Q(pk__in=())
         below = self._namespace_q(self.owner_id, self.group_id) & models.Q(

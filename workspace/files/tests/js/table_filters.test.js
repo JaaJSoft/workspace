@@ -45,9 +45,6 @@ test('toggleTagFilter adds then removes', () => {
 
   table.toggleTagFilter('tag-a');
   assert.deepStrictEqual(Array.from(table.tagFilter), ['tag-b']);
-
-  table.clearTagFilter();
-  assert.deepStrictEqual(Array.from(table.tagFilter), []);
 });
 
 test('rows and mosaic cards agree on every filter', () => {
@@ -81,7 +78,7 @@ test('applyCards hides the cards that do not match', () => {
     ['none', '', 'none']
   );
 
-  table.clearTagFilter();
+  table.tagFilter = [];
   table.typeFilter = 'folders';
   table.applyCards();
   assert.deepStrictEqual(

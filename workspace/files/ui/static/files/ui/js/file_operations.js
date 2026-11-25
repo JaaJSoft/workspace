@@ -140,7 +140,6 @@ window.createFileOperations = function createFileOperations({
   return {
     // The operations this page follows, newest first.
     items: [],
-    expanded: true,
     // Set by the operations panel: where there is none, nothing is shown.
     panel: false,
 

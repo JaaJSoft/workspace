@@ -88,7 +88,7 @@ from .viewers import (
     veil_sensitive,
 )
 
-RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
+RECENT_FILES_LIMIT = settings.RECENT_FILES_LIMIT
 INITIAL_EVENTS_LIMIT = 15
 MAX_EVENTS_LIMIT = 200
 # A public share link has no authentication behind it, so an unbounded
@@ -259,19 +259,10 @@ def _present_nodes(user, nodes, active_special):
         owner=user,
         file_id=OuterRef("pk"),
     )
-    pinned_subquery = PinnedFolder.objects.filter(
-        owner=user,
-        folder_id=OuterRef("pk"),
-    )
-    is_shared_subquery = FileShare.objects.filter(
-        file_id=OuterRef("pk"),
-    )
     nodes = with_scan(
         with_sensitivity(nodes.select_related("media_info"))
         .annotate(
             is_favorite=Exists(favorite_subquery),
-            is_pinned=Exists(pinned_subquery),
-            is_shared=Exists(is_shared_subquery),
         )
         .prefetch_related(viewer_file_tags(user))
     )
@@ -463,8 +454,6 @@ def _build_context(request, folder=None, is_trash_view=False):
     pinned_folders_qs = visible_pins(request.user)
 
     pinned_folder_ids = [p.folder_id for p in pinned_folders_qs]
-    for pin in pinned_folders_qs:
-        pin.folder.is_favorite = pin._folder_is_favorite
 
     parent_url = breadcrumbs[-2].get("url", "/files") if len(breadcrumbs) >= 2 else None
 
@@ -834,9 +823,6 @@ def events(request, uuid):
 def pinned_folders(request):
     """Return pinned folders partial for Alpine AJAX loading."""
     pinned_qs = visible_pins(request.user)
-
-    for pin in pinned_qs:
-        pin.folder.is_favorite = pin._folder_is_favorite
 
     return render(
         request,

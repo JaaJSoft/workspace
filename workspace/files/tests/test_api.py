@@ -119,7 +119,6 @@ class FileModelTests(TestCase):
 
         folder.refresh_from_db()
         self.assertIsNotNone(folder.deleted_at)
-        self.assertTrue(folder.is_deleted())
 
     def test_soft_delete_cascades_to_children(self):
         """Test that soft delete cascades to children."""

@@ -199,7 +199,7 @@ def visible_ancestors(user, folder, permission):
     above the shared one. One query for the whole chain, through the
     denormalized ``path``.
     """
-    parts = (folder.path or folder.get_path()).split("/")
+    parts = folder.path.split("/")
     ancestor_paths = ["/".join(parts[:i]) for i in range(1, len(parts))]
     if not ancestor_paths:
         return []

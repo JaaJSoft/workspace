@@ -13,8 +13,6 @@
   loads before file_viewer.js). While it plays, the header floats over the
   file and fades out with the arrows once the pointer rests.
 {% endcomment %}
-{% translate "Remove from favorites" as remove_favorite_label %}
-{% translate "Add to favorites" as add_favorite_label %}
 {% translate "Stop slideshow (Space)" as stop_slideshow_title %}
 {% translate "Slideshow (Space)" as slideshow_title %}
 {% translate "Stop slideshow" as stop_slideshow_label %}
@@ -91,42 +89,7 @@
           <span x-show="slideshowPlaying" x-cloak><i data-lucide="pause" class="w-4 h-4"></i></span>
         </button>
       {% endif %}
-      <button
-        type="button"
-        class="btn btn-ghost btn-sm btn-square"
-        :class="{ 'text-warning [&_svg]:fill-current': isFavorite }"
-        @click="toggleFavorite()"
-        :disabled="!canFavorite"
-        :title="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
-        :aria-label="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
-        :aria-pressed="isFavorite ? 'true' : 'false'"
-        data-viewer-favorite
-      >
-        <i data-lucide="star" class="w-4 h-4"></i>
-      </button>
-      <a
-        :href="newTabHref()"
-        target="_blank"
-        rel="noopener"
-        class="btn btn-ghost btn-sm btn-square"
-        title="{% translate 'Open in new tab' %}"
-        aria-label="{% translate 'Open in new tab' %}"
-        x-show="newTabHref()"
-        x-cloak
-        data-viewer-new-tab-link
-      >
-        <i data-lucide="external-link" class="w-4 h-4"></i>
-      </a>
-      {# Hidden on a blocked file: the malware policy 403s the request anyway. #}
-      <a
-        :href="downloadOverride || downloadUrl"
-        download
-        class="btn btn-ghost btn-sm btn-square"
-        title="{% translate 'Download file' %}"
-        x-show="fileUuid && downloadUrl && !viewerBlocked"
-      >
-        <i data-lucide="download" class="w-4 h-4"></i>
-      </a>
+      {% include "files/ui/partials/viewer_file_buttons.html" %}
       {% if properties %}
         <button
           type="button"

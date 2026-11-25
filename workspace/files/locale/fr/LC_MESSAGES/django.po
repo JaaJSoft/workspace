@@ -31,8 +31,7 @@ msgstr "Extraire l’archive"
 msgid "Analyze storage"
 msgstr "Analyser le stockage"
 
-#: actions/open.py ui/templates/files/ui/partials/file_viewer_inline.html
-#: ui/templates/files/ui/partials/file_viewer_modal.html
+#: actions/open.py ui/templates/files/ui/partials/viewer_file_buttons.html
 #: ui/templates/files/ui/shared_page.html
 msgid "Open in new tab"
 msgstr "Ouvrir dans un nouvel onglet"
@@ -1139,7 +1138,6 @@ msgstr "Visionneuse de fichiers"
 msgid "Time per photo"
 msgstr "Durée par photo"
 
-#: ui/templates/files/ui/partials/file_viewer_inline.html
 #: ui/templates/files/ui/partials/shared_viewer.html
 msgid "Download file"
 msgstr "Télécharger le fichier"

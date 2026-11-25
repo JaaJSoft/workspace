@@ -260,6 +260,17 @@ class InlineViewerTests(PlaywrightTestCase):
         expect(star).to_have_attribute("aria-pressed", "false")
         expect(self._row(self.images[0])).to_have_attribute("data-favorite", "0")
 
+    def test_the_header_downloads_the_file_shown(self):
+        self._open_listing()
+        viewer = self._open(self.images[0])
+
+        download = viewer.locator("h3").locator("xpath=..").locator("a[download]")
+
+        expect(download).to_be_visible()
+        expect(download).to_have_attribute(
+            "href", f"/api/v1/files/{self.images[0].uuid}/content"
+        )
+
     def test_a_sidebar_link_takes_the_viewer_away(self):
         FileFavorite.objects.create(owner=self.user, file=self.images[1])
         self._open_listing()

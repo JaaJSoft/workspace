@@ -178,6 +178,11 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         expect(dialog.locator("#viewer-panel-embed img").first).to_be_visible(
             timeout=10000
         )
+        # A Files file gets the header's star and download.
+        expect(dialog.locator("[data-viewer-favorite]")).to_be_visible()
+        expect(
+            dialog.locator("h3").locator("xpath=..").locator("a[download]")
+        ).to_have_attribute("href", f"/api/v1/files/{self.photo.uuid}/download")
 
         # The note under the modal stays mounted and editable.
         dialog.locator('button[aria-label="Close"]').click()

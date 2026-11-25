@@ -655,8 +655,8 @@ class SharedTreeTests(_DavTestCase):
         self.assertEqual(self._body(second), b"second")
 
     def test_no_address_passes_to_another_file_when_one_share_goes(self):
-        """Whichever share is taken back, among files of one name and one
-        named like the address of another."""
+        """Whichever share is taken back, among files of one name and files
+        named like the addresses of another."""
         carol = User.objects.create_user(username="carol", password="pass123")
         report = self._file(self.other, "report.txt")
         files = [
@@ -667,6 +667,7 @@ class SharedTreeTests(_DavTestCase):
             self._file(carol, "report.txt"),
             self._file(carol, "Report.TXT", parent=tree.create_folder(carol, "Caps")),
             self._file(carol, self._told_apart(report)),
+            self._file(carol, self._told_apart(report, whole=True)),
             self._file(carol, "notes.txt"),
         ]
         shares = {file_obj.pk: self._share(file_obj) for file_obj in files}
@@ -697,25 +698,77 @@ class SharedTreeTests(_DavTestCase):
         self.assertEqual(self._addresses(), {from_bob.pk: "report.txt"})
         self.assertEqual(self._resolve(f"/{SHARED}/report.txt")._file.pk, from_bob.pk)
 
-    def test_a_file_named_like_the_address_of_another_gets_neither_of_them(self):
-        """Two files that want one address: it is served for neither, so it
-        cannot pass from one to the other when a share changes."""
+    def test_a_file_named_like_an_address_is_told_apart_whatever_is_shared(self):
+        """Listed under its own name, it would hold the address of a file told
+        apart, and hand it over the day that file is."""
         carol = User.objects.create_user(username="carol", password="pass123")
-        from_bob = self._share(self._file(self.other, "report.txt")).file
+        from_bob = self._share(self._file(self.other, "report.txt", b"bob")).file
+        named_so = self._share(self._file(carol, self._told_apart(from_bob))).file
+
+        self.assertEqual(
+            self._addresses(),
+            {from_bob.pk: "report.txt", named_so.pk: self._told_apart(named_so)},
+        )
+        self.assertIsNone(self._resolve(f"/{SHARED}/{named_so.name}"))
+
         self._share(self._file(carol, "report.txt"))
-        contested = self._told_apart(from_bob)
-        named_so = self._share(self._file(carol, contested)).file
+
+        addresses = self._addresses()
+        self.assertEqual(addresses[from_bob.pk], named_so.name)
+        self.assertEqual(addresses[named_so.pk], self._told_apart(named_so))
+        code, _, body = self._request("GET", f"/{SHARED}/{named_so.name}")
+        self.assertEqual((code, body), (200, b"bob"))
+
+    def test_files_named_like_both_addresses_of_another_leave_it_its_own(self):
+        """Named like its address, then like the one made of its whole id:
+        the file left the folder, and the second answered in its place."""
+        carol = User.objects.create_user(username="carol", password="pass123")
+        report = self._share(self._file(self.other, "report.txt", b"report")).file
+        self._share(self._file(carol, "report.txt"))
+        address = self._addresses()[report.pk]
+        whole = self._told_apart(report, whole=True)
+        self._share(self._file(carol, address))
+        like_whole = self._share(self._file(carol, whole, b"another")).file
 
         addresses = self._addresses()
 
-        self.assertEqual(addresses[from_bob.pk], self._told_apart(from_bob, whole=True))
-        self.assertEqual(
-            addresses[named_so.pk],
-            self._told_apart(named_so, whole=True),
+        self.assertEqual(len(addresses), 4)
+        self.assertEqual(len({caseless(name) for name in addresses.values()}), 4)
+        self.assertEqual(addresses[report.pk], address)
+        self.assertEqual(self._resolve(f"/{SHARED}/{address}")._file.pk, report.pk)
+        self.assertIsNone(self._resolve(f"/{SHARED}/{whole}"))
+        code, _, _ = self._request(
+            "PUT", f"/{SHARED}/{whole}", body=b"meant for the report"
         )
-        self.assertNotIn(contested, addresses.values())
-        self.assertIsNone(self._resolve(f"/{SHARED}/{contested}"))
-        self.assertEqual(len(addresses), 3)
+        self.assertGreaterEqual(code, 400)
+        self.assertEqual(self._body(like_whole), b"another")
+
+    def test_two_files_told_apart_alike_fall_back_on_their_whole_id(self):
+        """One name, one owner and one end of id: the address they would
+        share is served for neither."""
+        twins = [
+            File.objects.create(
+                uuid=uuid.UUID(f"{start}-0000-7000-8000-0000deadbeef"),
+                owner=self.other,
+                name="report.txt",
+                node_type=File.NodeType.FILE,
+                parent=tree.create_folder(self.other, folder),
+            )
+            for start, folder in (("00000000", "Old"), ("11111111", "New"))
+        ]
+        for twin in twins:
+            self._share(twin)
+
+        addresses = self._addresses()
+
+        self.assertEqual(
+            addresses,
+            {twin.pk: self._told_apart(twin, whole=True) for twin in twins},
+        )
+        self.assertIsNone(self._resolve(f"/{SHARED}/{self._told_apart(twins[0])}"))
+        for twin in twins:
+            found = self._resolve(f"/{SHARED}/{addresses[twin.pk]}")
+            self.assertEqual(found._file.pk, twin.pk)
 
     def test_every_listed_name_resolves_to_the_file_it_lists(self):
         carol = User.objects.create_user(username="carol", password="pass123")
@@ -724,6 +777,7 @@ class SharedTreeTests(_DavTestCase):
             report,
             self._file(carol, "report.txt"),
             self._file(carol, self._told_apart(report)),
+            self._file(carol, self._told_apart(report, whole=True)),
             self._file(carol, "notes.txt"),
             self._file(carol, "notes (draft cafe).txt"),
             self._file(self.other, "\u00e9t\u00e9.txt"),
@@ -732,7 +786,7 @@ class SharedTreeTests(_DavTestCase):
 
         listing = namespace.shared_listing(self.user)
 
-        self.assertEqual(len(listing), 6)
+        self.assertEqual(len(listing), 7)
         for name, file_obj in listing.items():
             with self.subTest(name=name):
                 self.assertEqual(namespace.shared_file(self.user, name).pk, file_obj.pk)

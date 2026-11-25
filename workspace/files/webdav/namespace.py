@@ -149,6 +149,20 @@ def _told_apart(file_obj, length):
     return f"{stem} ({file_obj.owner.username} {tail}){extension}"
 
 
+def _addresses(file_obj):
+    """The names *file_obj* can be listed under, the one it would rather have
+    first: its own, then its own with the end of its id, then with all of it.
+
+    Not its own when it reads like an address made to tell a file apart:
+    listed under it, the file would hold the address of another, and hand it
+    over the day that one is told apart.
+    """
+    told_apart = (_told_apart(file_obj, _ID_LENGTH), _told_apart(file_obj, None))
+    if _TOLD_APART.search(caseless(file_obj.name)):
+        return told_apart
+    return (file_obj.name, *told_apart)
+
+
 def shared_listing(user):
     """The files shared with *user*, by the name ``/Shared`` lists each under.
 
@@ -158,29 +172,22 @@ def shared_listing(user):
     its own - ``report (bob 1a2b3c4d).txt``, its owner and the end of its id
     - which no share given or taken back can hand to another file.
 
-    The rule behind both: a name is served only while one file alone wants
-    it. Two that do - a file named like the address of another - each fall
-    back on their whole id. So a share that changes never passes an address
-    from one file to another: a client that kept the old one gets a 404, not
-    somebody else's file to write.
+    The rule behind both: a name is served only while one file alone could
+    be listed under it. Two files told apart alike each fall back on their
+    whole id. So a share that changes never passes an address from one file
+    to another: a client that kept the old one gets a 404, not somebody
+    else's file to write.
     """
     files = list(_shared(user).select_related("owner").order_by("pk"))
-    carrying = Counter(file_obj.name_key for file_obj in files)
-    wanted = {
-        file_obj.pk: (
-            file_obj.name
-            if carrying[file_obj.name_key] == 1
-            else _told_apart(file_obj, _ID_LENGTH)
-        )
-        for file_obj in files
-    }
-    wanting = Counter(caseless(name) for name in wanted.values())
+    addresses = {file_obj.pk: _addresses(file_obj) for file_obj in files}
+    wanting = Counter(caseless(name) for names in addresses.values() for name in names)
     listing = {}
     for file_obj in files:
-        name = wanted[file_obj.pk]
-        if wanting[caseless(name)] > 1:
-            name = _told_apart(file_obj, None)
-        listing[name] = file_obj
+        # No two whole ids are alike, so every file has a name nothing else wants.
+        for name in addresses[file_obj.pk]:
+            if wanting[caseless(name)] == 1:
+                listing[name] = file_obj
+                break
     return listing
 
 

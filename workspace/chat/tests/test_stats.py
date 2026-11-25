@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.chat.models import ConversationMember, Message, Reaction
+from workspace.chat.services.conversations import get_unread_counts
 
 from .test_chat import ChatTestMixin
 
@@ -395,42 +396,36 @@ class UnreadCountModelTests(ChatTestMixin, APITestCase):
 
     # -- get_unread_counts service ------------------------------
 
-    def test_get_unread_counts_api(self):
-        """GET /api/v1/chat/unread-counts returns correct totals."""
+    def test_get_unread_counts_totals(self):
         self.client.force_authenticate(self.creator)
         self.client.post(self._msg_url(self.group.uuid), {"body": "g1"}, format="json")
         self.client.post(self._msg_url(self.group.uuid), {"body": "g2"}, format="json")
         self.client.post(self._msg_url(self.dm.uuid), {"body": "d1"}, format="json")
 
-        self.client.force_authenticate(self.member)
-        resp = self.client.get("/api/v1/chat/unread-counts")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["total"], 3)
-        self.assertEqual(resp.data["conversations"][str(self.group.uuid)], 2)
-        self.assertEqual(resp.data["conversations"][str(self.dm.uuid)], 1)
+        counts = get_unread_counts(self.member)
+        self.assertEqual(counts["total"], 3)
+        self.assertEqual(counts["conversations"][str(self.group.uuid)], 2)
+        self.assertEqual(counts["conversations"][str(self.dm.uuid)], 1)
 
     def test_get_unread_counts_excludes_zero(self):
-        """Conversations with 0 unread should not appear in the response."""
-        self.client.force_authenticate(self.member)
-        resp = self.client.get("/api/v1/chat/unread-counts")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["total"], 0)
-        self.assertEqual(resp.data["conversations"], {})
+        """Conversations with 0 unread should not appear in the counts."""
+        counts = get_unread_counts(self.member)
+        self.assertEqual(counts["total"], 0)
+        self.assertEqual(counts["conversations"], {})
 
     def test_get_unread_counts_after_mark_read(self):
         """After marking a conversation read, it disappears from unread counts."""
         self.client.force_authenticate(self.creator)
         self.client.post(self._msg_url(self.group.uuid), {"body": "hi"}, format="json")
 
-        self.client.force_authenticate(self.member)
-        resp = self.client.get("/api/v1/chat/unread-counts")
-        self.assertEqual(resp.data["total"], 1)
+        self.assertEqual(get_unread_counts(self.member)["total"], 1)
 
+        self.client.force_authenticate(self.member)
         self.client.post(self._read_url(self.group.uuid))
 
-        resp = self.client.get("/api/v1/chat/unread-counts")
-        self.assertEqual(resp.data["total"], 0)
-        self.assertNotIn(str(self.group.uuid), resp.data["conversations"])
+        counts = get_unread_counts(self.member)
+        self.assertEqual(counts["total"], 0)
+        self.assertNotIn(str(self.group.uuid), counts["conversations"])
 
     def test_get_unread_counts_excludes_left_conversations(self):
         """Left conversations should not appear in unread counts."""
@@ -442,9 +437,7 @@ class UnreadCountModelTests(ChatTestMixin, APITestCase):
         cm.left_at = timezone.now()
         cm.save(update_fields=["left_at"])
 
-        self.client.force_authenticate(self.member)
-        resp = self.client.get("/api/v1/chat/unread-counts")
-        self.assertEqual(resp.data["total"], 0)
+        self.assertEqual(get_unread_counts(self.member)["total"], 0)
 
     # -- Conversation list integration --------------------------
 

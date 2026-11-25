@@ -532,69 +532,6 @@ class ReactionToggleView(APIView):
 
 
 @extend_schema(tags=["Chat - Messages"])
-class MessageReadersView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(summary="Get who has read a specific message")
-    def get(self, request, conversation_id, message_id):
-        membership = get_active_membership(request.user, conversation_id)
-        if not membership:
-            return Response(
-                {"detail": gettext("Not a member of this conversation.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        try:
-            message = Message.objects.get(
-                uuid=message_id,
-                conversation_id=conversation_id,
-                deleted_at__isnull=True,
-            )
-        except Message.DoesNotExist:
-            return Response(
-                {"detail": gettext("Message not found.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        members = (
-            ConversationMember.objects.filter(
-                conversation_id=conversation_id,
-                left_at__isnull=True,
-            )
-            .exclude(user=message.author)
-            .select_related("user")
-        )
-
-        readers = []
-        not_read = []
-        for m in members:
-            if m.last_read_at and m.last_read_at >= message.created_at:
-                readers.append(
-                    {
-                        "user_id": m.user.id,
-                        "username": m.user.username,
-                        "read_at": m.last_read_at.isoformat(),
-                    }
-                )
-            else:
-                not_read.append(
-                    {
-                        "user_id": m.user.id,
-                        "username": m.user.username,
-                    }
-                )
-
-        return Response(
-            {
-                "readers": readers,
-                "not_read": not_read,
-                "total_members": len(readers) + len(not_read),
-                "read_count": len(readers),
-            }
-        )
-
-
-@extend_schema(tags=["Chat - Messages"])
 class MarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 

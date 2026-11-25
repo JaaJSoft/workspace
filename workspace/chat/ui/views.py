@@ -253,19 +253,11 @@ def chat_room_view(request, conversation_uuid):
         conversation, context={"request": request}
     ).data
 
-    # Reuse the prefetched members so the heading matches the sidebar row.
-    partner = next(
-        (m.user for m in conversation.members.all() if m.user_id != request.user.id),
-        None,
-    )
-    title = display_name_for(conversation.kind, conversation.title, partner)
-
     return render(
         request,
         "chat/ui/room.html",
         {
             "conversation_uuid": str(conversation_uuid),
-            "conversation_title": title,
             "conversation": conversation_data,
             "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
             "call_sounds_enabled": get_setting(

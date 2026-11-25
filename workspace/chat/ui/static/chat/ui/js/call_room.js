@@ -1,4 +1,4 @@
-// Voice room: pure helpers shared by the room page and the main-tab observer.
+// Voice room: pure helpers shared by the room page and the main chat tab.
 // The Alpine room factory lives in room.js; speaking-meter wiring that touches
 // AudioContext is validated in a real browser, not here.
 
@@ -13,7 +13,7 @@ function chatCallRoomTabName(conversationId) {
 }
 
 function chatCallBannerAction(callActive, participants, currentUserId) {
-  // What the main (observer) tab should offer for an ongoing call:
+  // What the main chat tab should offer for an ongoing call:
   //   null     -> no active call, hide the banner
   //   'return' -> I am a participant, reactivate my room tab
   //   'join'   -> a call is running but I am not in it
@@ -25,11 +25,6 @@ function chatCallBannerAction(callActive, participants, currentUserId) {
 function chatIsSpeaking(level, threshold) {
   const t = (typeof threshold === 'number') ? threshold : 0.05;
   return typeof level === 'number' && level >= t;
-}
-
-function chatCallShouldOwnMedia(role) {
-  // Only the observer role gives up the microphone / peer connections.
-  return role !== 'observer';
 }
 
 function chatCallAutoPinTarget(participants, pinnedManually) {
@@ -60,6 +55,5 @@ window.chatCallRoomUrl = chatCallRoomUrl;
 window.chatCallRoomTabName = chatCallRoomTabName;
 window.chatCallBannerAction = chatCallBannerAction;
 window.chatIsSpeaking = chatIsSpeaking;
-window.chatCallShouldOwnMedia = chatCallShouldOwnMedia;
 window.chatCallSpotlightTarget = chatCallSpotlightTarget;
 window.chatCallAutoPinTarget = chatCallAutoPinTarget;

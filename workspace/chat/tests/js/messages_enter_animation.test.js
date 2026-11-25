@@ -60,7 +60,6 @@ function buildApp() {
     _isNearBottom: () => true,
     scrollToBottom() {},
     async markAsRead() {},
-    _updateConversationLastMessage() {},
     _bumpConversationUnread() {},
     async _listConversation() {},
     refreshConversationItems() {},

@@ -30,7 +30,6 @@ function buildApp({ attended = true, readSucceeds = true } = {}) {
     _isNearBottom: () => false,
     _refreshCurrentMessages: async () => {},
     _animateMessageEntry: () => {},
-    _updateConversationLastMessage: () => {},
     scrollToBottom: () => {},
     markAsRead: async (id) => { calls.markAsRead.push(id); return page.readSucceeds; },
     refreshConversationItems: (uuids, options) => { calls.refresh.push({ uuids: Array.from(uuids), options }); },

@@ -35,10 +35,6 @@ function chatApp(currentUserId) {
 
     // ── Init: orchestrates first paint and global listeners ─
     async init() {
-      // The main chat tab never owns the microphone; the dedicated room tab
-      // does. Force observer so any stray join path opens the room instead.
-      this.callRole = 'observer';
-
       // Probes MediaRecorder support once so the mic button can hide itself
       // on browsers that cannot record.
       this.initRecorder();

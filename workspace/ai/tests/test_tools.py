@@ -222,7 +222,9 @@ class ExecuteToolCallTests(TestCase):
         self.assertIn("not found", result.lower())
 
     def test_unknown_tool(self):
-        self.assertNotIn("unknown_tool", tool_registry.names())
+        self.assertNotIn(
+            "unknown_tool", [registered.name for registered in tool_registry.get_all()]
+        )
 
         with scripted(reply("", call("unknown_tool", {}, "call_5")), reply("done")):
             run = run_bot(

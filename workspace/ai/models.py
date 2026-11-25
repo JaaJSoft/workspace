@@ -461,13 +461,11 @@ class ScheduledMessage(models.Model):
     def __str__(self):
         return f"ScheduledMessage {self.uuid} ({self.kind} - {self.conversation_id})"
 
-    def compute_next_run(self, user_tz=None):
+    def compute_next_run(self, user_tz):
         """Calculate and set the next run time, or deactivate for one-time messages.
 
-        If *user_tz* is provided (a ``ZoneInfo``), ``recurrence_time`` is
-        interpreted in that timezone and the result is converted back to UTC.
-        Without it, ``recurrence_time`` is applied directly (legacy UTC
-        behaviour).
+        ``recurrence_time`` is read in *user_tz*, the creator's ``ZoneInfo``,
+        and the result is converted back to UTC.
         """
         from zoneinfo import ZoneInfo
 
@@ -486,7 +484,7 @@ class ScheduledMessage(models.Model):
         # Days, weekdays and month days are the user's, with or without a
         # time of day: "every Monday" from Tokyo is a Tokyo Monday, which
         # starts on Sunday in UTC.
-        base_local = base.astimezone(user_tz or utc)
+        base_local = base.astimezone(user_tz)
         if self.recurrence_unit == self.RecurrenceUnit.DAYS:
             candidate = base_local + timezone.timedelta(days=self.recurrence_interval)
         elif self.recurrence_unit == self.RecurrenceUnit.WEEKS:
@@ -510,7 +508,7 @@ class ScheduledMessage(models.Model):
             candidate = candidate.replace(
                 hour=self.recurrence_time.hour,
                 minute=self.recurrence_time.minute,
-                second=0 if user_tz is not None else self.recurrence_time.second,
+                second=0,
                 microsecond=0,
             )
         self.next_run_at = candidate.astimezone(utc)

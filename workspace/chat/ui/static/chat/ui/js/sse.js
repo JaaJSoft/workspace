@@ -99,7 +99,6 @@ window.chatSseMixin = function chatSseMixin() {
       }
 
       await this._listConversation(detail.conversation_id);
-      this._updateConversationLastMessage(detail.conversation_id, detail.message);
       // Only bump unread if the user is NOT currently viewing this conversation
       if (!isViewing) {
         this._bumpConversationUnread(detail.conversation_id);
@@ -290,27 +289,6 @@ window.chatSseMixin = function chatSseMixin() {
       this._typingHideTimer = setTimeout(() => {
         this.typingUsers = {};
       }, 5000);
-    },
-
-    _updateConversationLastMessage(convId, msg) {
-      const conv = this.conversations.find(c => c.uuid === convId);
-      if (conv) {
-        conv.last_message = {
-          uuid: msg.uuid,
-          author: msg.author,
-          body: msg.body,
-          created_at: msg.created_at,
-          has_attachments: msg.has_attachments || (msg.attachments && msg.attachments.length > 0),
-        };
-        conv.updated_at = msg.created_at;
-      }
-      this.conversations.sort((a, b) => {
-        // Pinned conversations always come first, sorted by pin_position
-        if (a.is_pinned && !b.is_pinned) return -1;
-        if (!a.is_pinned && b.is_pinned) return 1;
-        if (a.is_pinned && b.is_pinned) return (a.pin_position || 0) - (b.pin_position || 0);
-        return new Date(b.updated_at) - new Date(a.updated_at);
-      });
     },
 
     // A conversation started while the page is open is missing from the list

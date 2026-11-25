@@ -19,7 +19,6 @@ const stubs = {
   chatCallMixin: () => ({ startOrJoinCall: async () => {}, _start: true }),
   chatCallDiagnosticMixin: () => ({ _diag: true }),
   chatRecorderMixin: () => ({ initRecorder: () => {} }),
-  chatCallShouldOwnMedia: (r) => r !== 'observer',
 };
 
 const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/room.js', stubs);

@@ -19,7 +19,6 @@ const stubs = {
   chatCallMixin: () => ({ startOrJoinCall: async () => {}, _start: true }),
   chatCallDiagnosticMixin: () => ({ _diag: true }),
   chatRecorderMixin: () => ({ initRecorder: () => {} }),
-  chatCallShouldOwnMedia: (r) => r !== 'observer',
 };
 
 const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/room.js', stubs);
@@ -28,9 +27,8 @@ test('chatRoomApp exposes factory on window', () => {
   assert.equal(typeof ctx.chatRoomApp, 'function');
 });
 
-test('chatRoomApp composes call mixin and owns media', () => {
+test('chatRoomApp composes the call mixin', () => {
   const app = ctx.chatRoomApp(1, 'conv-1');
-  assert.equal(app.callRole, 'owner');
   assert.equal(app.roomConversationId, 'conv-1');
   assert.equal(typeof app.startOrJoinCall, 'function');
 });
@@ -39,7 +37,6 @@ test('chatRoomApp sets currentUserId and roomConversationId', () => {
   const app = ctx.chatRoomApp(42, 'conv-2');
   assert.equal(app.currentUserId, 42);
   assert.equal(app.roomConversationId, 'conv-2');
-  assert.equal(app.callRole, 'owner');
 });
 
 test('the call room wires the conversation pane as the chat page does', async () => {

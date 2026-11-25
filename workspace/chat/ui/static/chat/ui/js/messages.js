@@ -469,8 +469,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         }
 
         if (resp.ok) {
-          const msg = await resp.json();
-          this._updateConversationLastMessage(this.activeConversation.uuid, msg);
           // Re-render this conversation's sidebar row (and bubble it to the
           // top). The sender is excluded from the SSE broadcast (the
           // receivers' refresh path), so the send path must refresh it itself.
@@ -550,8 +548,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           }
         );
         if (resp.ok) {
-          const msg = await resp.json();
-          this._updateConversationLastMessage(convUuid, msg);
           // The sender is excluded from the SSE broadcast, so the send path
           // refreshes its own sidebar row.
           this.refreshConversationItems([convUuid]);

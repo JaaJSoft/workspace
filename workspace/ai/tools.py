@@ -57,13 +57,6 @@ WEB_SEARCH_DEFAULT_RESULTS = 5
 WEB_SEARCH_MAX_RESULTS = 20
 WEB_SEARCH_MAX_QUERIES = 4
 
-# Goals and schedules run with their creator's identity, so in a group the
-# bot lists every member's but may change only those of the user it answers.
-READ_ONLY_TASK_NOTE = (
-    "Set by another member: only its creator can change it - "
-    "ask them to, do not try on their behalf."
-)
-
 
 class WebSearchParams(BaseModel):
     queries: list[str] = Field(
@@ -1238,14 +1231,12 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
 their private notes, next check-in and deadline, plus the ones closed in the last 30 days with \
 their closing date and outcome. Call this before creating a goal (to avoid duplicates or \
 re-opening something already finished) and whenever the user asks what you are working on \
-autonomously. In a group, goals another member set are listed too, but only their creator can \
-update or close them."""
+autonomously."""
         user, bot, conversation_id = (
             ctx.deps.user,
             ctx.deps.bot,
             ctx.deps.conversation_id,
         )
-        from workspace.chat.services.bot_tasks import can_manage_bot_task
         from workspace.users.services.settings import get_user_timezone
 
         from .models import AgentGoal
@@ -1283,8 +1274,6 @@ update or close them."""
                     f"{g.deadline.astimezone(user_tz).strftime('%Y-%m-%d %H:%M')}"
                     f"{overdue}"
                 )
-            if not can_manage_bot_task(user, g):
-                line += f"\n  {READ_ONLY_TASK_NOTE}"
             line += f"\n  Objective: {g.goal[:200]}"
             if g.success_criteria:
                 line += f"\n  Definition of done: {g.success_criteria[:200]}"
@@ -1719,14 +1708,12 @@ Call this when the user wants to stop or remove a previously scheduled message."
     )
     def list_schedules(self, ctx: RunContext[ToolDeps]) -> str:
         """List all active scheduled messages in this conversation. \
-Call this when the user wants to see what messages are scheduled or pending. \
-In a group, schedules another member set are listed too, but only their creator can cancel them."""
+Call this when the user wants to see what messages are scheduled or pending."""
         user, bot, conversation_id = (
             ctx.deps.user,
             ctx.deps.bot,
             ctx.deps.conversation_id,
         )
-        from workspace.chat.services.bot_tasks import can_manage_bot_task
         from workspace.users.services.settings import get_user_timezone
 
         from .models import ScheduledMessage
@@ -1773,9 +1760,6 @@ In a group, schedules another member set are listed too, but only their creator 
                 timing += (
                     f", next run: {next_local.strftime('%Y-%m-%d %H:%M')} ({user_tz})"
                 )
-            line = f'- {s.uuid}: "{s.prompt[:60]}" — {timing}'
-            if not can_manage_bot_task(user, s):
-                line += f"\n  {READ_ONLY_TASK_NOTE}"
-            lines.append(line)
+            lines.append(f'- {s.uuid}: "{s.prompt[:60]}" — {timing}')
 
         return f"Active schedules ({len(lines)}):\n" + "\n".join(lines)

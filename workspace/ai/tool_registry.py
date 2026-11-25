@@ -219,9 +219,6 @@ class ToolRegistry:
     def get_all(self) -> list[Tool]:
         return list(self._tools.values())
 
-    def names(self) -> frozenset[str]:
-        return frozenset(self._tools)
-
     def toolset(self) -> FunctionToolset[ToolDeps]:
         """The registered tools, as the toolset an agent is given."""
         return FunctionToolset(self.get_all())

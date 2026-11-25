@@ -364,7 +364,6 @@ class ConversationCreateSerializer(serializers.Serializer):
         required=False,
     )
     title = serializers.CharField(max_length=255, required=False, default="")
-    description = serializers.CharField(required=False, default="", allow_blank=True)
 
     def validate(self, attrs):
         if bool(attrs.get("member_ids")) == bool(attrs.get("group_ids")):

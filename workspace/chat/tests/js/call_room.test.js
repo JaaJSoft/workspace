@@ -45,12 +45,6 @@ test('chatIsSpeaking returns true at the threshold boundary', () => {
   assert.equal(ctx.chatIsSpeaking(0.05, 0.05), true);
 });
 
-test('chatCallShouldOwnMedia is false only for observer', () => {
-  assert.equal(ctx.chatCallShouldOwnMedia('owner'), true);
-  assert.equal(ctx.chatCallShouldOwnMedia('observer'), false);
-  assert.equal(ctx.chatCallShouldOwnMedia(undefined), true);
-});
-
 test('chatCallSpotlightTarget returns the manually pinned user when still present', () => {
   const ps = [{ user_id: 1 }, { user_id: 2 }];
   assert.equal(ctx.chatCallSpotlightTarget(ps, 2, true), 2);

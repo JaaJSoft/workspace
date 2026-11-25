@@ -25,7 +25,6 @@ function chatRoomApp(currentUserId, conversationId) {
   return {
     currentUserId: currentUserId,
     roomConversationId: conversationId,
-    callRole: 'owner',
     speakingIds: {},
     pinnedUserId: null,
     pinnedManually: false,

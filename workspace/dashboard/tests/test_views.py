@@ -856,7 +856,16 @@ class IndexViewTests(TestCase):
         self.client.login(username="viewuser", password="pass123")
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "$ajax(feedUrl, { target: 'dashboard-activity' })")
+        self.assertContains(resp, 'id="dashboard-activity"')
+        self.assertContains(resp, "$ajax(feedUrl, { target: $el.id })")
+
+    def test_activity_card_reads_the_dashboard_feed(self):
+        self.client.login(username="viewuser", password="pass123")
+        resp = self.client.get("/")
+        self.assertContains(resp, "Recent Activity")
+        self.assertContains(resp, "let u = '/dashboard/activity';")
+        self.assertContains(resp, "activityTab: 'all'")
+        self.assertRegex(resp.content.decode(), r'(?s)x-ref="feedFailed".*?href="/"')
 
 
 # ── modules_fragment view ───────────────────────────────────────
@@ -1066,7 +1075,7 @@ class ActivityFeedSourceParamTests(TestCase):
         cache.clear()
 
     def _activity_tab_literal(self, resp):
-        match = re.search(r'x-data="\{ activityTab: (.*?), activitySearch', resp.text)
+        match = re.search(r"activityTab: (.*?),\s+activitySearch", resp.text)
         self.assertIsNotNone(match)
         return html.unescape(match.group(1))
 

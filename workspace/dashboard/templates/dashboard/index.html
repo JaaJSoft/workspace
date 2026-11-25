@@ -160,77 +160,10 @@
 
     {# ── Activity feed ── #}
     <section class="max-w-4xl mx-auto w-full">
-      <div>
-        <div
-          class="card bg-base-100 shadow-sm border border-base-300"
-          x-data="{ activityTab: '{{ activity_tab|default:"all"|escapejs }}', activitySearch: '', searchOpen: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }"
-          @ajax:before="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedSkeleton.innerHTML"
-          @ajax:error="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedFailed.innerHTML"
-        >
-          <div class="card-body gap-4 p-4 sm:p-6">
-            <div
-              class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
-            >
-              <h2 class="card-title text-xl shrink-0">
-                <i data-lucide="activity" class="w-5 h-5"></i>
-                {% translate "Recent Activity" %}
-              </h2>
-              <div class="flex items-center gap-2 min-w-0">
-                {% include "core/partials/activity_tabs.html" with activity_prefix="dashboard-activity" %}
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-sm btn-square"
-                  :class="searchOpen && 'btn-active'"
-                  title="{% translate 'Search' %}"
-                  @click="searchOpen = !searchOpen; if (!searchOpen) { activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click()) } else { $nextTick(() => $refs.activitySearchInput.focus()) }"
-                >
-                  <i data-lucide="search" class="w-4 h-4"></i>
-                </button>
-                {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="dashboard-activity" loading_expr="false" %}
-              </div>
-            </div>
-            {% include "core/partials/activity_search.html" with activity_prefix="dashboard-activity" %}
-
-            {% comment %}
-          Self-loading feed. The skeleton (feedSkeleton) is shown before every
-          fetch - on first paint via x-init, and on tab/search/refresh via the
-          card's @ajax:before - then alpine-ajax overwrites the target with the
-          response. There is no loading flag to get stuck; on failure the card's
-          @ajax:error swaps in feedFailed instead.
-            {% endcomment %}
-            <div x-ref="feedSkeleton" hidden>
-              <div class="animate-pulse">
-                <ul class="divide-y divide-base-200">
-                  {% for _ in "123456" %}
-                    <li class="py-3 flex items-center gap-3">
-                      <div class="w-9 h-9 rounded-lg bg-base-300 shrink-0"></div>
-                      <div class="flex-1 min-w-0 space-y-2">
-                        <div class="h-4 bg-base-300 rounded-sm w-3/4"></div>
-                        <div class="h-3 bg-base-300 rounded-sm w-1/2"></div>
-                      </div>
-                      <div class="h-6 w-12 bg-base-300 rounded-sm hidden sm:block"></div>
-                    </li>
-                  {% endfor %}
-                </ul>
-              </div>
-            </div>
-
-            <div
-              id="dashboard-activity"
-              x-init="$el.innerHTML = $refs.feedSkeleton.innerHTML; $ajax(feedUrl, { target: 'dashboard-activity' })"
-            ></div>
-
-            {# Error markup, copied into the feed target by @ajax:error above so the card is never left blank #}
-            <div x-ref="feedFailed" hidden>
-              <p class="py-3 text-sm text-base-content/60">
-                {% translate "Couldn't load activity." %}
-                <a href="{% url 'dashboard:index' %}" class="link link-hover">{% translate "Reload" %}</a>
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      {% translate "Recent Activity" as activity_title %}
+      {% url 'dashboard:activity_feed' as activity_feed_url %}
+      {% url 'dashboard:index' as activity_reload_url %}
+      {% include "core/partials/activity_card.html" with activity_prefix="dashboard-activity" activity_initial_tab=activity_tab activity_card_size="lg" %}
     </section>
 
   </div>

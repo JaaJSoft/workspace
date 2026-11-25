@@ -21,7 +21,7 @@ from django.conf import settings
 PYPROJECT = settings.BASE_DIR / "pyproject.toml"
 LOCK = settings.BASE_DIR / "uv.lock"
 MANAGE = settings.BASE_DIR / "manage.py"
-WORKFLOWS = settings.BASE_DIR / ".github" / "workflows"
+GITHUB = settings.BASE_DIR / ".github"
 PYTHON_VERSION_FILE = settings.BASE_DIR / ".python-version"
 
 FLOOR_RE = re.compile(r">=\s*(?P<version>\d+(?:\.\d+)*)")
@@ -60,13 +60,14 @@ def _manage_minimum():
 
 
 def _setup_python_versions():
-    """Every version `actions/setup-python` is handed, by workflow file name."""
+    """Every version `actions/setup-python` is handed, by file under .github."""
+    files = [*GITHUB.glob("workflows/*.yml"), *GITHUB.glob("actions/*/action.yml")]
     return {
-        workflow.name: [
+        path.relative_to(GITHUB).as_posix(): [
             _version(m["version"])
-            for m in SETUP_PYTHON_RE.finditer(workflow.read_text(encoding="utf-8"))
+            for m in SETUP_PYTHON_RE.finditer(path.read_text(encoding="utf-8"))
         ]
-        for workflow in sorted(WORKFLOWS.glob("*.yml"))
+        for path in sorted(files)
     }
 
 
@@ -108,7 +109,7 @@ class DeclaredFloorTests(unittest.TestCase):
         versions = _setup_python_versions()
         self.assertTrue(
             any(found for found in versions.values()),
-            "no workflow passes a python-version to actions/setup-python any more",
+            "no workflow or action passes a python-version to actions/setup-python any more",
         )
         for workflow, found in versions.items():
             for version in found:

@@ -17,7 +17,7 @@ git merge-base --is-ancestor "$last" HEAD && echo ok   # the tag must be on the 
 git log "$last"..HEAD --format='%h %s'
 ```
 
-The new version is the next minor after `$last` unless the user says otherwise. Don't bump `pyproject.toml`: the `chore(release):` commit does that, made by `scripts/release.py <version>` once the entry is in.
+The new version is the next minor after `$last` unless the user says otherwise. Don't bump `pyproject.toml`: the `chore(release):` commit does that, made by `uv run python scripts/release.py <version>` once the entry is in.
 
 ## 2. Drop what never goes in
 

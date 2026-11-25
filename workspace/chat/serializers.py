@@ -1,3 +1,4 @@
+from django.db.models import Prefetch
 from django.utils.translation import gettext
 from rest_framework import serializers
 
@@ -178,6 +179,22 @@ class MessageSerializer(serializers.ModelSerializer):
             "last_reply_at",
             "interaction",
         ]
+
+
+def with_message_relations(messages):
+    """*messages* with every related row ``MessageSerializer`` reads, loaded up front."""
+    return messages.select_related(
+        "author",
+        "author__bot_profile",
+        "reply_to",
+        "reply_to__author",
+        "interaction",
+        "interaction__interacted_by",
+    ).prefetch_related(
+        Prefetch("reactions", queryset=Reaction.objects.select_related("user")),
+        "attachments",
+        "link_previews__preview",
+    )
 
 
 class LastMessageSerializer(serializers.ModelSerializer):

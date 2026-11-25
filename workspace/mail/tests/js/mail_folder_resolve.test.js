@@ -3,6 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 // A folder uuid captured before a merge (a bookmark, a push notification, a
 // search hit) must still resolve once the folder becomes an alias. Aliases
@@ -26,7 +27,7 @@ function makeApp() {
       'workspace/mail/ui/static/mail/ui/js/mail_rules_form.js',
       'workspace/mail/ui/static/mail/ui/js/mail.js',
     ],
-    { document: { getElementById: () => null }, sidebarPreference: { initial: () => false, save: () => {} } },
+    { document: { getElementById: () => null }, sidebarPreference: sidebarPreferenceStub() },
   );
   const app = ctx.mailApp();
   app.folders = {
@@ -106,7 +107,7 @@ function makeDialogApp(responses) {
     ],
     {
       document: { getElementById: () => ({ showModal() {}, close() {} }) },
-      sidebarPreference: { initial: () => false, save: () => {} },
+      sidebarPreference: sidebarPreferenceStub(),
     },
   );
   const app = ctx.mailApp();

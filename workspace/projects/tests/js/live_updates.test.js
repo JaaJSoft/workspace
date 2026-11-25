@@ -7,6 +7,7 @@ const {
   loadScripts,
   CUSTOM_ELEMENT_STUBS,
 } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 const PROJECT = '11111111-1111-4111-8111-111111111111';
 const OTHER_PROJECT = '22222222-2222-4222-8222-222222222222';
@@ -25,7 +26,7 @@ const ctx = loadScripts(
     URLSearchParams,
     setTimeout: (...args) => setTimeout(...args),
     clearTimeout: (...args) => clearTimeout(...args),
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
   }
 );
 

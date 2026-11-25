@@ -8,6 +8,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 const PAGE_SIZE = 50;
 
@@ -33,7 +34,7 @@ function makeApp(server) {
       'workspace/mail/ui/static/mail/ui/js/mail_rules_form.js',
       'workspace/mail/ui/static/mail/ui/js/mail.js',
     ],
-    { document: { getElementById: () => null }, sidebarPreference: { initial: () => false, save: () => {} } },
+    { document: { getElementById: () => null }, sidebarPreference: sidebarPreferenceStub() },
   );
   const app = ctx.mailApp();
   app.accounts = [];

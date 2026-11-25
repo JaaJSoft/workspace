@@ -144,7 +144,7 @@ window.notesApp = function notesApp(config) {
 
     return {
         // Sidebar
-        collapsed: window.sidebarPreference.initial(),
+        ...window.sidebarPreference.drawerMixin('notes'),
         activeView: initialView,
         activeId: config.id || null,
         viewTitle: titleMap[initialView] || titleMap.all,
@@ -1547,23 +1547,6 @@ window.notesApp = function notesApp(config) {
             const d = new Date(dateStr);
             const locale = window.getUserLocale ? window.getUserLocale() : undefined;
             return d.toLocaleDateString(locale, { timeZone: tz, month: 'short', day: 'numeric', ...window.userClockOptions() });
-        },
-
-        toggleCollapse() {
-            if (this.isMobile()) return;
-            this.collapsed = !this.collapsed;
-            window.sidebarPreference.save('notes', this.collapsed);
-        },
-
-        isMobile() {
-            return window.innerWidth < 1024;
-        },
-
-        // The drawer is off-canvas below `lg`, so an opened one is the full
-        // sidebar whatever the desktop preference says: a 64px icon rail is
-        // no use on a phone.
-        sidebarCollapsed() {
-            return this.isMobile() ? false : this.collapsed;
         },
 
         _closeDrawerOnMobile() {

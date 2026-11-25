@@ -8,6 +8,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 const NOTE_A = { uuid: '0190d5a0-0000-7000-8000-00000000000a', name: 'A.md' };
 const NOTE_B = { uuid: '0190d5a0-0000-7000-8000-00000000000b', name: 'B.md' };
@@ -29,7 +30,7 @@ function makeApp({ url = '/notes', prefs = {}, config = {} } = {}) {
       return Promise.resolve(note ? { ok: true, json: async () => ({ ...note }) } : { ok: false });
     },
     isValidUuid: () => true,
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     addEventListener: () => {},
     document: {
       getElementById: (id) =>

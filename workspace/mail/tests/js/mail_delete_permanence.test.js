@@ -3,6 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 // The delete confirmation tells the user whether the message goes to Trash
 // or is gone for good. The server expunges only from Trash (or a folder
@@ -23,7 +24,7 @@ function makeApp(folders) {
       'workspace/mail/ui/static/mail/ui/js/mail_rules_form.js',
       'workspace/mail/ui/static/mail/ui/js/mail.js',
     ],
-    { document: { getElementById: () => null }, sidebarPreference: { initial: () => false, save: () => {} } },
+    { document: { getElementById: () => null }, sidebarPreference: sidebarPreferenceStub() },
   );
   const app = ctx.mailApp();
   app.folders = folders;
@@ -79,7 +80,7 @@ function makeDeletingApp(folders, prefs) {
     ],
     {
       document: { getElementById: () => null },
-      sidebarPreference: { initial: () => false, save: () => {} },
+      sidebarPreference: sidebarPreferenceStub(),
       _mailPrefsCache: prefs,
       gettext: (text) => text,
       AppDialog: { confirm: async (options) => { confirms.push(options); return true; } },

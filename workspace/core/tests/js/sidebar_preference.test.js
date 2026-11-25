@@ -59,3 +59,40 @@ test('save() swallows a refused write - the sidebar has already moved', async ()
   const ctx = load({ fetch: () => Promise.reject(new Error('offline')) });
   await assert.doesNotReject(ctx.sidebarPreference.save('files', false));
 });
+
+function loadDrawer({ embedded = 'false', narrow = false } = {}) {
+  const saved = [];
+  const queries = [];
+  const ctx = loadScripts(['workspace/core/static/core/js/sidebar_preference.js'], {
+    document: { getElementById: () => ({ textContent: embedded }) },
+    saveUserSetting: (module, key, value) => { saved.push([module, key, value]); return Promise.resolve(); },
+    matchMedia: (query) => { queries.push(query); return { matches: narrow }; },
+  });
+  return { drawer: { ...ctx.sidebarPreference.drawerMixin('mail') }, saved, queries };
+}
+
+test('drawerMixin() starts from the preference the shell rendered', () => {
+  assert.equal(loadDrawer({ embedded: 'true' }).drawer.collapsed, true);
+  assert.equal(loadDrawer({ embedded: 'false' }).drawer.collapsed, false);
+});
+
+test('drawerMixin() collapses on desktop only', () => {
+  const { drawer, queries } = loadDrawer({ embedded: 'true' });
+  assert.equal(drawer.sidebarCollapsed(), true);
+  assert.deepEqual([...queries], ['(max-width: 1023px)']);
+  assert.equal(loadDrawer({ embedded: 'true', narrow: true }).drawer.sidebarCollapsed(), false);
+});
+
+test('drawerMixin() toggles and saves the module preference on desktop', () => {
+  const { drawer, saved } = loadDrawer();
+  drawer.toggleCollapse();
+  assert.equal(drawer.collapsed, true);
+  assert.deepEqual(saved.map((s) => [...s]), [['mail', 'sidebar_collapsed', true]]);
+});
+
+test('drawerMixin() leaves the preference alone below lg', () => {
+  const { drawer, saved } = loadDrawer({ narrow: true });
+  drawer.toggleCollapse();
+  assert.equal(drawer.collapsed, false);
+  assert.equal(saved.length, 0);
+});

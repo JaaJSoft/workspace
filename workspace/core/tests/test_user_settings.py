@@ -17,7 +17,7 @@ _API_URL = re.compile(r"/api/v1/settings/([a-z_]+)/([a-z_]+)(?![a-z_]*['\"`]?\s*
 _SERVICE_CALL = re.compile(
     r"\b(?:get|set|delete)_setting\(\s*[\w.]+,\s*[\"'](\w+)[\"'],\s*[\"'](\w+)[\"']"
 )
-_SIDEBAR_SAVE = re.compile(r"sidebarPreference\.save\('(\w+)'")
+_SIDEBAR_SAVE = re.compile(r"sidebarPreference\.(?:save|drawerMixin)\('(\w+)'")
 # saveUserSetting('module', 'key', value) and deleteUserSetting('module', 'key'),
 # the shell's write helpers; not a key that is only the start of a
 # concatenation ('ai_' + feature).

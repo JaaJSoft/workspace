@@ -440,7 +440,7 @@ function projectBoard(config) {
   let dragOrigin = null;
   return {
     currentView: config.view || 'board',
-    collapsed: window.sidebarPreference.initial(),
+    ...window.sidebarPreference.drawerMixin('projects'),
     dragging: null,
     // The dragged card, restyled as the slot it will drop into.
     dropSlot: null,
@@ -652,20 +652,6 @@ function projectBoard(config) {
       return COLLECTION_SWAP_TARGETS.some(
         (id) => document.getElementById(id)?.getAttribute('aria-busy') === 'true'
       );
-    },
-
-    isMobile() {
-      return window.matchMedia('(max-width: 1023px)').matches;
-    },
-
-    sidebarCollapsed() {
-      return this.isMobile() ? false : this.collapsed;
-    },
-
-    toggleCollapse() {
-      if (this.isMobile()) return;
-      this.collapsed = !this.collapsed;
-      window.sidebarPreference.save('projects', this.collapsed);
     },
 
     _closeDrawerOnMobile() {

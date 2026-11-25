@@ -8,11 +8,12 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScript } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 function makeApp() {
   const ctx = loadScript('workspace/mail/ui/static/mail/ui/js/mail.js', {
 document: { getElementById: () => null },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     attachmentInputMixin: () => ({}),
     mailAccountsMixin: () => ({}),
     mailFoldersMixin: () => ({}),

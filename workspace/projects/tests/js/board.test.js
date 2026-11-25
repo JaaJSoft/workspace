@@ -5,6 +5,7 @@ const {
   loadScripts,
   CUSTOM_ELEMENT_STUBS,
 } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 // board.js reads the shared <tag-chip> palette and the latest-only request
 // tracker, which base.html loads before it.
@@ -20,7 +21,7 @@ const ctx = loadScripts(
     URL,
     URLSearchParams,
     setTimeout,
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
   }
 );
 
@@ -47,7 +48,7 @@ test('listOrder returns an empty order for an empty column', () => {
 
 function panelDeleteBoard(calls) {
   ctx.getCSRFToken = () => 'token';
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   ctx.location = { href: 'http://x.test/projects/p/board?task=u1' };
   ctx.navHistory = {
     push: () => {},
@@ -104,7 +105,7 @@ test('deletePanelTask deletes, closes the panel, and refreshes', async () => {
 
 test('_closeDrawerOnMobile unchecks drawer when on mobile', () => {
   ctx.getCSRFToken = () => 'token';
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   const checkboxState = { checked: true };
   ctx.document = {
     getElementById: (id) => {
@@ -120,7 +121,7 @@ test('_closeDrawerOnMobile unchecks drawer when on mobile', () => {
 
 test('_closeDrawerOnMobile does nothing when not on mobile', () => {
   ctx.getCSRFToken = () => 'token';
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   const checkboxState = { checked: true };
   ctx.document = {
     getElementById: (id) => {
@@ -830,7 +831,7 @@ test('projectBoard form assignee helpers add, dedupe and remove', () => {
 
 test('openTask pushes the task URL and swaps the panel', async () => {
   ctx.getCSRFToken = () => 'token';
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   const calls = [];
   ctx.location = { href: 'http://x.test/projects/p/board' };
   ctx.navHistory = {
@@ -854,7 +855,7 @@ test('openTask pushes the task URL and swaps the panel', async () => {
 
 test('closePanel clears state and strips the param', () => {
   ctx.getCSRFToken = () => 'token';
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   const calls = [];
   ctx.location = { href: 'http://x.test/projects/p/board?task=u1' };
   ctx.navHistory = {
@@ -875,7 +876,7 @@ test('closePanel clears state and strips the param', () => {
 
 function panelBoard() {
   ctx.getCSRFToken = () => 'token';
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   ctx.location = {
     origin: 'http://x.test',
     href: 'http://x.test/projects/p/board?task=u1',
@@ -1297,7 +1298,7 @@ test('panel addLabel is gated on the set_labels action', () => {
 });
 
 test('refresh targets the all-tasks partial when viewing tasks', () => {
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   ctx.location = {
     origin: 'http://x.test',
     href: 'http://x.test/projects/p/tasks',
@@ -1315,7 +1316,7 @@ test('refresh targets the all-tasks partial when viewing tasks', () => {
 });
 
 test('onRestore recognizes the tasks view', () => {
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   ctx.location = {
     pathname: '/projects/p/tasks',
     href: 'http://x.test/projects/p/tasks',
@@ -1330,7 +1331,7 @@ test('onRestore recognizes the tasks view', () => {
 });
 
 test('refresh targets the analytics partial when viewing analytics', () => {
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   ctx.location = {
     origin: 'http://x.test',
     href: 'http://x.test/projects/p/analytics',
@@ -1348,7 +1349,7 @@ test('refresh targets the analytics partial when viewing analytics', () => {
 });
 
 test('onRestore recognizes the analytics view', () => {
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   ctx.location = {
     pathname: '/projects/p/analytics',
     href: 'http://x.test/projects/p/analytics',
@@ -1363,7 +1364,7 @@ test('onRestore recognizes the analytics view', () => {
 });
 
 test('onRestore recognizes the timeline view', () => {
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   ctx.location = {
     pathname: '/projects/p/timeline',
     href: 'http://x.test/projects/p/timeline',
@@ -1378,7 +1379,7 @@ test('onRestore recognizes the timeline view', () => {
 });
 
 test('refresh targets the timeline partial with scale and group when viewing timeline', () => {
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   ctx.location = {
     origin: 'http://x.test',
     href: 'http://x.test/projects/p/timeline?scale=quarter&group=epic',
@@ -1399,7 +1400,7 @@ test('refresh targets the timeline partial with scale and group when viewing tim
 });
 
 function keydownBoard() {
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   return ctx.projectBoard({
     apiBase: '/api',
     projectBase: '/projects/p',
@@ -1559,7 +1560,7 @@ test('the epic field commits through the set_epic action gate', () => {
 
 function sprintBoard(calls, islandData) {
   ctx.getCSRFToken = () => 'token';
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   ctx.location = { href: 'http://x.test/projects/p/board?sprint=s1' };
   ctx.navHistory = {
     push: () => {},
@@ -1873,7 +1874,7 @@ function deferredFetch(calls) {
 
 function savingBoard(calls) {
   ctx.getCSRFToken = () => 'token';
-  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.sidebarPreference = sidebarPreferenceStub();
   const board = ctx.projectBoard({
     apiBase: '/api',
     projectBase: '/projects/p',

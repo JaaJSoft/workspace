@@ -1,8 +1,6 @@
 // The People page: sidebar scope and lists, the searchable list, the panel.
 // The list and the panel are server-rendered fragments swapped by alpine-ajax.
 
-const MOBILE_QUERY = '(max-width: 1023px)';
-
 window.peopleHelpers = {
   // The state a server-rendered fragment embeds, or the fallback when the
   // block is missing (the panel placeholder carries none).
@@ -71,7 +69,7 @@ window.peopleApp = function peopleApp(config) {
     importResult: null,
     importError: '',
     saving: false,
-    collapsed: window.sidebarPreference.initial(),
+    ...window.sidebarPreference.drawerMixin('people'),
     ctxMenu: { open: false, x: 0, y: 0, type: null, data: null, actions: null },
     _menuGeneration: 0,
 
@@ -84,17 +82,6 @@ window.peopleApp = function peopleApp(config) {
       const params = new URLSearchParams(window.location.search);
       if (params.get('action') === 'new-person') this.newPerson();
       if (params.get('action') === 'import') this.openImport();
-    },
-
-    sidebarCollapsed() {
-      if (window.matchMedia(MOBILE_QUERY).matches) return false;
-      return this.collapsed;
-    },
-
-    toggleCollapse() {
-      if (window.matchMedia(MOBILE_QUERY).matches) return;
-      this.collapsed = !this.collapsed;
-      window.sidebarPreference.save('people', this.collapsed);
     },
 
     listFragmentUrl() {

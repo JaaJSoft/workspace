@@ -1,8 +1,6 @@
 // Photos: the module shell (sidebar, viewer hand-off, selection, albums).
 // The sentinel paging the timeline is timeline_sentinel.js.
 
-const PHOTOS_MOBILE_QUERY = '(max-width: 1023px)';
-
 // The swap targets of this page. A response that lacks one (a login page once
 // the session expired) must leave the live element alone: alpine-ajax's
 // default is to remove it, which would empty the timeline.
@@ -230,8 +228,8 @@ window.photosApp = function photosApp() {
     ...window.photosImportMixin(),
     ...window.photosHiddenMixin(),
     ...window.photosCaptureDetailsMixin(),
+    ...window.sidebarPreference.drawerMixin('photos'),
 
-    collapsed: window.sidebarPreference.initial(),
     tileSize: tile.size,
     _tileWidths: tile.widths,
     photoPrefs: photosPrefs(),
@@ -361,19 +359,6 @@ window.photosApp = function photosApp() {
       }
       if (id === 'photos-content' || id === 'photos-header') this.syncAlbum();
       if (id === 'timeline-grid') this._removeEmptyHeaders();
-    },
-
-    // The stored preference is a desktop one: below `lg` the drawer is
-    // off-canvas and opens as the full sidebar.
-    sidebarCollapsed() {
-      if (window.matchMedia(PHOTOS_MOBILE_QUERY).matches) return false;
-      return this.collapsed;
-    },
-
-    toggleCollapse() {
-      if (window.matchMedia(PHOTOS_MOBILE_QUERY).matches) return;
-      this.collapsed = !this.collapsed;
-      window.sidebarPreference.save('photos', this.collapsed);
     },
 
     closeDrawer() {

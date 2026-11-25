@@ -4,7 +4,6 @@ import json
 import logging
 import threading
 import uuid as uuid_lib
-from datetime import UTC
 from typing import Literal
 
 from django.conf import settings
@@ -1509,8 +1508,7 @@ schedules with a similar prompt — update or cancel the old one instead of crea
             ctx.deps.bot,
             ctx.deps.conversation_id,
         )
-        import calendar
-        from datetime import time, timedelta
+        from datetime import time
 
         from django.utils import timezone as dj_timezone
 
@@ -1595,55 +1593,7 @@ schedules with a similar prompt — update or cancel the old one instead of crea
         if on_day is not None:
             recurrence_day = on_day
 
-        # Compute first next_run_at — recurrence_time is in the user's timezone
-        now_local = now.astimezone(user_tz)
-        if every == "hours":
-            next_run = now + timedelta(hours=interval)
-        elif every == "days":
-            candidate = now_local + timedelta(days=interval)
-            if recurrence_time is not None:
-                candidate = candidate.replace(
-                    hour=recurrence_time.hour,
-                    minute=recurrence_time.minute,
-                    second=0,
-                    microsecond=0,
-                )
-            next_run = candidate.astimezone(UTC)
-        elif every == "weeks":
-            candidate = now_local + timedelta(weeks=interval)
-            if recurrence_day is not None:
-                current_weekday = candidate.weekday()
-                day_offset = (recurrence_day - current_weekday) % 7
-                candidate = candidate + timedelta(days=day_offset)
-            if recurrence_time is not None:
-                candidate = candidate.replace(
-                    hour=recurrence_time.hour,
-                    minute=recurrence_time.minute,
-                    second=0,
-                    microsecond=0,
-                )
-            next_run = candidate.astimezone(UTC)
-        elif every == "months":
-            year = now_local.year
-            month = now_local.month + interval
-            year += (month - 1) // 12
-            month = (month - 1) % 12 + 1
-            day = now_local.day
-            if recurrence_day is not None:
-                day = recurrence_day
-            max_day = calendar.monthrange(year, month)[1]
-            day = min(day, max_day)
-            candidate = now_local.replace(year=year, month=month, day=day)
-            if recurrence_time is not None:
-                candidate = candidate.replace(
-                    hour=recurrence_time.hour,
-                    minute=recurrence_time.minute,
-                    second=0,
-                    microsecond=0,
-                )
-            next_run = candidate.astimezone(UTC)
-
-        schedule = ScheduledMessage.objects.create(
+        schedule = ScheduledMessage(
             conversation_id=conversation_id,
             bot=bot,
             created_by=user,
@@ -1653,8 +1603,10 @@ schedules with a similar prompt — update or cancel the old one instead of crea
             recurrence_interval=interval,
             recurrence_time=recurrence_time,
             recurrence_day=recurrence_day,
-            next_run_at=next_run,
         )
+        schedule.compute_next_run(user_tz=user_tz)
+        schedule.save()
+        next_run = schedule.next_run_at
 
         detail = f"every {interval} {every}"
         if recurrence_time:

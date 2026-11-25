@@ -1,9 +1,10 @@
 import uuid
-from datetime import time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from pydantic import ValidationError
@@ -15,6 +16,7 @@ from workspace.ai.models import AITask, BotProfile, ScheduledMessage, UserMemory
 from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import CancelScheduleParams, ScheduleMessageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.users.services.settings import set_setting
 
 from .agents import call, reply, run_tool, scripted, tool_context
 
@@ -924,6 +926,37 @@ class ScheduleToolTests(TestCase):
         )
         self.assertEqual(schedule.recurrence_unit, "months")
         self.assertIsNotNone(schedule.next_run_at.tzinfo)
+
+    def test_the_first_run_falls_on_the_users_day_and_time(self):
+        set_setting(self.user, "core", "timezone", "Asia/Tokyo")
+        self.addCleanup(cache.clear)
+        # Wednesday 05:00 in Tokyo, still Tuesday in UTC.
+        now = datetime(2026, 3, 10, 20, 0, tzinfo=UTC)
+        cases = (
+            (dict(every="hours", interval=3), datetime(2026, 3, 10, 23, 0)),
+            (
+                dict(every="days", interval=1, at_time="09:00"),
+                datetime(2026, 3, 12, 0, 0),
+            ),
+            (
+                dict(every="weeks", interval=1, at_time="14:00", on_day=0),
+                datetime(2026, 3, 23, 5, 0),
+            ),
+            (
+                dict(every="months", interval=1, at_time="10:00", on_day=31),
+                datetime(2026, 4, 30, 1, 0),
+            ),
+        )
+        for params, expected in cases:
+            with (
+                self.subTest(every=params["every"]),
+                patch("django.utils.timezone.now", return_value=now),
+            ):
+                self._call(
+                    "schedule_message", ScheduleMessageParams(prompt="Hi", **params)
+                )
+                schedule = ScheduledMessage.objects.get(recurrence_unit=params["every"])
+                self.assertEqual(schedule.next_run_at, expected.replace(tzinfo=UTC))
 
     def test_schedule_rejects_past_datetime(self):
         past = (timezone.now() - timedelta(hours=1)).isoformat()

@@ -1,5 +1,4 @@
 import hashlib
-from collections import Counter, defaultdict
 from urllib.parse import quote
 
 from django.db.models import Q
@@ -7,11 +6,11 @@ from django.utils.translation import gettext as _
 
 from workspace.common.search import apply_fulltext
 from workspace.common.search.schema import Col, FulltextIndex
-from workspace.common.text import fold_text
 from workspace.core.module_registry import SearchResult, SearchTag
 
 from .models import MailMessage
 from .queries import canonical_folder, user_account_ids
+from .services.recipients import history_suggestions
 
 # Column order is frozen into the applied bm25 config
 # bm25(10.0, 2.0, 4.0, 4.0, 1.0): subject A, snippet C, from_email B,
@@ -93,46 +92,10 @@ def _format_date(dt, tz):
 
 
 def search_contacts(query, user, limit):
-    account_ids = user_account_ids(user)
-
-    messages = (
-        MailMessage.objects.filter(account_id__in=account_ids, deleted_at__isnull=True)
-        .filter(
-            Q(from_email__ficontains=query)
-            | Q(from_name__ficontains=query)
-            | Q(recipients_text__ficontains=query)
-        )
-        .order_by("-date")
-        .only("from_email", "from_name", "to_addresses", "cc_addresses")[:500]
-    )
-
-    needle = fold_text(query)
-    email_count = Counter()
-    email_names = defaultdict(Counter)
-
-    for msg in messages:
-        addresses = []
-        if msg.from_email:
-            addresses.append({"name": msg.from_name, "email": msg.from_email})
-        for field in (msg.to_addresses, msg.cc_addresses):
-            if isinstance(field, list):
-                addresses.extend(
-                    a for a in field if isinstance(a, dict) and a.get("email")
-                )
-
-        for addr in addresses:
-            email = addr["email"].strip().lower()
-            name = (addr.get("name") or "").strip()
-            if needle not in fold_text(email) and needle not in fold_text(name):
-                continue
-            email_count[email] += 1
-            if name:
-                email_names[email][name] += 1
-
+    account_filter = Q(account_id__in=user_account_ids(user))
     results = []
-    for email, _count in email_count.most_common(limit):
-        name_counter = email_names.get(email)
-        name = name_counter.most_common(1)[0][0] if name_counter else ""
+    for contact in history_suggestions(account_filter, query)[:limit]:
+        name, email = contact["name"], contact["email"]
         display = f"{name} <{email}>" if name else email
         uid = hashlib.md5(email.encode()).hexdigest()
         results.append(

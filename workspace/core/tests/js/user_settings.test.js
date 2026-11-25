@@ -62,3 +62,15 @@ test('saveUserSettings() patches several keys of a module at once', async () => 
   assert.deepEqual(JSON.parse(calls[0].options.body), { theme: 'nord', light_theme: 'nord' });
   await assert.rejects(load({ ok: false, status: 400 }).saveUserSettings('core', { theme: 'x' }));
 });
+
+test('deleteUserSetting() removes the key and rejects a refusal', async () => {
+  const calls = [];
+  await load({ ok: true, status: 204 }, calls).deleteUserSetting('profile', 'banner_palette');
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/api/v1/settings/profile/banner_palette');
+  assert.equal(calls[0].options.method, 'DELETE');
+  assert.equal(calls[0].options.headers['X-CSRFToken'], 'csrf-token');
+  assert.equal(calls[0].options.body, undefined);
+  await assert.rejects(load({ ok: false, status: 404 }).deleteUserSetting('profile', 'nope'));
+});

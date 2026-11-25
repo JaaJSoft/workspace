@@ -128,3 +128,23 @@ class SettingsWritesTests(PlaywrightTestCase):
             self.page.locator('button[title="Ocean"]').click()
 
         expect(self.page.get_by_text("Failed to save palette.")).to_be_visible()
+
+    def test_resetting_the_banner_palette_removes_it(self):
+        set_setting(self.user, "profile", "banner_palette", "ocean")
+        self._open("profile")
+        with self._write("DELETE", "/api/v1/settings/profile/banner_palette"):
+            self.page.get_by_role("button", name="Reset to default").click()
+
+        expect(self.page.get_by_text("Banner reset to default.")).to_be_visible()
+        cache.clear()
+        self.assertIsNone(get_setting(self.user, "profile", "banner_palette"))
+
+    def test_a_refused_banner_reset_is_reported(self):
+        set_setting(self.user, "profile", "banner_palette", "ocean")
+        self._open("profile")
+        self._refuse("/api/v1/settings/profile/banner_palette")
+        with self._write("DELETE", "/api/v1/settings/profile/banner_palette"):
+            self.page.get_by_role("button", name="Reset to default").click()
+
+        expect(self.page.get_by_text("Failed to save palette.")).to_be_visible()
+        expect(self.page.get_by_text("Banner reset to default.")).to_have_count(0)

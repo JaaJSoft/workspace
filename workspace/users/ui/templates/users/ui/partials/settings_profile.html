@@ -462,17 +462,11 @@
       async resetPalette() {
         this.currentId = null;
         this.showCustom = false;
-        const csrfToken = getCSRFToken();
         try {
-          await fetch('/api/v1/settings/profile/banner_palette', {
-            method: 'DELETE',
-            headers: {
-              'X-CSRFToken': csrfToken
-            },
-          });
+          await window.deleteUserSetting('profile', 'banner_palette');
           this.showFeedback('success', '{{ banner_reset_message|escapejs }}');
         } catch (e) {
-          this.showFeedback('error', '{{ network_error_message|escapejs }}');
+          this.showFeedback('error', e.response ? '{{ palette_save_failed_message|escapejs }}' : '{{ network_error_message|escapejs }}');
         }
       },
       async _save(value) {

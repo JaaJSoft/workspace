@@ -20,7 +20,11 @@ updates:
           - "pydantic-graph"
 
   - package-ecosystem: "github-actions"
-    directory: "/" # Workflows under .github/workflows
+    # "/" only covers .github/workflows: the composite actions under
+    # .github/actions pin actions of their own.
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "daily"
 

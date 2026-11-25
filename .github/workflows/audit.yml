@@ -65,16 +65,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
         with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install the runtime dependencies
-        run: uv sync --frozen --no-dev
+          sync-args: --frozen --no-dev
 
       - name: Check the licenses of what is distributed
         run: uv run --no-sync python scripts/check_licenses.py

@@ -101,8 +101,11 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/tests.yml'
-            # The bundle tests read scripts/frontend as input: a dependency bump
-            # there is exactly the change that can leave a vendored artifact stale.
+            # The bundle tests read scripts/frontend. Of it, the trigger only
+            # admits src/, but a PR also lists the manifest bump that came with
+            # its rebuilt artifacts: on a Tailwind bump only app.css changes,
+            # and this entry is what runs css_bundle.test.js. A bare bump is
+            # frontend-bundle.yml's to check.
             js:
               - 'workspace/**/*.js'
               - 'scripts/frontend/**'
@@ -240,16 +243,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       - name: djlint check
         run: |
@@ -305,16 +300,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       # Poster frames, video metadata, faces in videos and the frames a
       # vision model is shown run ffmpeg and ffprobe; their tests skip without
@@ -379,16 +366,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       - name: Run E2E tests
         env:
@@ -463,16 +442,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       - name: Install davfs2
         uses: ./.github/actions/apt-install
@@ -519,16 +490,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       # The container answers HTTP before its first-run install is over.
       - name: Wait for Nextcloud to finish installing
@@ -582,16 +545,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       - name: Start the IMAP server without extensions
         run: |
@@ -638,7 +593,8 @@ jobs:
     if: needs.changes.outputs.storage == 'true'
     services:
       s3:
-        image: versity/versitygw:v1.8.0
+        # Pulled through mirror.gcr.io, see the nextcloud service above.
+        image: mirror.gcr.io/versity/versitygw:v1.8.0
         env:
           ROOT_ACCESS_KEY_ID: ci-s3-user
           ROOT_SECRET_ACCESS_KEY: ci-s3-password-7d1e
@@ -655,16 +611,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       # The service container answers once it listens; an anonymous request
       # gets a 403, which is enough to know it is up.
@@ -700,7 +648,8 @@ jobs:
     if: needs.changes.outputs.storage == 'true'
     services:
       s3:
-        image: versity/versitygw:v1.8.0
+        # Pulled through mirror.gcr.io, see the nextcloud service above.
+        image: mirror.gcr.io/versity/versitygw:v1.8.0
         env:
           ROOT_ACCESS_KEY_ID: ci-s3-user
           ROOT_SECRET_ACCESS_KEY: ci-s3-password-7d1e
@@ -717,16 +666,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       - name: Wait for the S3 server
         run: |
@@ -787,88 +728,44 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
-
-      - name: Run the vector tests on PostgreSQL
+      # One run, so the test database is created and migrated once. What each
+      # suite checks that the SQLite matrix cannot:
+      # - test_vectors*: the pgvector backend of the vector index.
+      # - AccountRotateTests: the rotation's single UPDATE copies the current
+      #   envelope into the previous slot with Case/F, JSONField included, and
+      #   only PostgreSQL proves it reads the row as it was before the statement.
+      # - test_folding: Fold and the ficontains lookup compile to f_unaccent.
+      # - test_in_lists: a long __in compiles to = ANY(array), the values adapted
+      #   by the driver.
+      # - test_bulk_update: UPDATE ... FROM (VALUES ...), each column of the
+      #   table cast to its type.
+      # - test_search, test_search_scope: the tsvector columns, the query and
+      #   how PostgreSQL's parser cuts a file name into words, where the matrix
+      #   only ever runs FTS5.
+      # - test_file_links: unlinking locks the share row, which PostgreSQL
+      #   refuses on the nullable side of the outer join select_related builds.
+      # - test_cleanup_races: two connections race a cleanup between its
+      #   statements (a restore against the trash purge, a member's upload
+      #   against an extraction taking back its folders), which SQLite's writer
+      #   lock makes impossible.
+      - name: Run the PostgreSQL-only tests
         env:
           DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
           # A server without a usable pgvector is a failure here, not a skip.
           WORKSPACE_PGVECTOR_TESTS: '1'
           PYTHONWARNINGS: default
-        run: |
-          uv run python manage.py test workspace.common.tests.test_vectors workspace.common.tests.test_vectors_schema -v 2
-
-      # The rotation's single UPDATE copies the current envelope into the
-      # previous slot with Case/F, JSONField included, and only PostgreSQL
-      # here proves it reads the row as it was before the statement.
-      - name: Run the vault envelope rotation tests on PostgreSQL
-        env:
-          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
-          PYTHONWARNINGS: default
-        run: |
-          uv run python manage.py test workspace.vault.tests.test_account_api.AccountRotateTests -v 2
-
-      # Fold and the ficontains lookup compile to f_unaccent on PostgreSQL;
-      # the Django matrix only ever runs their SQLite side.
-      - name: Run the accent-folding lookup tests on PostgreSQL
-        env:
-          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
-          PYTHONWARNINGS: default
-        run: |
-          uv run python manage.py test workspace.common.tests.test_folding -v 2
-
-      # A long __in compiles to = ANY(array) on PostgreSQL, the values adapted
-      # by the driver; the Django matrix only ever runs its SQLite side.
-      - name: Run the long __in list tests on PostgreSQL
-        env:
-          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
-          PYTHONWARNINGS: default
-        run: |
-          uv run python manage.py test workspace.common.tests.test_in_lists -v 2
-
-      # bulk_update goes out as UPDATE ... FROM (VALUES ...), each column of
-      # the table cast to its type on PostgreSQL; the Django matrix only ever
-      # runs its SQLite side.
-      - name: Run the bulk_update tests on PostgreSQL
-        env:
-          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
-          PYTHONWARNINGS: default
-        run: |
-          uv run python manage.py test workspace.common.tests.test_bulk_update -v 2
-
-      # The tsvector columns, the query and how PostgreSQL's parser cuts a
-      # file name into words; the Django matrix only ever runs FTS5.
-      - name: Run the full-text search tests on PostgreSQL
-        env:
-          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
-          PYTHONWARNINGS: default
-        run: |
-          uv run python manage.py test workspace.common.tests.test_search workspace.files.tests.test_search_scope -v 2
-
-      # Unlinking locks the share row, which PostgreSQL refuses on the
-      # nullable side of the outer join select_related builds.
-      - name: Run the task file link tests on PostgreSQL
-        env:
-          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
-          PYTHONWARNINGS: default
-        run: |
-          uv run python manage.py test workspace.projects.tests.test_file_links -v 2
-
-      # Two connections race a cleanup between its statements: a restore
-      # against the trash purge, a member's upload against an extraction
-      # taking back its folders. SQLite's writer lock makes both impossible.
-      - name: Run the cleanup race tests on PostgreSQL
-        env:
-          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
-          PYTHONWARNINGS: default
-        run: |
-          uv run python manage.py test workspace.files.tests.test_cleanup_races -v 2
+        run: >-
+          uv run python manage.py test -v 2
+          workspace.common.tests.test_vectors
+          workspace.common.tests.test_vectors_schema
+          workspace.vault.tests.test_account_api.AccountRotateTests
+          workspace.common.tests.test_folding
+          workspace.common.tests.test_in_lists
+          workspace.common.tests.test_bulk_update
+          workspace.common.tests.test_search
+          workspace.files.tests.test_search_scope
+          workspace.projects.tests.test_file_links
+          workspace.files.tests.test_cleanup_races

@@ -68,20 +68,20 @@ class _RemoteFile:
     cache_blocks = 60000
 
     def __init__(self, url):
-        import httpx
+        import httpx2
 
         self.url = url
         self._local = threading.local()
         self._lock = threading.Lock()
         self._cache = OrderedDict()
-        self.size = int(httpx.head(url, timeout=60).headers["content-length"])
+        self.size = int(httpx2.head(url, timeout=60).headers["content-length"])
 
     def _client(self):
-        import httpx
+        import httpx2
 
         client = getattr(self._local, "client", None)
         if client is None:
-            client = self._local.client = httpx.Client(timeout=60)
+            client = self._local.client = httpx2.Client(timeout=60)
         return client
 
     def _block(self, index):
@@ -252,7 +252,7 @@ def flickr_source(download_url):
 
 def fetch_images(rows, cache_dir):
     """{photo id: (path, sha256, width, height)} for the images the bucket has."""
-    import httpx
+    import httpx2
     from PIL import Image
 
     index_path = cache_dir / "build" / "images.jsonl"
@@ -268,7 +268,7 @@ def fetch_images(rows, cache_dir):
     def one(photo_id):
         client = getattr(local, "client", None)
         if client is None:
-            client = local.client = httpx.Client(timeout=60)
+            client = local.client = httpx2.Client(timeout=60)
         key = image_key(rows[photo_id]["downloadurl"])
         entry = {"photoid": photo_id, "key": key}
         response = client.get(photo_dataset.IMAGE_URL.format(key[:3], key[3:6], key))

@@ -172,16 +172,8 @@ jobs:
           sarif_file: trivy-results.sarif
           category: trivy-image
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.4.0
-
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Set up the Python environment
+        uses: ./.github/actions/python-env
 
       # The PostgreSQL chain runs in both legs rather than in a job of its own:
       # the container smoke test below needs a migrated, seeded database to talk

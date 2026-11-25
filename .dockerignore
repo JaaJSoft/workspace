@@ -19,6 +19,9 @@ env/
 # uv
 .uv/
 
+# Node - the css-builder stage runs its own npm ci
+**/node_modules/
+
 # Django
 *.log
 db.sqlite3

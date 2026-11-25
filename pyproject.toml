@@ -155,12 +155,13 @@ dev = [
     # than with Word; these emit the real part layout, namespaces and
     # scaffolding. Never imported by application code - workspace/common/
     # documents/office.py reads documents and depends on nothing but lxml.
-    # Only ever writes: the fixtures the extractor is tested against.
-    "pypdf>=7.1.1",
     "python-docx>=1.2.0",
     "openpyxl>=3.1.5",
     "python-pptx>=1.0.2",
     "odfpy>=1.4.1",
+    # Writes the PDF fixtures of the document extraction tests (ai, common,
+    # files). Never imported by application code: Tika reads PDFs.
+    "pypdf>=7.1.1",
     # A third-party CalDAV client, driven against a live server by the calendar
     # E2E suite: the server is tested with somebody else's reading of the RFCs.
     "caldav>=3.7.0",

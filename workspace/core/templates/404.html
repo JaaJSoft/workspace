@@ -1,31 +1,14 @@
-{% extends "base_with_navbar.html" %}
+{% extends "error_page.html" %}
 {% load i18n %}
 
 {% block title %}404 - {% translate "Page Not Found" %}{% endblock %}
 
-{% block main_class %}flex items-center justify-center{% endblock %}
-
-{% block content %}
-  <div class="text-center max-w-md mx-auto px-4">
-    <div class="flex justify-center mb-4">
-      <div
-        class="w-16 h-16 rounded-full bg-warning/10 flex items-center justify-center"
-      >
-        <i data-lucide="map-pin-off" class="w-8 h-8 text-warning"></i>
-      </div>
-    </div>
-    <div class="text-8xl font-black text-base-content/10 select-none mb-2">404</div>
-    <h1 class="text-2xl font-bold mb-2">{% translate "Page not found" context "error page" %}</h1>
-    <p class="text-base-content/60 mb-8">{% translate "The page you're looking for doesn't exist or has been moved." %}</p>
-    <div class="flex gap-3 justify-center">
-      <a href="/" data-nav-back class="btn btn-ghost btn-sm gap-2">
-        <i data-lucide="arrow-left" class="w-4 h-4"></i>
-        {% translate "Go back" context "error page" %}
-      </a>
-      <a href="/" class="btn btn-primary btn-sm gap-2">
-        <i data-lucide="home" class="w-4 h-4"></i>
-        {% translate "Home" %}
-      </a>
-    </div>
-  </div>
+{% block error_tint %}bg-warning/10 text-warning{% endblock %}
+{% block error_icon %}map-pin-off{% endblock %}
+{% block error_code %}404{% endblock %}
+{% block error_heading %}
+  {% translate "Page not found" context "error page" %}
+{% endblock %}
+{% block error_message %}
+  {% translate "The page you're looking for doesn't exist or has been moved." %}
 {% endblock %}

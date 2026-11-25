@@ -1,0 +1,41 @@
+{% extends "base_with_navbar.html" %}
+{% load i18n %}
+{% comment %}
+  Shared layout of the 400, 403 and 404 pages, which fill in the blocks below
+  (error_tint takes the icon square's bg and text classes). 500.html stays a
+  standalone page: it loads no script and extends nothing, so it still renders
+  when the base template is what failed.
+{% endcomment %}
+
+{% block main_class %}flex items-center justify-center{% endblock %}
+
+{% block content %}
+  <div class="text-center max-w-md mx-auto px-4">
+    <div class="flex justify-center mb-4">
+      <div
+        class="w-16 h-16 rounded-full flex items-center justify-center {% block error_tint %}{% endblock %}"
+      >
+        <i data-lucide="{% block error_icon %}{% endblock %}" class="w-8 h-8"></i>
+      </div>
+    </div>
+    <div class="text-8xl font-black text-base-content/10 select-none mb-2">
+      {% block error_code %}{% endblock %}
+    </div>
+    <h1 class="text-2xl font-bold mb-2">
+      {% block error_heading %}{% endblock %}
+    </h1>
+    <p class="text-base-content/60 mb-8">
+      {% block error_message %}{% endblock %}
+    </p>
+    <div class="flex gap-3 justify-center">
+      <a href="/" data-nav-back class="btn btn-ghost btn-sm gap-2">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        {% translate "Go back" context "error page" %}
+      </a>
+      <a href="/" class="btn btn-primary btn-sm gap-2">
+        <i data-lucide="home" class="w-4 h-4"></i>
+        {% translate "Home" %}
+      </a>
+    </div>
+  </div>
+{% endblock %}

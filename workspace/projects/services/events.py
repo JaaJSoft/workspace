@@ -1,7 +1,7 @@
 from django.utils.translation import gettext as _
 from django.utils.translation import pgettext_lazy
 
-from ..models import TaskEvent, TaskStatus
+from ..models import TaskEvent, TaskStatus, task_url
 from ..queries import visible_task_events_q
 
 # The direction labels links.py snapshots into a link event's from_value, in
@@ -96,7 +96,7 @@ def serialize_task_event(ev):
     # (SET_NULL on the event) falls back to the project page.
     url = f"/projects/{ev.project_id}"
     if ev.task_id is not None:
-        url = f"{url}?task={ev.task_id}"
+        url = task_url(ev.project_id, ev.task_id)
     description = ev.task_title
     if ev.task_number is not None:
         description = f"{ev.project.key}-{ev.task_number} · {ev.task_title}"

@@ -201,7 +201,9 @@ class GlobalSearchProviderTests(TestCase):
         r = results[0]
         self.assertEqual(r.uuid, str(self.task.uuid))
         self.assertEqual(r.name, "Pick the flamingo palette")
-        self.assertEqual(r.url, f"/projects/{self.project.uuid}?task={self.task.uuid}")
+        self.assertEqual(
+            r.url, f"/projects/{self.project.uuid}/board?task={self.task.uuid}"
+        )
         self.assertEqual(r.tags[0].label, "Flamingo redesign")
 
     def test_limit_respected(self):

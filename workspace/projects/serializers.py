@@ -449,8 +449,7 @@ class TaskCalendarSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_url(self, obj):
-        board = reverse("projects_ui:board", args=[obj.project_id])
-        return f"{board}?task={obj.uuid}"
+        return obj.get_absolute_url()
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_card_url(self, obj):

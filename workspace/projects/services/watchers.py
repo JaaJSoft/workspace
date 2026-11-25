@@ -93,10 +93,6 @@ def apply_watchers(task, recipients, allowed_by_id):
     return list(kept.values())
 
 
-def _task_url(task):
-    return f"/projects/{task.project_id}/board?task={task.uuid}"
-
-
 def notify_status_changed(moved, actor):
     """Notify each moved task's non-muted watchers - never the actor.
 
@@ -126,7 +122,7 @@ def notify_status_changed(moved, actor):
                 source=task,
                 origin="projects",
                 title=_status_change_title(task, actor),
-                url=_task_url(task),
+                url=task.get_absolute_url(),
                 actor=actor,
                 priority_map=priority_map,
                 stream="status",

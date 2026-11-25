@@ -10,10 +10,6 @@ from workspace.users.services.settings import get_user_language, in_recipient_la
 from .notification_levels import apply_levels
 
 
-def _task_url(task):
-    return f"/projects/{task.project_id}/board?task={task.uuid}"
-
-
 def notify_assigned(task, actor, assignees):
     """Notify *assignees* they were put on *task* - never the actor.
 
@@ -32,7 +28,7 @@ def notify_assigned(task, actor, assignees):
             origin="projects",
             title=_('%(actor)s assigned you to "%(task)s"')
             % {"actor": actor.username, "task": task.title},
-            url=_task_url(task),
+            url=task.get_absolute_url(),
             actor=actor,
             priority_map=priority_map,
             stream="assignment",

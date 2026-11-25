@@ -54,7 +54,8 @@ class ProjectSearchScopeTests(TestCase):
     def test_mine_tasks_stay_in_the_personal_project(self):
         hits = search_project_tasks("zanzibar", self.alice, 10, scope=SearchScope.MINE)
         self.assertEqual(
-            {h.url.split("?")[0] for h in hits}, {f"/projects/{self.personal.uuid}"}
+            {h.url.split("?")[0] for h in hits},
+            {f"/projects/{self.personal.uuid}/board"},
         )
 
     def test_mine_projects_drop_the_shared_boards(self):

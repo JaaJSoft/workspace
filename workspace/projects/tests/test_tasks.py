@@ -81,7 +81,9 @@ class NotifyDueTasksCronTests(NotifyDueTasksMixin, TestCase):
         self.assertEqual(notif.origin, "projects")
         self.assertEqual(notif.title, "Ship it")
         self.assertIn("Due today", notif.body)
-        self.assertEqual(notif.url, f"/projects/{self.project.uuid}?task={task.uuid}")
+        self.assertEqual(
+            notif.url, f"/projects/{self.project.uuid}/board?task={task.uuid}"
+        )
 
     def test_overdue_task_says_since_when(self):
         task = self._task(due_days=-3)

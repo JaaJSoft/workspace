@@ -30,10 +30,6 @@ def add_comment(task, author, body):
     return comment
 
 
-def _task_url(task):
-    return f"/projects/{task.project_id}/board?task={task.uuid}"
-
-
 def _notify_mentioned(task, actor, mentioned):
     recipients, priority_map = apply_levels(task.project_id, mentioned)
     if not recipients:
@@ -45,7 +41,7 @@ def _notify_mentioned(task, actor, mentioned):
             origin="projects",
             title=_('%(actor)s mentioned you in a comment on "%(task)s"')
             % {"actor": actor.username, "task": task.title},
-            url=_task_url(task),
+            url=task.get_absolute_url(),
             actor=actor,
             default_priority="high",
             priority_map=priority_map,
@@ -92,7 +88,7 @@ def notify_comment_added(task, actor, body):
             origin="projects",
             title=_('%(actor)s commented on "%(task)s"')
             % {"actor": actor.username, "task": task.title},
-            url=_task_url(task),
+            url=task.get_absolute_url(),
             actor=actor,
             priority_map=priority_map,
         )

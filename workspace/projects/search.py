@@ -38,7 +38,7 @@ def search_project_tasks(query, user, limit, scope=SearchScope.ALL):
         SearchResult(
             uuid=str(t.uuid),
             name=t.title,
-            url=f"/projects/{t.project_id}?task={t.uuid}",
+            url=t.get_absolute_url(),
             matched_value=t.reference if t.uuid in reference_uuids else t.title,
             match_type="task",
             type_icon="list-todo",

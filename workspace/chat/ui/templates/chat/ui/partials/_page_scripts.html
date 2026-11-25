@@ -1,0 +1,26 @@
+{# Scripts shared by the chat page and the voice room, before each page's own entry script. #}
+{% load static %}
+<script src="{% static 'users/ui/js/vendor/cropper/cropper.js' %}"></script>
+<script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+<script src="{% static 'files/ui/js/file_viewer.js' %}"></script>
+<script src="{% static 'ui/js/attachment_input.js' %}"></script>
+<!-- Initial preferences embedded server-side so JS doesn't need to fetch
+   /api/v1/settings/chat/preferences on page load. -->
+{{ chat_prefs|json_script:"chat-prefs-data" }}
+<script src="{% static 'chat/ui/js/chat_preferences.js' %}"></script>
+<script src="{% static 'chat/ui/js/conversations.js' %}"></script>
+<script src="{% static 'chat/ui/js/message_shell.js' %}"></script>
+<script src="{% static 'chat/ui/js/messages.js' %}"></script>
+<script src="{% static 'chat/ui/js/sse.js' %}"></script>
+<script src="{% static 'chat/ui/js/members.js' %}"></script>
+<script src="{% static 'chat/ui/js/panels.js' %}"></script>
+<script src="{% static 'chat/ui/js/threads.js' %}"></script>
+<script src="{% static 'chat/ui/js/bot.js' %}"></script>
+<script src="{% static 'chat/ui/js/input.js' %}"></script>
+<script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
+<script src="{% static 'chat/ui/js/call.js' %}"></script>
+<script src="{% static 'chat/ui/js/call_room.js' %}"></script>
+<script src="{% static 'chat/ui/js/call_diagnostic.js' %}"></script>
+<script src="{% static 'chat/ui/js/ui_helpers.js' %}"></script>
+<script src="{% static 'chat/ui/js/audio.js' %}"></script>
+<script src="{% static 'chat/ui/js/recorder.js' %}"></script>

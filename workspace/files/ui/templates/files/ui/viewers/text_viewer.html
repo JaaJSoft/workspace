@@ -343,26 +343,10 @@
       lineNumbers: true,
     };
 
-    function getCSRFToken() {
-      const match = document.cookie.split('; ').find(function(row) {
-        return row.startsWith('csrftoken=');
-      });
-      return match ? match.split('=')[1] : '';
-    }
-
     function savePrefsRemote(prefs) {
       clearTimeout(_prefsSaveTimer);
       _prefsSaveTimer = setTimeout(function() {
-        fetch(PREFS_URL, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-          },
-          body: JSON.stringify({
-            value: prefs
-          }),
-        }).catch(function() {});
+        window.saveUserSetting('files', 'editor', prefs).catch(function() {});
       }, 500);
     }
 

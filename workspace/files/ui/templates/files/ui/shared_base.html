@@ -47,6 +47,8 @@
     <script src="{% static 'ui/js/uuid.js' %}"></script>
     {# A drop behind a password sends the CSRF token along with the access cookie. #}
     <script src="{% static 'ui/js/csrf.js' %}"></script>
+    {# The text viewer saves a signed-in visitor's editor preferences through it. #}
+    <script src="{% static 'core/js/user_settings.js' %}"></script>
     {% comment %}
       This page does not extend base.html, so nothing base.html loads globally
       is present. Anything a child page needs, including <inline-alert>, is

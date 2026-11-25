@@ -2101,14 +2101,12 @@ msgstr "Abandonner les retouches"
 msgid "Save (Ctrl+S)"
 msgstr "Enregistrer (Ctrl+S)"
 
-#: ui/templates/files/ui/viewers/markdown_viewer.html
-#: ui/templates/files/ui/viewers/text_viewer.html
+#: ui/templates/files/ui/viewers/lock_banner.html
 #, python-format
 msgid "%(owner)s is editing this file"
 msgstr "%(owner)s modifie ce fichier"
 
-#: ui/templates/files/ui/viewers/markdown_viewer.html
-#: ui/templates/files/ui/viewers/text_viewer.html
+#: ui/templates/files/ui/viewers/lock_banner.html
 msgid "Force unlock"
 msgstr "Forcer le déverrouillage"
 

@@ -44,7 +44,7 @@ dependencies = [
     # IMAP client (pure Python): parsed responses, modified UTF-7 folder names
     "imapclient>=4.3.0",
     "cryptography>=50.0.2",
-    "nh3>=0.3.7",
+    "nh3>=0.3.8",
     "python-dateutil>=2.9",
     "icalendar>=7.3.0",
     # calendar: feeds that publish UTC times plus an X-WR-TIMEZONE (LGPL-3.0+,

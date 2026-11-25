@@ -137,11 +137,9 @@ def _told_apart(file_obj, taken):
     """*file_obj*'s name with its owner in it, free among the *taken* keys."""
     stem, extension = posixpath.splitext(file_obj.name)
     owner = file_obj.owner.username
-    for attempt in itertools.count(1):
-        label = owner if attempt == 1 else f"{owner} {attempt}"
-        name = f"{stem} ({label}){extension}"
-        if caseless(name) not in taken:
-            return name
+    labels = itertools.chain([owner], (f"{owner} {n}" for n in itertools.count(2)))
+    names = (f"{stem} ({label}){extension}" for label in labels)
+    return next(name for name in names if caseless(name) not in taken)
 
 
 def shared_file(user, name):

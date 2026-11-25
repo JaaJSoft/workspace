@@ -92,4 +92,5 @@ class CryptoAgilityBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
         found = self.page.locator(banner)
         if not found.count():
             return 0
-        return int(found.first.locator("b > span").first.inner_text())
+        headline = found.first.locator("b").first.inner_text()
+        return int(headline.split()[0])

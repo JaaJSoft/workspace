@@ -7,6 +7,7 @@ the same URL, and a write aimed at the first could land on another.
 """
 
 import re
+import unicodedata
 import uuid
 from urllib.parse import quote
 
@@ -18,6 +19,7 @@ from wsgidav.dav_error import HTTP_FORBIDDEN, DAVError
 
 from workspace.common.dav.auth import clear_auth_cache
 from workspace.common.tests.wsgi import served_in_test
+from workspace.common.text import caseless
 from workspace.files.models import File, FileShare
 from workspace.files.services import tree
 from workspace.files.tests import test_webdav
@@ -42,6 +44,11 @@ _LOCK_BODY = (
     b"<lockscope><exclusive/></lockscope><locktype><write/></locktype>"
     b"</lockinfo>"
 )
+
+
+def _wsgi(path):
+    """*path* as a WSGI server hands it over: its UTF-8 bytes, read as latin-1."""
+    return path.encode().decode("latin-1")
 
 
 class _DavTestCase(TestCase):
@@ -79,6 +86,17 @@ class _DavTestCase(TestCase):
 
     def _resolve(self, path):
         return self.provider.get_resource_inst(path, self.environ)
+
+    def _stored_decomposed(self, node):
+        """*node* as a row from before names were composed: its name, and the
+        end of its path, in the form macOS sends them."""
+        name = unicodedata.normalize("NFD", node.name)
+        path = f"{node.parent.path}/{name}" if node.parent_id else name
+        File.objects.filter(pk=node.pk).update(
+            name=name, path=path, name_key=caseless(name)
+        )
+        node.refresh_from_db()
+        return node
 
     def _answer(self, method, path):
         """What a request is answered, less what any answer echoes: the path
@@ -405,15 +423,51 @@ class PersonalTreeTests(_DavTestCase):
 
     def test_a_node_whose_path_mixes_both_unicode_forms_is_found(self):
         """A folder named before names were composed holds a file named since."""
-        decomposed = "Résumé"
-        folder = tree.create_folder(self.user, "placeholder")
-        File.objects.filter(pk=folder.pk).update(name=decomposed, path=decomposed)
-        note = self._file(self.user, "été.txt", parent=folder)
-        File.objects.filter(pk=note.pk).update(path=f"{decomposed}/été.txt")
+        folder = self._stored_decomposed(
+            tree.create_folder(self.user, "R\u00e9sum\u00e9")
+        )
+        note = self._file(self.user, "\u00e9t\u00e9.txt", parent=folder)
 
-        found = self._resolve(f"{HOME}/{decomposed}/été.txt")
+        found = self._resolve(f"{HOME}/{folder.name}/e\u0301te\u0301.txt")
 
         self.assertEqual(found._file.pk, note.pk)
+
+    def test_folders_stored_in_different_unicode_forms_lead_to_the_file(self):
+        """Above the file, a folder from before names were composed and one
+        named since: the path is under neither form of the whole of it."""
+        legacy = self._stored_decomposed(
+            tree.create_folder(self.user, "R\u00e9sum\u00e9")
+        )
+        summer = tree.create_folder(self.user, "\u00e9t\u00e9", parent=legacy)
+        note = self._file(self.user, "x.txt", parent=summer)
+        composed = f"{HOME}/R\u00e9sum\u00e9/\u00e9t\u00e9/x.txt"
+
+        for form in ("NFC", "NFD"):
+            with self.subTest(form=form):
+                found = self._resolve(unicodedata.normalize(form, composed))
+                self.assertIsNotNone(found)
+                self.assertEqual(found._file.pk, note.pk)
+        self.assertEqual(
+            self._resolve(f"{HOME}/{legacy.name}").get_member("\u00e9t\u00e9")._file.pk,
+            summer.pk,
+        )
+
+    def test_a_name_from_before_names_were_composed_is_found_composed(self):
+        note = self._stored_decomposed(self._file(self.user, "\u00e9t\u00e9.txt"))
+
+        found = self._resolve(f"{HOME}/\u00e9t\u00e9.txt")
+
+        self.assertIsNotNone(found)
+        self.assertEqual(found._file.pk, note.pk)
+        self.assertEqual(
+            self._resolve(HOME).get_member("\u00e9t\u00e9.txt")._file.pk, note.pk
+        )
+
+    def test_the_case_of_a_name_still_counts(self):
+        self._file(self.user, "Notes.txt")
+
+        self.assertIsNone(self._resolve(f"{HOME}/notes.txt"))
+        self.assertIsNone(self._resolve(HOME).get_member("notes.txt"))
 
 
 class GroupsTreeTests(_DavTestCase):
@@ -541,7 +595,18 @@ class SharedTreeTests(_DavTestCase):
         self.assertEqual((code, body), (200, b"theirs"))
         self.assertIsNone(self._resolve(f"/{GROUPS}/Elsewhere/theirs.txt"))
 
-    def test_same_named_files_are_told_apart_by_their_owner(self):
+    @staticmethod
+    def _told_apart(file_obj, whole=False):
+        """The address of a file another shared file has the name of."""
+        stem, extension = file_obj.name.rsplit(".", 1)
+        tail = file_obj.uuid.hex if whole else file_obj.uuid.hex[-8:]
+        return f"{stem} ({file_obj.owner.username} {tail}).{extension}"
+
+    def _addresses(self):
+        listing = namespace.shared_listing(self.user)
+        return {file_obj.pk: name for name, file_obj in listing.items()}
+
+    def test_same_named_files_are_told_apart_by_their_owner_and_their_own_id(self):
         carol = User.objects.create_user(username="carol", password="pass123")
         from_bob = self._share(self._file(self.other, "report.txt", b"bob")).file
         from_carol = self._share(self._file(carol, "Report.txt", b"carol")).file
@@ -549,57 +614,149 @@ class SharedTreeTests(_DavTestCase):
         older = self._share(self._file(self.other, "report.txt", parent=folder)).file
         alone = self._share(self._file(carol, "notes.txt")).file
 
-        listing = namespace.shared_listing(self.user)
-
         self.assertEqual(
-            {name: file_obj.pk for name, file_obj in listing.items()},
+            self._addresses(),
             {
-                "report (bob).txt": from_bob.pk,
-                "Report (carol).txt": from_carol.pk,
-                "report (bob 2).txt": older.pk,
-                "notes.txt": alone.pk,
+                from_bob.pk: self._told_apart(from_bob),
+                from_carol.pk: self._told_apart(from_carol),
+                older.pk: self._told_apart(older),
+                alone.pk: "notes.txt",
             },
         )
         # No shared file answers to the name they have in common.
         self.assertIsNone(self._resolve(f"/{SHARED}/report.txt"))
         self.assertEqual(self._request("GET", f"/{SHARED}/report.txt")[0], 404)
-        code, _, body = self._request("GET", f"/{SHARED}/Report (carol).txt")
+        code, _, body = self._request(
+            "GET", f"/{SHARED}/{self._told_apart(from_carol)}"
+        )
         self.assertEqual((code, body), (200, b"carol"))
 
-    def test_a_told_apart_name_never_takes_the_name_of_another_file(self):
+    def test_revoking_a_share_never_hands_its_address_to_another_file(self):
+        """A client that kept the address of the first would write the second."""
+        carol = User.objects.create_user(username="carol", password="pass123")
+        first = self._share(self._file(self.other, "report.txt", b"first"))
+        folder = tree.create_folder(self.other, "Old")
+        second = self._share(
+            self._file(self.other, "report.txt", b"second", parent=folder)
+        ).file
+        self._share(self._file(carol, "report.txt", b"carol"))
+        before = self._addresses()
+
+        first.delete()
+
+        after = self._addresses()
+        self.assertNotIn(first.file.pk, after)
+        self.assertEqual(after[second.pk], before[second.pk])
+        self.assertIsNone(self._resolve(f"/{SHARED}/{before[first.file.pk]}"))
+        code, _, _ = self._request(
+            "PUT", f"/{SHARED}/{before[first.file.pk]}", body=b"meant for the first"
+        )
+        self.assertGreaterEqual(code, 400)
+        self.assertEqual(self._body(second), b"second")
+
+    def test_no_address_passes_to_another_file_when_one_share_goes(self):
+        """Whichever share is taken back, among files of one name and one
+        named like the address of another."""
+        carol = User.objects.create_user(username="carol", password="pass123")
+        report = self._file(self.other, "report.txt")
+        files = [
+            report,
+            self._file(
+                self.other, "report.txt", parent=tree.create_folder(self.other, "Old")
+            ),
+            self._file(carol, "report.txt"),
+            self._file(carol, "Report.TXT", parent=tree.create_folder(carol, "Caps")),
+            self._file(carol, self._told_apart(report)),
+            self._file(carol, "notes.txt"),
+        ]
+        shares = {file_obj.pk: self._share(file_obj) for file_obj in files}
+        before = {
+            name: file_obj.pk
+            for name, file_obj in namespace.shared_listing(self.user).items()
+        }
+        self.assertEqual(len(before), len(files))
+
+        for revoked in files:
+            with self.subTest(revoked=revoked.path):
+                shares[revoked.pk].delete()
+                after = namespace.shared_listing(self.user)
+                self.assertEqual(len(after), len(files) - 1)
+                for name, file_obj in after.items():
+                    if name in before:
+                        self.assertEqual(before[name], file_obj.pk, name)
+                shares[revoked.pk] = self._share(revoked)
+
+    def test_the_last_file_of_a_name_is_served_under_it_again(self):
+        carol = User.objects.create_user(username="carol", password="pass123")
+        from_bob = self._share(self._file(self.other, "report.txt", b"bob")).file
+        from_carol = self._share(self._file(carol, "report.txt", b"carol"))
+        self.assertIsNone(self._resolve(f"/{SHARED}/report.txt"))
+
+        from_carol.delete()
+
+        self.assertEqual(self._addresses(), {from_bob.pk: "report.txt"})
+        self.assertEqual(self._resolve(f"/{SHARED}/report.txt")._file.pk, from_bob.pk)
+
+    def test_a_file_named_like_the_address_of_another_gets_neither_of_them(self):
+        """Two files that want one address: it is served for neither, so it
+        cannot pass from one to the other when a share changes."""
         carol = User.objects.create_user(username="carol", password="pass123")
         from_bob = self._share(self._file(self.other, "report.txt")).file
         self._share(self._file(carol, "report.txt"))
-        named_so = self._share(self._file(carol, "report (bob).txt")).file
+        contested = self._told_apart(from_bob)
+        named_so = self._share(self._file(carol, contested)).file
 
-        listing = namespace.shared_listing(self.user)
+        addresses = self._addresses()
 
-        self.assertEqual(listing["report (bob).txt"].pk, named_so.pk)
-        self.assertEqual(listing["report (bob 2).txt"].pk, from_bob.pk)
-        self.assertEqual(len(listing), 3)
+        self.assertEqual(addresses[from_bob.pk], self._told_apart(from_bob, whole=True))
+        self.assertEqual(
+            addresses[named_so.pk],
+            self._told_apart(named_so, whole=True),
+        )
+        self.assertNotIn(contested, addresses.values())
+        self.assertIsNone(self._resolve(f"/{SHARED}/{contested}"))
+        self.assertEqual(len(addresses), 3)
 
     def test_every_listed_name_resolves_to_the_file_it_lists(self):
         carol = User.objects.create_user(username="carol", password="pass123")
-        for owner, name in (
-            (self.other, "report.txt"),
-            (carol, "report.txt"),
-            (carol, "report (bob).txt"),
-            (carol, "notes.txt"),
-            (self.other, "été.txt"),
+        report = self._file(self.other, "report.txt")
+        for file_obj in (
+            report,
+            self._file(carol, "report.txt"),
+            self._file(carol, self._told_apart(report)),
+            self._file(carol, "notes.txt"),
+            self._file(carol, "notes (draft cafe).txt"),
+            self._file(self.other, "\u00e9t\u00e9.txt"),
         ):
-            self._share(self._file(owner, name))
+            self._share(file_obj)
 
         listing = namespace.shared_listing(self.user)
 
-        self.assertEqual(len(listing), 5)
+        self.assertEqual(len(listing), 6)
         for name, file_obj in listing.items():
             with self.subTest(name=name):
                 self.assertEqual(namespace.shared_file(self.user, name).pk, file_obj.pk)
                 self.assertEqual(
                     self._resolve(f"/{SHARED}/{name}")._file.pk, file_obj.pk
                 )
-        decomposed = self._resolve(f"/{SHARED}/été.txt")
-        self.assertEqual(decomposed._file.name, "été.txt")
+                member = self._resolve(f"/{SHARED}").get_member(name)
+                self.assertEqual(member._file.pk, file_obj.pk)
+        decomposed = self._resolve(f"/{SHARED}/e\u0301te\u0301.txt")
+        self.assertEqual(decomposed._file.name, "\u00e9t\u00e9.txt")
+
+    def test_a_shared_name_from_before_names_were_composed_is_found_composed(self):
+        shared = self._stored_decomposed(self._file(self.other, "caf\u00e9.txt", b"x"))
+        self._share(shared)
+
+        for form in ("NFC", "NFD"):
+            with self.subTest(form=form):
+                name = unicodedata.normalize(form, "caf\u00e9.txt")
+                found = self._resolve(f"/{SHARED}/{name}")
+                self.assertIsNotNone(found)
+                self.assertEqual(found._file.pk, shared.pk)
+                member = self._resolve(f"/{SHARED}").get_member(name)
+                self.assertEqual(member._file.pk, shared.pk)
+        self.assertIsNone(self._resolve(f"/{SHARED}/CAF\u00c9.txt"))
 
     def test_a_file_not_shared_answers_like_one_that_does_not_exist(self):
         self._file(self.other, "private.txt", b"private")
@@ -849,6 +1006,51 @@ class LockIsolationTests(_DavTestCase):
         self.assertEqual(code, 412)
         mine.refresh_from_db()
         self.assertEqual(mine.lock_expires_at, expires_at)
+
+    def test_both_unicode_spellings_of_an_address_are_one_lock(self):
+        """The holder's other client must not get past the lock by spelling
+        the address the other way."""
+        mine = self._file(self.user, "\u00e9t\u00e9.txt", b"mine")
+        composed = f"{HOME}/\u00e9t\u00e9.txt"
+        decomposed = unicodedata.normalize("NFD", composed)
+
+        self.assertEqual(
+            namespace.lock_key(self.user, composed),
+            namespace.lock_key(self.user, decomposed),
+        )
+        self.assertEqual(
+            self._resolve(composed).get_ref_url(),
+            self._resolve(decomposed).get_ref_url(),
+        )
+        code, token = self._lock(_wsgi(composed))
+        self.assertEqual(code, 200)
+
+        code, _, _ = self._request("PUT", _wsgi(decomposed), body=b"no token")
+        self.assertEqual(code, 423)
+        code, _, _ = self._request(
+            "PUT", _wsgi(decomposed), body=b"token", headers={"If": f"(<{token}>)"}
+        )
+        self.assertEqual(code, 204)
+        self.assertEqual(self._body(mine), b"token")
+
+    def test_a_name_from_before_names_were_composed_is_locked_either_way(self):
+        legacy = self._stored_decomposed(
+            self._file(self.user, "\u00e9t\u00e9.txt", b"x")
+        )
+        composed = f"{HOME}/\u00e9t\u00e9.txt"
+
+        for form in ("NFC", "NFD"):
+            with self.subTest(form=form):
+                path = _wsgi(unicodedata.normalize(form, composed))
+                code, token = self._lock(path)
+                self.assertEqual(code, 200)
+                legacy.refresh_from_db()
+                self.assertEqual(legacy.locked_by, self.user)
+                code, _, _ = self._request(
+                    "UNLOCK", path, headers={"Lock-Token": f"<{token}>"}
+                )
+                self.assertEqual(code, 204)
+        self.assertEqual(File.objects.filter(owner=self.user).count(), 1)
 
     def test_a_lock_key_is_the_users_own_outside_a_group_tree(self):
         for path in ("/", f"{HOME}/", f"{HOME}/a b/c.txt", f"/{SHARED}/x.txt"):

@@ -24,8 +24,8 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 from workspace.common.logging import scrub
 from workspace.files.models import (
     File,
+    canonical_name,
     files_storage,
-    name_forms,
 )
 from workspace.files.queries import FilePermission, can_create_in, get_permission
 from workspace.files.services import quota, tree
@@ -227,8 +227,15 @@ class _Collection(_LockKeyed, DAVCollection):
         return [name for name, _ in self._listing()]
 
     def get_member(self, name):
-        forms = name_forms(name)
-        return next((res for listed, res in self._listing() if listed in forms), None)
+        asked = canonical_name(name)
+        return next(
+            (
+                resource
+                for listed, resource in self._listing()
+                if canonical_name(listed) == asked
+            ),
+            None,
+        )
 
     def get_member_list(self):
         return [resource for _, resource in self._listing()]
@@ -257,12 +264,8 @@ class _TreeFolder:
         # Reuse an existing file to avoid duplicates from concurrent PUTs
         # (e.g. Windows retries while a slow upload is still in progress):
         # the one any member created, in a group folder.
-        file_obj = (
-            namespace.members(self._user, self._file)
-            .filter(name__in=name_forms(name), node_type=File.NodeType.FILE)
-            .first()
-        )
-        if file_obj is None:
+        file_obj = namespace.named(namespace.members(self._user, self._file), name)
+        if file_obj is None or not file_obj.is_file():
             _require_permission(self._user, self._file, FilePermission.EDIT, "PUT")
             self._refuse_new_member_under_a_lock()
             file_obj = tree.create_file(

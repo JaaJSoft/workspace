@@ -133,7 +133,7 @@ The address opens on three folders, named the same in every language:
 |---|---|
 | `My Files` | The user's own files and folders. |
 | `Groups` | One folder per group the user belongs to. |
-| `Shared` | The files other people shared with the user, in one flat list. A read-write share can be saved in place; nothing is created, renamed or deleted there. When two shared files carry the same name, each shows its owner: `report (alice).pdf`. |
+| `Shared` | The files other people shared with the user, in one flat list. A read-write share can be saved in place; nothing is created, renamed or deleted there. When two shared files carry the same name, each shows its owner and an id of its own, `report (alice 1a2b3c4d).pdf`, an address that stays that file's whatever else is shared or no longer shared. |
 
 A sync app pointed at one folder takes its full address, for instance
 `https://<your-domain>/dav/My%20Files/Documents/`.

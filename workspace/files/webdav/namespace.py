@@ -14,12 +14,13 @@ The three names are in every client's configuration - a mount, a sync pair, a
 bookmark. They are not translated, and renaming one breaks those.
 """
 
-import itertools
 import posixpath
-from collections import defaultdict
+import re
+import unicodedata
+from collections import Counter
 
 from workspace.common.text import caseless
-from workspace.files.models import File, name_forms
+from workspace.files.models import File, canonical_name
 from workspace.files.queries import (
     full_path_q,
     shared_files_qs,
@@ -68,6 +69,46 @@ def members(user, folder):
     return nodes.filter(parent=folder)
 
 
+def _same_name(stored, asked):
+    """Whether *asked* spells the name *stored*, in whichever Unicode form
+    each of them is. Case counts."""
+    return canonical_name(stored) == canonical_name(asked)
+
+
+def named(nodes, name):
+    """The node among *nodes* - the members of one folder - that *name*
+    spells, or None.
+
+    A name is stored composed or, from before names were composed, as its
+    client sent it, and a client asks for it in either form. ``name_key``
+    folds both forms, and the case with them: one folder holds one live node
+    per key, whose case still has to be the one asked for.
+    """
+    candidates = nodes.filter(name_key=caseless(name))
+    return next((node for node in candidates if _same_name(node.name, name)), None)
+
+
+def _at(nodes, parts):
+    """The node of the tree *nodes* at the tree path *parts*, or None.
+
+    One lookup on ``path`` when its names are all stored in one form. A path
+    that mixes them - a folder from before names were composed, holding one
+    named since - is under no form of the whole of it: the folder above is
+    found the same way, then the node by its name.
+    """
+    path = "/".join(parts)
+    forms = {path, canonical_name(path), unicodedata.normalize("NFD", path)}
+    node = nodes.filter(path__in=forms).first()
+    if node is not None:
+        return node
+    parent = None
+    if len(parts) > 1:
+        parent = _at(nodes, parts[:-1])
+        if parent is None:
+            return None
+    return named(nodes.filter(parent=parent), parts[-1])
+
+
 def tree_node(user, parts):
     """The node of *user*'s personal or group trees that *parts* names, or None.
 
@@ -78,24 +119,10 @@ def tree_node(user, parts):
         return None
     space, *tree_parts = parts
     if space == PERSONAL:
-        nodes = personal_nodes(user)
-    elif space == GROUPS:
-        nodes = group_nodes(user)
-    else:
-        return None
-    node = nodes.filter(path__in=name_forms("/".join(tree_parts))).first()
-    if node is not None:
-        return node
-    # ``path`` was matched in the two forms of the whole path. A folder named
-    # before names were composed, holding a node named since, is under
-    # neither: look the last segment up by its parent.
-    siblings = nodes.filter(name__in=name_forms(tree_parts[-1]))
-    if len(tree_parts) == 1:
-        return siblings.filter(parent__isnull=True).first()
-    parent = nodes.filter(path__in=name_forms("/".join(tree_parts[:-1]))).first()
-    if parent is None:
-        return None
-    return siblings.filter(parent=parent).first()
+        return _at(personal_nodes(user), tree_parts)
+    if space == GROUPS:
+        return _at(group_nodes(user), tree_parts)
+    return None
 
 
 def _shared(user):
@@ -108,50 +135,74 @@ def _shared(user):
     return shared_files_qs(user).exclude(full_path_q(user))
 
 
+# How much of a file's id tells it apart: its end, which is the random part.
+_ID_LENGTH = 8
+# What every address made by ``_told_apart`` reads like, once folded.
+_TOLD_APART = re.compile(r" \(.+ [0-9a-f]{8,}\)(\.[^.]*)?$")
+
+
+def _told_apart(file_obj, length):
+    """*file_obj*'s name with its owner and the last *length* characters of
+    its id in it - the whole id for None."""
+    stem, extension = posixpath.splitext(file_obj.name)
+    tail = file_obj.uuid.hex[-length:] if length else file_obj.uuid.hex
+    return f"{stem} ({file_obj.owner.username} {tail}){extension}"
+
+
 def shared_listing(user):
     """The files shared with *user*, by the name ``/Shared`` lists each under.
 
     A flat folder of files that come from as many trees, so two of them can
-    carry one name. Those are told apart by their owner - ``report (bob).txt``
-    - and none of them keeps the bare name: which one would is a matter of
-    order, and a name must not pass from one file to another.
+    carry one name. A file is listed under its own name while no other
+    shared file carries it, and otherwise under an address made of what is
+    its own - ``report (bob 1a2b3c4d).txt``, its owner and the end of its id
+    - which no share given or taken back can hand to another file.
+
+    The rule behind both: a name is served only while one file alone wants
+    it. Two that do - a file named like the address of another - each fall
+    back on their whole id. So a share that changes never passes an address
+    from one file to another: a client that kept the old one gets a 404, not
+    somebody else's file to write.
     """
-    by_key = defaultdict(list)
-    for file_obj in _shared(user).select_related("owner").order_by("pk"):
-        by_key[file_obj.name_key].append(file_obj)
-    alone = [same[0] for same in by_key.values() if len(same) == 1]
-    clashing = [
-        file_obj for same in by_key.values() if len(same) > 1 for file_obj in same
-    ]
-
-    listing = {file_obj.name: file_obj for file_obj in alone}
-    taken = {file_obj.name_key for file_obj in alone}
-    for file_obj in clashing:
-        name = _told_apart(file_obj, taken)
+    files = list(_shared(user).select_related("owner").order_by("pk"))
+    carrying = Counter(file_obj.name_key for file_obj in files)
+    wanted = {
+        file_obj.pk: (
+            file_obj.name
+            if carrying[file_obj.name_key] == 1
+            else _told_apart(file_obj, _ID_LENGTH)
+        )
+        for file_obj in files
+    }
+    wanting = Counter(caseless(name) for name in wanted.values())
+    listing = {}
+    for file_obj in files:
+        name = wanted[file_obj.pk]
+        if wanting[caseless(name)] > 1:
+            name = _told_apart(file_obj, None)
         listing[name] = file_obj
-        taken.add(caseless(name))
     return listing
-
-
-def _told_apart(file_obj, taken):
-    """*file_obj*'s name with its owner in it, free among the *taken* keys."""
-    stem, extension = posixpath.splitext(file_obj.name)
-    owner = file_obj.owner.username
-    labels = itertools.chain([owner], (f"{owner} {n}" for n in itertools.count(2)))
-    names = (f"{stem} ({label}){extension}" for label in labels)
-    return next(name for name in names if caseless(name) not in taken)
 
 
 def shared_file(user, name):
     """The file ``/Shared`` lists as *name* for *user*, or None."""
-    forms = name_forms(name)
-    # The only shared file of that name is listed under it: no need to read
-    # the whole folder to serve one file of it.
-    same_name = list(_shared(user).filter(name_key=caseless(name))[:2])
-    if len(same_name) == 1:
-        return same_name[0] if same_name[0].name in forms else None
-    listing = shared_listing(user)
-    return next((listing[form] for form in forms if form in listing), None)
+    if _TOLD_APART.search(caseless(name)):
+        listing = shared_listing(user)
+        return next(
+            (
+                file_obj
+                for listed, file_obj in listing.items()
+                if _same_name(listed, name)
+            ),
+            None,
+        )
+    # No address made to tell a file apart reads like *name*: it is served
+    # for the one shared file that carries it, if there is exactly one. No
+    # need to read the whole folder to serve one file of it.
+    carrying = list(_shared(user).filter(name_key=caseless(name))[:2])
+    if len(carrying) != 1 or not _same_name(carrying[0].name, name):
+        return None
+    return carrying[0]
 
 
 def node_at(user, parts):
@@ -180,7 +231,11 @@ def lock_key(user, path):
     there binds the group's other members. The folders above it are each
     user's own, ``/Groups`` included: a lock on one of them stops at its
     holder's own trees, and never freezes a group.
+
+    The key spells the path composed, whichever form it was asked in: the
+    two Unicode forms of an address are one resource, and one lock.
     """
+    path = canonical_name(path)
     if _in_group_tree(path):
         return path
     return f"/{_USER_KEY}{user.pk}{path}"

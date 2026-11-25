@@ -11,6 +11,7 @@ from django.utils.dateparse import parse_datetime
 from imapclient.exceptions import IMAPClientError
 
 from workspace.common.logging import scrub
+from workspace.mail.services.counts import refresh_folder_counts
 from workspace.mail.services.imap_connection import ConnectionLost, imap_session
 from workspace.mail.services.imap_mailbox import (
     _detect_folder_type,
@@ -297,7 +298,7 @@ def _read_mailbox(client, account, folder, selected, state, known):
         if was_initial_sync:
             folder.last_sync_uid = 0
 
-    _update_folder_counts(folder)
+    refresh_folder_counts(folder, also_save=["last_sync_uid"])
 
     # A message that could not be stored (a locked database, a storage
     # error on an attachment) is fetched again by the next pass, as long as
@@ -682,7 +683,7 @@ def _reconcile_folder(client, folder, local_uids, remote_uids, changed_since=Non
         base.filter(imap_uid__in=need_unanswered).update(is_answered=False)
 
     if affected_message_ids:
-        from .label_counts import refresh_labels_for_messages
+        from .counts import refresh_labels_for_messages
 
         refresh_labels_for_messages(affected_message_ids)
 
@@ -692,26 +693,6 @@ def _reconcile_folder(client, folder, local_uids, remote_uids, changed_since=Non
         from .notifications import settle_message_notifications
 
         settle_message_notifications(folder.account.owner, externally_read_pks)
-
-
-def _update_folder_counts(folder):
-    """Update message_count and unread_count from database."""
-    from django.db.models import Count, Q
-
-    from ..models import MailMessage
-
-    counts = MailMessage.objects.filter(
-        folder=folder,
-        deleted_at__isnull=True,
-    ).aggregate(
-        message_count=Count("pk"),
-        unread_count=Count("pk", filter=Q(is_read=False)),
-    )
-    folder.message_count = counts["message_count"]
-    folder.unread_count = counts["unread_count"]
-    folder.save(
-        update_fields=["message_count", "unread_count", "last_sync_uid", "updated_at"]
-    )
 
 
 def sync_account(account):

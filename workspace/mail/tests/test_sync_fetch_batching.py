@@ -252,3 +252,18 @@ class SyncCursorTests(SyncFetchBatchingMixin, TestCase):
         self.assertEqual(
             MailFolder.objects.get(pk=self.folder.pk).last_sync_uid, uids[-1]
         )
+
+
+class SyncFolderCountsTests(SyncFetchBatchingMixin, TestCase):
+    def test_a_pass_stores_the_folder_counters_and_its_cursor(self):
+        with fake_imap() as server:
+            server.deliver("INBOX", flags=[r"\Seen"])
+            last = server.deliver("INBOX")
+
+            sync_folder_messages(self.account, self.folder)
+
+        stored = MailFolder.objects.get(pk=self.folder.pk)
+        self.assertEqual(
+            (stored.message_count, stored.unread_count, stored.last_sync_uid),
+            (2, 1, last),
+        )

@@ -26,7 +26,7 @@ from .counts import (
     refresh_folder_counts,
     refresh_folders_counts_bulk,
     refresh_label_counts,
-    refresh_message_label_counts,
+    refresh_labels_for_messages,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ def set_flag(message, flag):
             forget_remote_state([message.folder_id])
         refresh_folder_counts(message.folder)
         if field == "is_read":
-            refresh_message_label_counts(message)
+            refresh_labels_for_messages([message.pk])
     return synced
 
 
@@ -116,7 +116,6 @@ def mark_folder_read(folder):
     from .imap_connection import shared_connections
     from .imap_messages import mark_uids_read
     from .imap_sync import forget_remote_state
-    from .label_counts import refresh_labels_for_messages
 
     group_ids = folder_group_ids(folder)
     unread = MailMessage.objects.filter(
@@ -233,7 +232,7 @@ def move_to_folder(message, target, refresh=True):
             message.deleted_at = now
             message.updated_at = now
             settle_message_notifications(message.account.owner, [message.pk])
-            refresh_message_label_counts(message)
+            refresh_labels_for_messages([message.pk])
         if refresh:
             refresh_folders_counts_bulk({source_id, target.pk})
     return source_id
@@ -329,7 +328,7 @@ def _take_out_of_folder(message, refresh):
             message.deleted_at = now
             message.updated_at = now
             settle_message_notifications(message.account.owner, [message.pk])
-            refresh_message_label_counts(message)
+            refresh_labels_for_messages([message.pk])
         if refresh:
             refresh_folder_counts(message.folder)
 
@@ -376,7 +375,7 @@ def trash_message(message, refresh=True, expunge=True):
         message.save(update_fields=["deleted_at", "updated_at"])
         if refresh:
             refresh_folder_counts(message.folder)
-            refresh_message_label_counts(message)
+            refresh_labels_for_messages([message.pk])
     settle_message_notifications(owner, [message.pk])
     try:
         delete_message(message.account, message)

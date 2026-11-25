@@ -1000,15 +1000,15 @@ wheels = [
 
 [[package]]
 name = "django-rest-knox"
-version = "5.1.1"
+version = "6.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "djangorestframework" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/a3/1a59745c00179784452edb5d2a5fdf409fbef0e51b1aeb8fb6b072f0533a/django_rest_knox-5.1.1.tar.gz", hash = "sha256:b303d1a7c898d535cb2d2f153ca80b6d71e493d5fa2d8f09aa17f9b86c66641b", size = 21072, upload-time = "2026-11-04T18:43:34.836Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/63/0d/d9f0f19ba0f06816ccdc26649c14669ad0c07dd8ab92064741e2a9444b53/django_rest_knox-6.0.0.tar.gz", hash = "sha256:f1d7f389752b44037553bf42f748f626a2413ad7e3c02c0891c773c0be230fcd", size = 21596, upload-time = "2026-11-20T01:07:10.094Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/34/de/7a9819f13e8f728f8dccfd4029775d5d98f60063d5b2da8da471ce4e3ab8/django_rest_knox-5.1.1-py3-none-any.whl", hash = "sha256:4a61218ef771c1573edf5c1c308a3c6acc438a6be2e86e225620b74b18fc38b4", size = 16014, upload-time = "2026-11-04T18:43:33.34Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/8a/4fb0dae22589605ec5ef08ca09236e91ecd1418131ded048ce24bcb32341/django_rest_knox-6.0.0-py3-none-any.whl", hash = "sha256:f12014a04d4243da33c82e66de4c4015ff428bc65ef9072a96f6e56a1595615d", size = 16287, upload-time = "2026-11-20T01:07:09.054Z" },
 ]
 
 [[package]]
@@ -3918,7 +3918,7 @@ requires-dist = [
     { name = "django-http-compression", extras = ["brotli"], specifier = ">=1.5.0" },
     { name = "django-prometheus", specifier = ">=2.6.0.dev26" },
     { name = "django-redis", specifier = ">=7.0.0" },
-    { name = "django-rest-knox", specifier = ">=5.1.1" },
+    { name = "django-rest-knox", specifier = ">=6.0.0" },
     { name = "django-unfold", specifier = ">=0.110.1" },
     { name = "djangorestframework", specifier = "==3.18.3" },
     { name = "drf-orjson-renderer", specifier = ">=1.7.0" },

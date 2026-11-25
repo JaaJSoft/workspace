@@ -22,13 +22,12 @@ from workspace.common.uuids import (
     parse_uuid_or_none,
 )
 
-from ..actions import AlbumActionRegistry
+from ..actions import album_action_allowed
 from ..queries import (
     ALL,
     OWNER,
     album_files,
     contributable_files,
-    direct_share_album_ids,
     get_album_role,
     library_files,
     reachable_album,
@@ -71,16 +70,6 @@ def _refused(detail):
 
 def _not_found():
     return Response(status=status.HTTP_404_NOT_FOUND)
-
-
-def _allowed(action_id, user, album, role=None):
-    return AlbumActionRegistry.is_action_available(
-        action_id,
-        user,
-        album,
-        role=role or get_album_role(user, album),
-        direct=bool(direct_share_album_ids(user, [album])),
-    )
 
 
 def _parse_files(data, *, required=True):
@@ -180,7 +169,9 @@ class AlbumDetailView(APIView):
         data = request.data if isinstance(request.data, dict) else {}
         role = get_album_role(request.user, album)
         for field, action_id in FIELD_ACTIONS.items():
-            if field in data and not _allowed(action_id, request.user, album, role):
+            if field in data and not album_action_allowed(
+                action_id, request.user, album, role=role
+            ):
                 return Response(status=status.HTTP_403_FORBIDDEN)
 
         serializer = AlbumWriteSerializer(album, data=data, partial=True)
@@ -216,7 +207,7 @@ class AlbumDetailView(APIView):
         album = reachable_album(request.user, uuid)
         if album is None:
             return _not_found()
-        if not _allowed("delete", request.user, album):
+        if not album_action_allowed("delete", request.user, album):
             return Response(status=status.HTTP_403_FORBIDDEN)
         album.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -238,7 +229,7 @@ class AlbumItemsView(APIView):
         if album is None:
             return _not_found()
         role = get_album_role(request.user, album)
-        if not _allowed("add_items", request.user, album, role):
+        if not album_action_allowed("add_items", request.user, album, role=role):
             return Response(status=status.HTTP_403_FORBIDDEN)
         uuids = _parse_files(request.data)
         if isinstance(uuids, Response):
@@ -267,7 +258,7 @@ class AlbumItemsRemoveView(APIView):
         if album is None:
             return _not_found()
         role = get_album_role(request.user, album)
-        if not _allowed("remove_items", request.user, album, role):
+        if not album_action_allowed("remove_items", request.user, album, role=role):
             return Response(status=status.HTTP_403_FORBIDDEN)
         uuids = _parse_files(request.data)
         if isinstance(uuids, Response):
@@ -307,7 +298,7 @@ class AlbumReorderView(APIView):
         album = reachable_album(request.user, uuid)
         if album is None:
             return _not_found()
-        if not _allowed("reorder", request.user, album):
+        if not album_action_allowed("reorder", request.user, album):
             return Response(status=status.HTTP_403_FORBIDDEN)
         uuids = _parse_files(request.data)
         if isinstance(uuids, Response):

@@ -21,9 +21,9 @@ from workspace.common.mixins import CacheControlMixin
 from workspace.projects.models import Project
 from workspace.projects.queries import user_project_ids
 
-from ..actions import AlbumActionRegistry
+from ..actions import album_action_allowed
 from ..models import AlbumLink, AlbumShare
-from ..queries import direct_share_album_ids, get_album_role, reachable_album
+from ..queries import reachable_album
 from ..services.album_sharing import (
     create_link,
     leave_album,
@@ -80,13 +80,7 @@ def _album_for(request, uuid, *, action=None):
     album = reachable_album(request.user, uuid)
     if album is None:
         return None, _not_found()
-    if action is not None and not AlbumActionRegistry.is_action_available(
-        action,
-        request.user,
-        album,
-        role=get_album_role(request.user, album),
-        direct=bool(direct_share_album_ids(request.user, [album])),
-    ):
+    if action is not None and not album_action_allowed(action, request.user, album):
         return None, Response(status=status.HTTP_403_FORBIDDEN)
     return album, None
 

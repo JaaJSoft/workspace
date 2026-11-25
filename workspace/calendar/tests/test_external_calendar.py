@@ -439,7 +439,7 @@ class SyncExternalCalendarTests(TestCase):
         # Event for the same (calendar, ical_uid) before our sync's
         # update_or_create runs. The constraint would make a plain
         # ``create()`` raise IntegrityError, but ``update_or_create``
-        # catches that and falls back to an UPDATE — so the second sync
+        # catches that and falls back to an UPDATE - so the second sync
         # converges to the latest defaults without raising and without
         # creating a duplicate row.
         from django.utils import timezone
@@ -467,7 +467,7 @@ class SyncExternalCalendarTests(TestCase):
     def test_sync_skips_db_writes_when_event_unchanged(self, mock_httpx):
         # Feeds that don't emit ETag/Last-Modified return 200 on every
         # poll. Without the skip-if-unchanged guard, ``update_or_create``
-        # would rewrite every row on every 15-min sync — ``updated_at``
+        # would rewrite every row on every 15-min sync - ``updated_at``
         # would constantly advance even though nothing actually changed
         # upstream. Pinning this here so a regression brings the
         # "calendars seem to update permanently" report back.
@@ -606,7 +606,7 @@ class SyncTaskTests(TestCase):
             calendar=cal_b,
             url="https://example.com/feed-b.ics",
         )
-        # Both rows are due — self.ext via IS NULL, ext_b via < threshold.
+        # Both rows are due - self.ext via IS NULL, ext_b via < threshold.
         original_b = timezone.now() - timedelta(hours=1)
         ExternalCalendar.objects.filter(pk=ext_b.pk).update(last_synced_at=original_b)
 
@@ -646,7 +646,7 @@ class SyncTaskTests(TestCase):
         # Celery can redeliver a task after the first worker has already
         # committed (lost ack, worker death, etc.). The second worker
         # arrives with the dispatcher's claim_token, but the row's
-        # last_synced_at has been finalized by the first worker — so the
+        # last_synced_at has been finalized by the first worker - so the
         # CAS predicate matches zero rows and the worker bails before
         # re-fetching the feed.
         from datetime import timedelta

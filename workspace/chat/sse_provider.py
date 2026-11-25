@@ -79,7 +79,7 @@ class ChatSSEProvider(SSEProvider):
         events = []
         user_id = self.user.id
 
-        # Typing — always check (independent of dirty flag)
+        # Typing - always check (independent of dirty flag)
         from .services.typing import get_typing_users
 
         typing_data = get_typing_users(self._member_conv_ids, exclude_user_id=user_id)

@@ -31,7 +31,7 @@ class CalendarActivityProviderTests(TestCase):
 
         self.ts = timezone.now()
 
-        # Alice's public calendar (bob subscribes to it) — 2 events
+        # Alice's public calendar (bob subscribes to it) - 2 events
         self.alice_cal = Calendar.objects.create(
             name="Alice Public",
             owner=self.alice,
@@ -51,7 +51,7 @@ class CalendarActivityProviderTests(TestCase):
             owner=self.alice,
         )
 
-        # Alice's private calendar (no subscription) — 1 event
+        # Alice's private calendar (no subscription) - 1 event
         self.alice_private_cal = Calendar.objects.create(
             name="Alice Private",
             owner=self.alice,
@@ -64,7 +64,7 @@ class CalendarActivityProviderTests(TestCase):
             owner=self.alice,
         )
 
-        # Bob's calendar — 1 event
+        # Bob's calendar - 1 event
         self.bob_cal = Calendar.objects.create(
             name="Bob Calendar",
             owner=self.bob,
@@ -295,7 +295,7 @@ class CalendarActivityProviderTests(TestCase):
         """Dashboard mode (user_id=None) keeps external events with actor=None."""
         self._make_external_event_for_alice(title="Feed Sync Event")
         # Alice subscribes to the external calendar she owns so visibility passes
-        # (already owned, so no subscription needed — visible_events_q includes owned).
+        # (already owned, so no subscription needed - visible_events_q includes owned).
         events = self.provider.get_recent_events(
             user_id=None,
             viewer_id=self.alice.id,

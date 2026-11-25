@@ -1,3 +1,6 @@
+{% load i18n %}
+{% translate "Hide the archive passphrase" as hide_passphrase %}
+{% translate "Show the archive passphrase" as show_passphrase %}
 {% comment %}
   The export dialog, mounted under x-if rather than x-show: it holds an export
   passphrase, and tearing the component down on close is what lets go of it.
@@ -34,23 +37,27 @@
       {% endcomment %}
       <template x-if="exportConfirming">
         <div>
-          {% include "ui/partials/dialog_header.html" with icon="triangle-alert" icon_class="bg-error/10 text-error" title="This file is not protected" title_id="vault-export-warning-title" close_expr="closeExportDialog()" only %}
+          {% include "ui/partials/dialog_header.html" with icon="triangle-alert" icon_class="bg-error/10 text-error" title=_("This file is not protected") title_id="vault-export-warning-title" close_expr="closeExportDialog()" only %}
 
           <inline-alert type="error">
-          It contains every password in this account in plain text. Anyone who
-          opens the file can read them. Nothing encrypts it.
+          {% blocktranslate trimmed %}
+            It contains every password in this account in plain text. Anyone who
+            opens the file can read them. Nothing encrypts it.
+          {% endblocktranslate %}
           </inline-alert>
 
           <p class="mt-3 text-sm text-base-content/60">
-            Import it into the other password manager and delete it afterwards.
-            If what you want is a backup, go back and take the encrypted archive.
+            {% blocktranslate trimmed %}
+              Import it into the other password manager and delete it afterwards.
+              If what you want is a backup, go back and take the encrypted archive.
+            {% endblocktranslate %}
           </p>
         </div>
       </template>
 
       <template x-if="!exportConfirming">
         <div>
-          {% include "ui/partials/dialog_header.html" with icon="download" title="Export this account" title_id="vault-export-dialog-title" close_expr="closeExportDialog()" only %}
+          {% include "ui/partials/dialog_header.html" with icon="download" title=_("Export this account") title_id="vault-export-dialog-title" close_expr="closeExportDialog()" only %}
 
           <inline-alert type="error" class="mb-4" x-show="exportError" x-cloak>
           <span x-text="exportError"></span>
@@ -77,8 +84,8 @@
                 name="export-format"
               />
               <span>
-                <span class="font-medium block">Encrypted archive</span>
-                <span class="text-sm text-base-content/60">Everything this account holds, sealed with a passphrase you choose.</span>
+                <span class="font-medium block">{% translate "Encrypted archive" %}</span>
+                <span class="text-sm text-base-content/60">{% translate "Everything this account holds, sealed with a passphrase you choose." %}</span>
               </span>
             </label>
             <label class="flex items-start gap-3 cursor-pointer">
@@ -91,9 +98,9 @@
                 name="export-format"
               />
               <span>
-                <span class="font-medium block">Readable by another password manager</span>
+                <span class="font-medium block">{% translate "Readable by another password manager" %}</span>
                 <span class="text-sm text-base-content/60">
-                  Plain text. Every password in the file can be read by anyone who opens it.
+                  {% translate "Plain text. Every password in the file can be read by anyone who opens it." %}
                 </span>
               </span>
             </label>
@@ -102,8 +109,10 @@
           <template x-if="exportFormat === 'archive'">
             <div class="mt-4 flex flex-col gap-3">
               <inline-alert type="warning">
-              Nothing but this passphrase protects the file. Lose it and the archive is
-              lost with it - keep it with your emergency kit.
+              {% blocktranslate trimmed %}
+                Nothing but this passphrase protects the file. Lose it and the archive is
+                lost with it - keep it with your emergency kit.
+              {% endblocktranslate %}
               </inline-alert>
 
               {% comment %}
@@ -117,7 +126,7 @@
                   class="text-sm text-base-content/60 block mb-1"
                   for="export-passphrase"
                 >
-                  Archive passphrase
+                  {% translate "Archive passphrase" %}
                 </label>
                 <div class="flex items-center gap-1.5">
                   {% comment %}
@@ -148,8 +157,8 @@
                     type="button"
                     class="btn btn-sm btn-square btn-ghost"
                     data-testid="export-passphrase-reveal"
-                    :title="exportRevealed ? 'Hide the archive passphrase' : 'Show the archive passphrase'"
-                    :aria-label="exportRevealed ? 'Hide the archive passphrase' : 'Show the archive passphrase'"
+                    :title="exportRevealed ? '{{ hide_passphrase|escapejs }}' : '{{ show_passphrase|escapejs }}'"
+                    :aria-label="exportRevealed ? '{{ hide_passphrase|escapejs }}' : '{{ show_passphrase|escapejs }}'"
                     :disabled="exportBusy || !exportPassphrase"
                     @click="toggleExportReveal()"
                   >
@@ -159,8 +168,8 @@
                     type="button"
                     class="btn btn-sm btn-square btn-ghost"
                     data-testid="export-passphrase-copy"
-                    title="Copy the archive passphrase"
-                    aria-label="Copy the archive passphrase"
+                    title="{% translate "Copy the archive passphrase" %}"
+                    aria-label="{% translate "Copy the archive passphrase" %}"
                     :disabled="exportBusy || !exportPassphrase"
                     @click="copyExportPassphrase()"
                   >
@@ -172,22 +181,19 @@
                     data-testid="export-generate"
                     :class="exportGeneratorOpen ? 'btn-module' : 'btn-ghost'"
                     :disabled="exportBusy"
-                    title="Generate a passphrase"
-                    aria-label="Generate a passphrase"
+                    title="{% translate "Generate a passphrase" %}"
+                    aria-label="{% translate "Generate a passphrase" %}"
                     @click="toggleExportGenerator()"
                   >
                     <i data-lucide="dices" class="w-4 h-4"></i>
                   </button>
                 </div>
                 <p id="export-passphrase-hint" class="mt-1 text-xs" aria-live="polite">
-                  <span
-                    class="text-base-content/60"
-                    x-show="passphraseState() === 'empty'"
-                  >A generated passphrase is recommended: press the dice, or type your own.</span>
+                  <span class="text-base-content/60" x-show="passphraseState() === 'empty'">{% translate "A generated passphrase is recommended: press the dice, or type your own." %}</span>
                   <span
                     class="text-success"
                     x-show="passphraseState() === 'generated' && !exportGeneratorOpen && passphraseStrongEnough()"
-                  >Generated passphrase applied. Show or copy it, and keep it with your emergency kit.</span>
+                  >{% translate "Generated passphrase applied. Show or copy it, and keep it with your emergency kit." %}</span>
                   {% comment %}
                     Reopened over an applied phrase, the panel draws at once and
                     trackGeneratedPassphrase moves the field onto that draw - so
@@ -196,31 +202,31 @@
                   <span
                     class="text-success"
                     x-show="passphraseState() === 'generated' && exportGeneratorOpen"
-                  >The field follows the generator: the passphrase shown below is the one that will seal the archive.</span>
+                  >{% translate "The field follows the generator: the passphrase shown below is the one that will seal the archive." %}</span>
                   <span
                     class="text-base-content/60"
                     x-show="passphraseState() === 'typed' && typedPassphraseVerdict() === 'ok'"
-                  >Your own passphrase: confirm it below.</span>
+                  >{% translate "Your own passphrase: confirm it below." %}</span>
                   <span
                     class="text-base-content/60"
                     data-testid="export-passphrase-measuring"
                     x-show="passphraseState() === 'typed' && typedPassphraseVerdict() === 'measuring'"
-                  >Checking this passphrase...</span>
+                  >{% translate "Checking this passphrase..." %}</span>
                   <span
                     class="text-warning"
                     data-testid="export-passphrase-too-weak"
                     x-show="passphraseState() === 'typed' && ['short', 'weak'].includes(typedPassphraseVerdict())"
-                  >At least 12 characters, and strong enough to resist guessing: nothing else protects this file.</span>
+                  >{% translate "At least 12 characters, and strong enough to resist guessing: nothing else protects this file." %}</span>
                   <span
                     class="text-error"
                     data-testid="export-passphrase-breached"
                     x-show="passphraseState() === 'typed' && typedPassphraseVerdict() === 'breached'"
-                  >This passphrase appears in known data breaches, so it is among the first an attacker tries. Choose another.</span>
+                  >{% translate "This passphrase appears in known data breaches, so it is among the first an attacker tries. Choose another." %}</span>
                   <span
                     class="text-warning"
                     data-testid="export-generated-too-weak"
                     x-show="passphraseState() === 'generated' && !passphraseStrongEnough()"
-                  >Too weak to protect an archive on its own: raise it to Strong in the generator.</span>
+                  >{% translate "Too weak to protect an archive on its own: raise it to Strong in the generator." %}</span>
                 </p>
 
                 {% comment %}
@@ -273,7 +279,9 @@
               <template x-if="exportSource === 'typed'">
                 <div class="flex flex-col gap-3">
                   <div>
-                    <label class="text-sm text-base-content/60 block mb-1" for="export-confirm">Confirm</label>
+                    <label class="text-sm text-base-content/60 block mb-1" for="export-confirm">
+                      {% translate "Confirm" %}
+                    </label>
                     <input
                       id="export-confirm"
                       data-testid="export-confirm"
@@ -298,7 +306,7 @@
                         x-show="confirmationState() === 'match'"
                       >
                         <i data-lucide="circle-check" class="w-3.5 h-3.5"></i>
-                        Passphrases match
+                        {% translate "Passphrases match" %}
                       </span>
                       <span
                         class="flex items-center gap-1.5 text-error"
@@ -306,7 +314,7 @@
                         x-show="confirmationState() === 'mismatch'"
                       >
                         <i data-lucide="circle-x" class="w-3.5 h-3.5"></i>
-                        Passphrases don't match
+                        {% translate "Passphrases don't match" %}
                       </span>
                     </p>
                   </div>
@@ -318,7 +326,7 @@
                       x-model="exportOwnPhraseAck"
                       :disabled="exportBusy"
                     />
-                    <span class="text-sm text-base-content/70">I chose this passphrase and understand it alone protects the file.</span>
+                    <span class="text-sm text-base-content/70">{% translate "I chose this passphrase and understand it alone protects the file." %}</span>
                   </label>
                 </div>
               </template>
@@ -333,7 +341,7 @@
         the plaintext export.
       {% endcomment %}
       <p class="mt-4 text-sm text-base-content/60" x-show="exportBusy" x-cloak>
-        <span x-text="exportProgress"></span> entries read...
+        <span x-text="exportProgressLabel()"></span>
       </p>
 
       <div class="modal-action">
@@ -345,7 +353,7 @@
               data-testid="export-cancel"
               @click="closeExportDialog()"
             >
-              Cancel
+              {% translate "Cancel" %}
             </button>
             <button
               type="button"
@@ -354,7 +362,7 @@
               @click="requestExport()"
               :disabled="exportBusy || (exportFormat === 'archive' && !passphraseAccepted())"
             >
-              Export
+              {% translate "Export" %}
             </button>
           </div>
         </template>
@@ -367,7 +375,7 @@
               @click="dismissWarning()"
               :disabled="exportBusy"
             >
-              Back
+              {% translate "Back" %}
             </button>
             <button
               type="button"
@@ -376,7 +384,7 @@
               @click="runExport()"
               :disabled="exportBusy"
             >
-              Export anyway
+              {% translate "Export anyway" %}
             </button>
           </div>
         </template>

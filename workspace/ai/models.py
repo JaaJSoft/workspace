@@ -273,6 +273,7 @@ class ConversationSummary(models.Model):
 class UserMemory(models.Model):
     """Persistent memory that a bot stores about a user."""
 
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -293,7 +294,7 @@ class UserMemory(models.Model):
         ordering = ["key"]
 
     def __str__(self):
-        return f"Memory: {self.user.username}/{self.bot.username} — {self.key}"
+        return f"Memory: {self.user.username}/{self.bot.username} - {self.key}"
 
 
 class AgentGoal(models.Model):
@@ -346,7 +347,7 @@ class AgentGoal(models.Model):
     title = models.CharField(max_length=200)
     goal = models.TextField()
     # Mission brief: user-owned steering text injected in every check-in
-    # prompt. Each field maps to one decision the agent makes on its own —
+    # prompt. Each field maps to one decision the agent makes on its own -
     # when to close the goal, how to work on it, and when to break silence.
     success_criteria = models.TextField(blank=True, default="")
     constraints = models.TextField(blank=True, default="")
@@ -373,7 +374,7 @@ class AgentGoal(models.Model):
         ordering = ["next_check_at"]
         indexes = [
             # Partial index for the dispatch worker, which only ever queries
-            # active goals with `next_check_at <= now` — mirrors
+            # active goals with `next_check_at <= now` - mirrors
             # scheduled_active_next_run on ScheduledMessage.
             models.Index(
                 fields=["next_check_at"],
@@ -383,7 +384,7 @@ class AgentGoal(models.Model):
         ]
 
     def __str__(self):
-        return f"AgentGoal {self.uuid} ({self.status} — {self.title[:40]})"
+        return f"AgentGoal {self.uuid} ({self.status} - {self.title[:40]})"
 
     @classmethod
     def clamp_next_check(cls, dt):
@@ -458,7 +459,7 @@ class ScheduledMessage(models.Model):
         ]
 
     def __str__(self):
-        return f"ScheduledMessage {self.uuid} ({self.kind} — {self.conversation_id})"
+        return f"ScheduledMessage {self.uuid} ({self.kind} - {self.conversation_id})"
 
     def compute_next_run(self, user_tz=None):
         """Calculate and set the next run time, or deactivate for one-time messages.

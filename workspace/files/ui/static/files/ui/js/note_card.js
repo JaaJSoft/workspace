@@ -6,7 +6,7 @@
  * popover element and accepts either a DOM element or a synthetic
  * { getBoundingClientRect() } anchor - the graph is canvas-drawn, so its nodes
  * are not DOM elements. Reuses window._computePopoverPosition /
- * _applyPopoverTransform / _setPopoverContent from avatar.js.
+ * _applyPopoverTransform / _setPopoverContent from ui/js/popover.js.
  */
 
 /* Cache with 30s TTL */

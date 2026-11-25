@@ -88,4 +88,4 @@ palette also offers *New note*, *Favorite notes* and *Recent notes*. On a
 phone, a floating button creates a note.
 
 Notes have no API of their own: they are files, served by `/api/v1/files`
-(see the Swagger UI at `/schema/swagger-ui/`).
+(see the Swagger UI at `/api/schema/swagger-ui`).

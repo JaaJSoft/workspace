@@ -7,6 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
+from workspace.people.services.lists import create_list
 from workspace.people.services.persons import create_person
 from workspace.users.services.settings import set_setting
 
@@ -102,3 +103,12 @@ class PeopleApiLanguageTests(APITestCase):
             "Une adresse doit comporter au moins une ligne.",
             str(response.json()["addresses"]),
         )
+
+    def test_duplicate_list_name_is_translated(self):
+        set_setting(self.user, "core", "language", "fr")
+        create_list(owner=self.user, name="Family")
+        response = self.client.post(
+            "/api/v1/people/lists", {"name": "Family"}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["name"], ["Une liste de ce nom existe déjà."])

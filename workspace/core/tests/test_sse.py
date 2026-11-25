@@ -1,7 +1,7 @@
 """Tests for workspace.core.sse global SSE stream generators.
 
 Validates that both the Pub/Sub and polling generators honor the
-_MAX_CONNECTION_SECONDS budget — they must return cleanly so the browser
+_MAX_CONNECTION_SECONDS budget - they must return cleanly so the browser
 can auto-reconnect, and the finally blocks must run (pubsub cleanup,
 Prometheus gauge decrement).
 """

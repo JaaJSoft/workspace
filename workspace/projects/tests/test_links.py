@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.utils import translation
 
 from workspace.projects.models import TaskEvent, TaskLink, TaskStatus
 from workspace.projects.services.links import (
@@ -134,6 +135,14 @@ class LinksForTaskTests(ProjectTestMixin, TestCase):
         self.assertEqual(len(inward), 1)
         self.assertEqual(inward[0]["label"], "is blocked by")
         self.assertEqual(inward[0]["task"]["uuid"], str(self.task_a.uuid))
+
+    def test_direction_is_in_the_readers_language(self):
+        create_link(self.task_a, self.task_b, "blocks")
+        with translation.override("fr"):
+            (outward,) = links_for_task(self.member, self.task_a)
+            (inward,) = links_for_task(self.member, self.task_b)
+        self.assertEqual(outward["label"], "bloque")
+        self.assertEqual(inward["label"], "est bloquée par")
 
     def test_inaccessible_other_end_is_hidden(self):
         other_project = create_project(self.admin, name="Secret")

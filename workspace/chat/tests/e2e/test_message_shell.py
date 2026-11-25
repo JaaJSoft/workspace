@@ -4,7 +4,7 @@ The shell builds the message bubble chrome client-side (message_shell.js),
 for both the server-rendered path (message_group.html writes the element
 with slotted content) and the optimistic path (messages.js creates it with
 the `pending` attribute). Custom-element behaviour is out of reach for the
-node:vm unit-test loader — no DOM — so the rendered shell is pinned here:
+node:vm unit-test loader - no DOM - so the rendered shell is pinned here:
 own/other alignment and colour variants, the reply quote, the attachment
 fragments, the pending variant, and compact-mode participation.
 
@@ -351,7 +351,7 @@ class MessageShellRenderingTests(PlaywrightTestCase):
 
         self.page.evaluate("() => window.updateChatPref('compactMessageView', true)")
 
-        # :class bindings written by the shell flip with the preference —
+        # :class bindings written by the shell flip with the preference -
         # no refetch, no rebuild.
         self.page.wait_for_function(
             f"""() => document.getElementById('msg-{self.own_msg.uuid}')

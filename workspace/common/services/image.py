@@ -19,6 +19,9 @@ _ETAG_SECRET = os.urandom(32)
 
 logger = logging.getLogger(__name__)
 
+# Content types an uploaded picture may have before process_image_to_webp converts it.
+SOURCE_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
+
 DEFAULT_SIZE = 256
 DEFAULT_QUALITY = 85
 
@@ -52,9 +55,7 @@ def process_image_to_webp(
 
 def save_image(path: str, image_bytes: bytes) -> None:
     """Save *image_bytes* to *path* in default_storage, replacing any existing file."""
-    if default_storage.exists(path):
-        default_storage.delete(path)
-    default_storage.save(path, ContentFile(image_bytes))
+    default_storage.replace(path, ContentFile(image_bytes))
 
 
 def delete_image(path: str) -> None:

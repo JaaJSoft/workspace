@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Creating a tag. The name is sealed under the vault's metadata key and the
   record is signed here, like a folder's - the server stores a ciphertext it
@@ -9,32 +10,34 @@
 <template x-if="tagDraft">
   <div class="modal modal-open">
     <div class="modal-box max-w-sm">
-      {% include "ui/partials/dialog_header.html" with icon="tag" title="New tag" close_expr="closeTagDialog()" only %}
+      {% include "ui/partials/dialog_header.html" with icon="tag" title=_("New tag") close_expr="closeTagDialog()" only %}
       <form @submit.prevent="saveTag()">
         <input
           type="text"
           class="input input-sm w-full mb-4"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Tag name"
+          placeholder="{% translate "Tag name" %}"
           x-model="tagDraft.name"
         />
 
         {% include "ui/partials/tag_color_picker.html" with color_expr="tagDraft.color" %}
 
         <div class="flex items-center gap-2 text-sm">
-          <span class="opacity-60">Preview</span>
+          <span class="opacity-60">{% translate "Preview" context "tag preview" %}</span>
           <tag-chip :name="tagDraft.name || 'Tag'" :color="tagDraft.color" size="sm"></tag-chip>
         </div>
 
         <div class="modal-action">
-          <button type="button" class="btn btn-sm btn-ghost" @click="closeTagDialog()">Cancel</button>
+          <button type="button" class="btn btn-sm btn-ghost" @click="closeTagDialog()">
+            {% translate "Cancel" %}
+          </button>
           <button
             type="submit"
             class="btn btn-sm btn-module"
             :disabled="busy || !tagDraft.name.trim()"
           >
-            Create
+            {% translate "Create" %}
           </button>
         </div>
       </form>

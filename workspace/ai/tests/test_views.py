@@ -186,6 +186,20 @@ class MemoryAPITests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.json()), 2)
 
+    def test_a_memory_is_addressed_by_its_uuid(self):
+        mem = UserMemory.objects.create(
+            user=self.user, bot=self.bot_user, key="name", content="Pierre"
+        )
+        [listed] = self.client.get("/api/v1/ai/memories").json()
+        self.assertEqual(listed["uuid"], str(mem.uuid))
+        self.assertNotIn("id", listed)
+        resp = self.client.patch(
+            f"/api/v1/ai/memories/{listed['uuid']}",
+            data={"content": "Pierre C."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
     def test_list_memories_only_own(self):
         other = User.objects.create_user(username="other", password="pass123")
         UserMemory.objects.create(
@@ -201,16 +215,16 @@ class MemoryAPITests(APITestCase):
         mem = UserMemory.objects.create(
             user=self.user, bot=self.bot_user, key="name", content="Pierre"
         )
-        resp = self.client.delete(f"/api/v1/ai/memories/{mem.id}")
+        resp = self.client.delete(f"/api/v1/ai/memories/{mem.uuid}")
         self.assertEqual(resp.status_code, 204)
-        self.assertFalse(UserMemory.objects.filter(pk=mem.id).exists())
+        self.assertFalse(UserMemory.objects.filter(pk=mem.uuid).exists())
 
     def test_delete_other_user_memory_404(self):
         other = User.objects.create_user(username="other", password="pass123")
         mem = UserMemory.objects.create(
             user=other, bot=self.bot_user, key="name", content="Jean"
         )
-        resp = self.client.delete(f"/api/v1/ai/memories/{mem.id}")
+        resp = self.client.delete(f"/api/v1/ai/memories/{mem.uuid}")
         self.assertEqual(resp.status_code, 404)
 
     def test_patch_memory(self):
@@ -218,7 +232,7 @@ class MemoryAPITests(APITestCase):
             user=self.user, bot=self.bot_user, key="name", content="Pierre"
         )
         resp = self.client.patch(
-            f"/api/v1/ai/memories/{mem.id}",
+            f"/api/v1/ai/memories/{mem.uuid}",
             data={"content": "Paul"},
             format="json",
         )
@@ -233,7 +247,7 @@ class MemoryAPITests(APITestCase):
 
     def _rename(self, memory, key):
         return self.client.patch(
-            f"/api/v1/ai/memories/{memory.id}", data={"key": key}, format="json"
+            f"/api/v1/ai/memories/{memory.uuid}", data={"key": key}, format="json"
         )
 
     def test_renaming_a_memory_onto_a_taken_key_is_refused(self):

@@ -155,6 +155,7 @@ class _ErrorStreak:
 class ContactsImporter(Importer):
     kind = KIND_CONTACTS
     label = gettext_lazy("Contacts")
+    description = gettext_lazy("Address books, with their contact groups as lists.")
     option_serializer = ContactsImportOptionsSerializer
 
     def run(self, ctx):

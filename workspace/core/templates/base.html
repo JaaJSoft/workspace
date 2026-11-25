@@ -46,6 +46,8 @@
       src="{% url 'javascript-catalog' LANGUAGE_CODE %}?v={{ APP_VERSION|urlencode }}"
     ></script>
     <script src="{% static 'ui/js/csrf.js' %}"></script>
+    {# Ahead of every script that writes a setting, timezone_suggest.js writing one as it loads. #}
+    <script src="{% static 'core/js/user_settings.js' %}"></script>
     {# Before Alpine: its popstate listener must run ahead of alpine-ajax's. #}
     <script src="{% static 'ui/js/nav_history.js' %}"></script>
     <script src="{% static 'ui/js/uuid.js' %}"></script>
@@ -119,6 +121,7 @@
 
     <!-- Shared components -->
     <script src="{% static 'ui/js/dispatch_action.js' %}"></script>
+    <script src="{% static 'ui/js/popover.js' %}"></script>
     <script src="{% static 'users/ui/js/avatar.js' %}"></script>
     <script src="{% static 'files/ui/js/note_card.js' %}"></script>
     {# The image viewer's rotation and crop geometry: any page may open the viewer. #}

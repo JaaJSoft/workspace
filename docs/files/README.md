@@ -263,7 +263,7 @@ off by default.
 ### API
 
 The REST API lives under `/api/v1/files` and is documented in the Swagger UI
-(`/schema/swagger-ui/`), resumable uploads (`/api/v1/files/uploads`)
+(`/api/schema/swagger-ui`), resumable uploads (`/api/v1/files/uploads`)
 included. The WOPI endpoints under `/api/wopi/files/` follow the
 [WOPI protocol](https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/)
 and only accept the editor's access tokens.

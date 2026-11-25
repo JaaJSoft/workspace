@@ -28,6 +28,16 @@ msgstr "Messagerie instantanée, en tête-à-tête ou en groupe."
 msgid "New conversation"
 msgstr "Nouvelle conversation"
 
+#: models.py
+msgctxt "chat group role"
+msgid "Admin"
+msgstr "Administrateur"
+
+#: models.py
+msgctxt "chat group role"
+msgid "Member"
+msgstr "Membre"
+
 #: search.py
 msgctxt "search result type"
 msgid "Message"

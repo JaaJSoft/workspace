@@ -63,23 +63,17 @@ def _query_instance_statuses() -> dict[int, str]:
 
     now = timezone.now()
     cutoff = now - presence_service.AWAY_THRESHOLD
-    online_cutoff = now - presence_service.ONLINE_THRESHOLD
 
     rows = UserPresence.objects.filter(
-        Q(last_seen__gte=cutoff) & ~Q(manual_status="invisible")
+        Q(last_seen__gt=cutoff) & ~Q(manual_status="invisible")
         | Q(manual_status__in=("busy", "away"))
     ).values_list("user_id", "last_seen", "manual_status")
 
     statuses = {}
     for uid, last_seen, manual in rows:
-        match manual:
-            case "busy" | "away":
-                statuses[uid] = manual
-            case "auto" | "online":
-                if last_seen >= online_cutoff:
-                    statuses[uid] = "online"
-                elif last_seen >= cutoff:
-                    statuses[uid] = "away"
+        status = presence_service.status_from(manual, last_seen, now)
+        if status != "offline":
+            statuses[uid] = status
     for uid in bot_user_ids():
         statuses[uid] = "bot"
     return statuses

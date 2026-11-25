@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Rows of the listing menu. The panel around them is
   ui/partials/context_menu_panel.html, included from browser_listing_menu.html.
@@ -12,7 +13,7 @@
           @click="closeBackgroundMenu(); newEntry(type.id)"
         >
           <i :data-lucide="type.icon" class="w-4 h-4"></i>
-          <span x-text="'New ' + type.label.toLowerCase()"></span>
+          <span x-text="type.new_label"></span>
         </button>
       </li>
     </template>
@@ -20,7 +21,7 @@
 
   <template x-if="view !== 'trash'">
     <li class="mt-0.5 pt-0.5 border-t border-base-300">
-      {% include "ui/partials/context_menu_item.html" with bare=1 icon="folder-plus" label="New folder" click="closeBackgroundMenu(); newFolder()" only %}
+      {% include "ui/partials/context_menu_item.html" with bare=1 icon="folder-plus" label=_("New folder") click="closeBackgroundMenu(); newFolder()" only %}
     </li>
   </template>
 
@@ -28,7 +29,7 @@
     x-show="visibleEntries().length"
     :class="view !== 'trash' ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
   >
-    {% include "ui/partials/context_menu_item.html" with bare=1 icon="check-check" label="Select all" click="closeBackgroundMenu(); selectAll()" only %}
+    {% include "ui/partials/context_menu_item.html" with bare=1 icon="check-check" label=_("Select all") click="closeBackgroundMenu(); selectAll()" only %}
   </li>
-  {% include "ui/partials/context_menu_item.html" with show="selected.length" icon="x" label="Deselect" click="closeBackgroundMenu(); clearSelection()" only %}
+  {% include "ui/partials/context_menu_item.html" with show="selected.length" icon="x" label=_("Deselect") click="closeBackgroundMenu(); clearSelection()" only %}
 </ul>

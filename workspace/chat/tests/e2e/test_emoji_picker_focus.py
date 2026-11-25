@@ -116,7 +116,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         self._wait_for_search_field_focus()
 
         # Empty space in the middle of the message area: no focusable element
-        # takes the focus, so the browser drops it on <body> — the case that
+        # takes the focus, so the browser drops it on <body> - the case that
         # would leave the composer dead if closing did not hand it back.
         self.page.mouse.click(900, 250)
 

@@ -185,10 +185,6 @@ msgid "Enter a name for the new folder."
 msgstr "Saisissez un nom pour le nouveau dossier."
 
 #: ui/static/mail/ui/js/mail_folders.js
-msgid "Rename folder"
-msgstr "Renommer le dossier"
-
-#: ui/static/mail/ui/js/mail_folders.js
 msgid "Failed to rename folder"
 msgstr "Échec du renommage du dossier"
 
@@ -368,84 +364,12 @@ msgstr ""
 "comme le déplacement et la suppression sont irréversibles."
 
 #: ui/static/mail/ui/js/mail_rules.js
-msgid "Apply"
-msgstr "Appliquer"
-
-#: ui/static/mail/ui/js/mail_rules.js
 msgid "Delete rule"
 msgstr "Supprimer la règle"
 
 #: ui/static/mail/ui/js/mail_rules.js
 msgid "Delete rule \"%(name)s\"? This cannot be undone."
 msgstr "Supprimer la règle « %(name)s » ? Cette action est irréversible."
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "To"
-msgstr "À"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "Cc"
-msgstr "Cc"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "To or Cc"
-msgstr "À ou Cc"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "Subject"
-msgstr "Objet"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "Body"
-msgstr "Corps"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "Has attachments"
-msgstr "A des pièces jointes"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "Is starred"
-msgstr "Est suivi"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "contains"
-msgstr "contient"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "equals"
-msgstr "est égal à"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "starts with"
-msgstr "commence par"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "ends with"
-msgstr "se termine par"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "matches regex"
-msgstr "correspond à l’expression régulière"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "in list"
-msgstr "dans la liste"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "is true"
-msgstr "est vrai"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "is false"
-msgstr "est faux"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "greater than"
-msgstr "après"
-
-#: ui/static/mail/ui/js/mail_rules_form.js
-msgid "less than"
-msgstr "avant"
 
 #: ui/static/mail/ui/js/mail_rules_form.js
 msgid "Invalid conditions JSON"

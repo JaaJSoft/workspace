@@ -33,30 +33,25 @@ function normalizeProjectKey(value) {
     .toUpperCase();
 }
 
-// Stops of the done-retention slider; the stop after the last preset means
-// "always visible" ('' / null).
-const RETENTION_PRESETS = [1, 7, 14, 30, 90];
-
+// *presets* are the stops of the done-retention slider; the stop after the
+// last one means "always visible" ('' / null).
 // Snaps to the nearest preset so an API-set value (e.g. 21) still lands on
 // a valid stop instead of leaving the slider out of range.
-function retentionSliderIndex(days) {
-  if (days === '' || days == null) return RETENTION_PRESETS.length;
+function retentionSliderIndex(days, presets) {
+  if (days === '' || days == null) return presets.length;
   const value = Number(days);
   let best = 0;
-  for (let i = 1; i < RETENTION_PRESETS.length; i++) {
-    if (
-      Math.abs(RETENTION_PRESETS[i] - value) <
-      Math.abs(RETENTION_PRESETS[best] - value)
-    ) {
+  for (let i = 1; i < presets.length; i++) {
+    if (Math.abs(presets[i] - value) < Math.abs(presets[best] - value)) {
       best = i;
     }
   }
   return best;
 }
 
-function retentionDaysFromIndex(index) {
+function retentionDaysFromIndex(index, presets) {
   const i = Number(index);
-  return i >= RETENTION_PRESETS.length ? '' : String(RETENTION_PRESETS[i]);
+  return i >= presets.length ? '' : String(presets[i]);
 }
 
 // Accessible name of a swatch in the colour pickers ('' is "no colour").
@@ -80,6 +75,7 @@ function projectSettingsGeneral(config) {
     key: '',
     // Select model: preset day count as a string, '' = always visible.
     doneRetentionDays: '',
+    retentionPresets: [],
     // Select model: 'points' | 'hours', '' = estimation disabled.
     estimateUnit: '',
     saving: false,
@@ -97,6 +93,9 @@ function projectSettingsGeneral(config) {
       this.key = data.key;
       this.doneRetentionDays =
         data.done_retention_days == null ? '' : String(data.done_retention_days);
+      this.retentionPresets = JSON.parse(
+        document.getElementById('retention-presets-data').textContent
+      );
       this.estimateUnit = data.estimate_unit || '';
       this._savedForm = this._formState();
     },
@@ -117,11 +116,11 @@ function projectSettingsGeneral(config) {
     },
 
     retentionIndex() {
-      return retentionSliderIndex(this.doneRetentionDays);
+      return retentionSliderIndex(this.doneRetentionDays, this.retentionPresets);
     },
 
     setRetentionIndex(index) {
-      this.doneRetentionDays = retentionDaysFromIndex(index);
+      this.doneRetentionDays = retentionDaysFromIndex(index, this.retentionPresets);
     },
 
     retentionSliderLabel() {

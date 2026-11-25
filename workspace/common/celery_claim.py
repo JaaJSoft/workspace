@@ -1,6 +1,6 @@
 """Atomic row-claim helpers for Celery dispatcher/worker patterns.
 
-Background — the recurring race
+Background - the recurring race
 -------------------------------
 
 Many of our Celery jobs follow the same shape: a periodic *dispatcher*
@@ -26,11 +26,11 @@ enqueueing; the worker CAS-pins its own update against the exact value
 the dispatcher wrote, so a duplicate delivery whose row has been
 finalized by the winning worker matches zero rows and bails.
 
-The CAS itself is two lines of Django ORM, but getting all of —
+The CAS itself is two lines of Django ORM, but getting all of -
 ``is_active`` predicate, ``NULL`` handling for never-claimed rows,
 rolling back the claim on broker failure, passing the token to the
 worker, ISO-(de)serialising it, falling back when the token is absent
-(manual trigger / test) — right at every call site is what produces
+(manual trigger / test) - right at every call site is what produces
 bugs. This module hides those details.
 
 Pattern usage
@@ -64,7 +64,7 @@ Worker::
         return {'status': 'skipped', 'reason': 'already_claimed'}
 
 A ``claim_token`` of ``None`` makes ``cas_finalize`` skip the CAS check
-— this is the legacy / direct-test path, where the dispatcher window is
+- this is the legacy / direct-test path, where the dispatcher window is
 absent and there is no token to verify.
 """
 
@@ -80,7 +80,7 @@ logger = logging.getLogger(__name__)
 
 # How far forward the dispatcher pushes the claim field when it claims a
 # row. Any worker that fails to finalize its claim within this window
-# leaves the row to re-fire naturally on the next dispatcher pass —
+# leaves the row to re-fire naturally on the next dispatcher pass -
 # self-healing fallback if the Celery task is lost or the worker dies
 # before its own CAS update.
 DISPATCH_LOCK_HORIZON = timedelta(hours=1)
@@ -120,7 +120,7 @@ def cas_rollback(model, pk, claim_field, original_value):
     Used after a broker error so the row stays due and re-fires on the
     next dispatcher pass instead of being parked at the claim token for
     :data:`DISPATCH_LOCK_HORIZON`. Unconditional ``update`` is fine here
-    — by the time we reach this branch we owned the claim, and rolling
+    - by the time we reach this branch we owned the claim, and rolling
     back is the right thing even if a worker has somehow already begun
     (it will lose its CAS in :func:`cas_finalize`).
     """
@@ -139,7 +139,7 @@ def cas_finalize(
     """CAS-update a row keyed on the dispatcher's claim token.
 
     Returns ``True`` if exactly one row was updated, ``False`` if zero
-    — i.e. another worker has already finalized this claim with the
+    - i.e. another worker has already finalized this claim with the
     same token, or the row no longer matches ``extra_where``.
 
     ``claim_token`` may be a ``datetime`` or its ``.isoformat()``

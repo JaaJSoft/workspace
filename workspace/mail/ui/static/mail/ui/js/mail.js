@@ -1,23 +1,26 @@
 /**
- * Mail application — Alpine.js component
+ * Mail application - Alpine.js component
  *
  * The main app object is composed from domain mixins (defined in their own
  * files and loaded BEFORE this script in the template). Each mixin returns
  * an object literal which is spread into the root, so all mixins share the
  * same `this`. State stays here; methods live in the mixins.
  */
-function _eagerAccounts() {
+function _pageData(id, fallback) {
   try {
-    const el = document.getElementById('accounts-data');
+    const el = document.getElementById(id);
     if (el) return JSON.parse(el.textContent);
   } catch (e) {}
-  return [];
+  return fallback;
 }
 
 function mailApp() {
   return {
     // State
-    accounts: _eagerAccounts(),
+    accounts: _pageData('accounts-data', []),
+    // Server-side definitions (services/rules/choices.py, services/triage.py).
+    rulesConditionFields: _pageData('mail-rule-condition-fields-data', []),
+    filingRules: _pageData('mail-filing-rules-data', { archive_refused_from: [], spam_refused_from: [] }),
     folders: {},        // { accountUuid: [folder, ...] }
     messages: [],
     selectedFolder: null,
@@ -151,7 +154,7 @@ function mailApp() {
 
     // ── Compose mailApp from domain mixins ─────────────────
     // Each mixin returns an object literal with its own methods. They all
-    // share the same `this` at runtime — state stays in this root object.
+    // share the same `this` at runtime - state stays in this root object.
     ...window.attachmentInputMixin({
       pickerMessage: gettext('Select files to attach to the email.'),
     }),
@@ -166,7 +169,7 @@ function mailApp() {
     ...mailRulesFormMixin(),
 
     // ── Computed ───────────────────────────────────────────
-    // Defined on the root (not a mixin) so the getter survives object spread —
+    // Defined on the root (not a mixin) so the getter survives object spread -
     // `{...mixin()}` copies a getter as a fixed value at spread time, but a
     // getter declared directly on the literal stays a getter on the result,
     // which Alpine can react to when its dependencies change.

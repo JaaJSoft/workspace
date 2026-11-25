@@ -134,4 +134,4 @@ there too, under *Calendar subscriptions*
 event's stored series data matches its rule, and repairs it with `--fix`.
 
 The API (`/api/v1/calendars`, `/api/v1/events`, `/api/v1/external-calendars`,
-`/api/v1/polls`) is documented in the Swagger UI at `/schema/swagger-ui/`.
+`/api/v1/polls`) is documented in the Swagger UI at `/api/schema/swagger-ui`.

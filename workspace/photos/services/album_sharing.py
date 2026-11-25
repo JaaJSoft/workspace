@@ -8,11 +8,32 @@ concern (``album_notifications``).
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy
 
 from ..models import Album, AlbumLink, AlbumShare
 from .album_notifications import notify_removed, notify_role_changed, notify_shared
 from .album_revocation import revoke_lapsed_sharing
 from .albums import remove_items as remove_album_items
+
+# What each role adds to the one below it, as the share modal explains it.
+_ROLE_HINTS = {
+    AlbumShare.Role.VIEWER: gettext_lazy("Browses the album"),
+    AlbumShare.Role.CONTRIBUTOR: gettext_lazy(
+        "Also adds their own photos, and removes them"
+    ),
+    AlbumShare.Role.MANAGER: gettext_lazy(
+        "Also edits the album, its members and its links"
+    ),
+}
+
+
+def share_role_choices():
+    """The roles a share grants, lowest first: the share modal's picker,
+    whose first entry is what a new member gets."""
+    return [
+        {"value": role.value, "label": role.label, "hint": _ROLE_HINTS[role]}
+        for role in AlbumShare.Role
+    ]
 
 
 def _target_filter(*, user=None, group=None, project=None):

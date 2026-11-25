@@ -1,7 +1,7 @@
 """Avatar processing and storage service.
 
 Avatars are stored at a deterministic path ``avatars/{user_id}.webp`` using
-Django's ``default_storage``.  No database field is needed — the presence of
+Django's ``default_storage``.  No database field is needed - the presence of
 an avatar is tracked via a ``UserSetting(module='profile', key='has_avatar')``.
 """
 

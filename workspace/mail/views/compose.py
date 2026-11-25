@@ -12,8 +12,7 @@ from rest_framework.views import APIView
 from workspace.common.closing import close_all
 from workspace.common.logging import scrub
 
-from ..models import MailAccount, MailMessage
-from ..queries import reachable_message
+from ..queries import reachable_account, reachable_message
 from ..serializers import (
     ComposePrefillSerializer,
     DraftSaveSerializer,
@@ -96,9 +95,8 @@ class MailSendView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
-        try:
-            account = MailAccount.objects.get(uuid=d["account_id"], owner=request.user)
-        except MailAccount.DoesNotExist:
+        account = reachable_account(request.user, d["account_id"])
+        if account is None:
             return Response(
                 {"detail": _("Account not found")},
                 status=status.HTTP_404_NOT_FOUND,
@@ -161,9 +159,8 @@ class MailDraftView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
-        try:
-            account = MailAccount.objects.get(uuid=d["account_id"], owner=request.user)
-        except MailAccount.DoesNotExist:
+        account = reachable_account(request.user, d["account_id"])
+        if account is None:
             return Response(
                 {"detail": _("Account not found")},
                 status=status.HTTP_404_NOT_FOUND,
@@ -218,15 +215,8 @@ class MailDraftView(APIView):
         if not uuid:
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            msg = MailMessage.objects.select_related("account", "folder").get(
-                uuid=uuid,
-                deleted_at__isnull=True,
-            )
-        except MailMessage.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        if msg.account.owner != request.user:
+        msg = reachable_message(request.user, uuid)
+        if msg is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         from ..services.imap_messages import delete_draft

@@ -21,6 +21,7 @@ from django.utils import timezone
 
 from workspace.common.logging import scrub
 
+from ..models import MailFolder
 from .counts import (
     refresh_folder_counts,
     refresh_folders_counts_bulk,
@@ -29,6 +30,21 @@ from .counts import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Folders a message has nowhere to be archived or reported out of. The mail
+# page reads them too, to offer Archive and Report spam where these do.
+ARCHIVE_REFUSED_FROM = (
+    MailFolder.FolderType.ARCHIVE,
+    MailFolder.FolderType.TRASH,
+    MailFolder.FolderType.SPAM,
+    MailFolder.FolderType.DRAFTS,
+)
+SPAM_REFUSED_FROM = (
+    MailFolder.FolderType.SPAM,
+    MailFolder.FolderType.TRASH,
+    MailFolder.FolderType.DRAFTS,
+    MailFolder.FolderType.SENT,
+)
 
 
 def flag_operations():
@@ -95,7 +111,7 @@ def mark_folder_read(folder):
     mailbox that refused the flags flips its messages back to unread on the
     next sync.
     """
-    from ..models import MailFolder, MailMessage
+    from ..models import MailMessage
     from ..queries import folder_group_ids
     from .imap_connection import shared_connections
     from .imap_messages import mark_uids_read
@@ -236,13 +252,12 @@ def archive_message(message, refresh=True):
     Raises whatever the IMAP layer raises, having written nothing locally
     (the `move_to_folder` invariant).
     """
-    from ..models import MailFolder
     from ..queries import canonical_folder_id, special_folder
     from .imap_folders import create_archive_folder
 
     types = MailFolder.FolderType
     source_type = message.folder.folder_type
-    if source_type in (types.ARCHIVE, types.TRASH, types.SPAM, types.DRAFTS):
+    if source_type in ARCHIVE_REFUSED_FROM:
         return False
     account = message.account
     archive = special_folder(account, types.ARCHIVE)
@@ -265,22 +280,14 @@ def report_spam(message, refresh=True):
     False, with nothing touched, on an account without one and for a
     message that is spam already, trashed, a draft or sent by the user.
     """
-    from ..models import MailFolder
 
-    types = MailFolder.FolderType
-    if message.folder.folder_type in (
-        types.SPAM,
-        types.TRASH,
-        types.DRAFTS,
-        types.SENT,
-    ):
+    if message.folder.folder_type in SPAM_REFUSED_FROM:
         return False
-    return _move_to_special_folder(message, types.SPAM, refresh)
+    return _move_to_special_folder(message, MailFolder.FolderType.SPAM, refresh)
 
 
 def mark_not_spam(message, refresh=True):
     """Move `message` out of Spam, back into the Inbox. True when it went."""
-    from ..models import MailFolder
 
     types = MailFolder.FolderType
     if message.folder.folder_type != types.SPAM:
@@ -351,7 +358,6 @@ def trash_message(message, refresh=True, expunge=True):
     mark it read. `refresh=False` leaves the folder and label counters to a
     caller batching several deletes.
     """
-    from ..models import MailFolder
     from ..queries import canonical_folder_id, special_folder
     from .imap_messages import delete_message
     from .notifications import settle_message_notifications

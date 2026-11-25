@@ -165,7 +165,7 @@ class Event(models.Model):
             ),
         ]
         constraints = [
-            # One row per VEVENT UID per calendar — closes the duplicate
+            # One row per VEVENT UID per calendar - closes the duplicate
             # window when two ICS sync workers race on the same feed.
             # Native events (no ical_uid) and legacy '' values are excluded
             # via the partial condition.
@@ -247,7 +247,7 @@ class EventMember(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user or self.email} — {self.event} ({self.status})"
+        return f"{self.user or self.email} - {self.event} ({self.status})"
 
     @property
     def is_external(self):
@@ -364,7 +364,7 @@ class PollSlot(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.poll.title} — {self.start}"
+        return f"{self.poll.title} - {self.start}"
 
 
 class PollVote(models.Model):
@@ -413,7 +413,7 @@ class PollVote(models.Model):
 
     def __str__(self):
         who = self.user.username if self.user else self.guest_name
-        return f"{who} — {self.choice} — {self.slot}"
+        return f"{who} - {self.choice} - {self.slot}"
 
 
 class PollInvitee(models.Model):
@@ -437,7 +437,7 @@ class PollInvitee(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user} — {self.poll}"
+        return f"{self.user} - {self.poll}"
 
 
 # Import models from sub-modules so Django's migration framework discovers them.

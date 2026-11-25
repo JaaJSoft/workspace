@@ -18,10 +18,6 @@ window.sidebarPreference = {
   },
 
   save(module, collapsed) {
-    return fetch(`/api/v1/settings/${module}/sidebar_collapsed`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-      body: JSON.stringify({ value: collapsed === true }),
-    }).catch(() => {});
+    return window.saveUserSetting(module, 'sidebar_collapsed', collapsed === true).catch(() => {});
   },
 };

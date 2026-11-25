@@ -6,8 +6,6 @@
 {% load i18n %}
 {% translate "Change name" as change_name_label %}
 {% translate "Who is this?" as who_label %}
-{% translate "%(count)s photo" as photo_count_one %}
-{% translate "%(count)s photos" as photo_count_other %}
 {% translate "Add “%(name)s” to People" as add_to_people_label %}
 <dialog id="name-person-dialog" class="modal">
   <div class="modal-box max-w-md">
@@ -84,7 +82,7 @@
             <span
               class="text-xs text-base-content/60 tabular-nums"
               x-show="person.photo_count"
-              x-text="interpolate(person.photo_count === 1 ? '{{ photo_count_one|escapejs }}' : '{{ photo_count_other|escapejs }}', { count: person.photo_count }, true)"
+              x-text="photosCountLabels.photos(person.photo_count)"
             ></span>
           </button>
         </li>

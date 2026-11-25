@@ -27,17 +27,11 @@ window._chatPrefsDefaults = {
 // `chat:preferences-changed` re-renders.
 window.updateChatPref = function updateChatPref(key, value) {
     window._chatPrefsCache = { ...window._chatPrefsCache, [key]: value };
-    fetch('/api/v1/settings/chat/preferences', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ value: window._chatPrefsCache }),
-        credentials: 'same-origin',
-    }).catch(function() {});
+    window.saveUserSetting('chat', 'preferences', window._chatPrefsCache).catch(function() {});
     window.dispatchEvent(new CustomEvent('chat:preferences-changed', { detail: window._chatPrefsCache }));
 };
 
 window.chatPreferences = function chatPreferences() {
-    const API_URL = '/api/v1/settings/chat/preferences';
     let _saveTimer = null;
 
     return {
@@ -71,24 +65,12 @@ window.chatPreferences = function chatPreferences() {
             this.prefs[key] = value;
             this._broadcast();
             clearTimeout(_saveTimer);
-            let resp;
             try {
-                resp = await fetch(API_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                    body: JSON.stringify({ value: this.prefs }),
-                    credentials: 'same-origin',
-                });
+                await window.saveUserSetting('chat', 'preferences', this.prefs);
             } catch (e) {
                 // The toggle did not stick; skip the refetch rather than
                 // repaint the list with the value the server still holds.
                 console.error('Failed to save preference', e);
-                return;
-            }
-            // fetch resolves on 4xx/5xx too - an HTTP error also means the
-            // server kept the old value, so the same rule applies.
-            if (!resp.ok) {
-                console.error('Failed to save preference', resp.status);
                 return;
             }
             window.dispatchEvent(new CustomEvent('chat:refresh-messages'));
@@ -101,11 +83,7 @@ window.chatPreferences = function chatPreferences() {
             // take effect until the page reloads (the toggle and calls now live
             // on the same page).
             if (window.chatCallSounds) window.chatCallSounds.setEnabled(value);
-            fetch('/api/v1/settings/chat/call_sounds', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                body: JSON.stringify({ value: value }),
-            }).catch(function() {});
+            window.saveUserSetting('chat', 'call_sounds', value).catch(function() {});
         },
 
         _broadcast() {
@@ -116,11 +94,7 @@ window.chatPreferences = function chatPreferences() {
         _saveRemote() {
             clearTimeout(_saveTimer);
             _saveTimer = setTimeout(function() {
-                fetch(API_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                    body: JSON.stringify({ value: this.prefs }),
-                }).catch(function() {});
+                window.saveUserSetting('chat', 'preferences', this.prefs).catch(function() {});
             }.bind(this), 500);
         },
     };

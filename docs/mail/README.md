@@ -256,4 +256,4 @@ model for event extraction. See [AI](../ai/README.md).
 
 ## API
 
-All endpoints are under `/api/v1/mail/` - see the [Swagger UI](/schema/swagger-ui/).
+All endpoints are under `/api/v1/mail/` - see the [Swagger UI](/api/schema/swagger-ui).

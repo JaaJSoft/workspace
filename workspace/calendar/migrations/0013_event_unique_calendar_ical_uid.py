@@ -34,7 +34,7 @@ def dedupe_event_ical_uid(apps, schema_editor):
 
 
 def noop_reverse(apps, schema_editor):
-    """Dedupe is irreversible — restoring deleted duplicates is impossible."""
+    """Dedupe is irreversible - restoring deleted duplicates is impossible."""
     pass
 
 

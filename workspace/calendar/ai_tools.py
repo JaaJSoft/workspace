@@ -13,6 +13,7 @@ from workspace.ai.tool_registry import ToolDeps, ToolError, ToolProvider, tool
 from workspace.calendar.services.timezones import all_day_label
 from workspace.common.datetimes import parse_local_datetime
 from workspace.common.logging import scrub
+from workspace.users.queries import pickable_users
 
 logger = logging.getLogger(__name__)
 
@@ -236,20 +237,16 @@ def _resolve_usernames(names):
     An unknown name is reported rather than dropped: silently inviting four
     people out of five is worse than inviting nobody.
     """
-    from django.contrib.auth import get_user_model
     from django.db.models import Q
 
     wanted = [n.strip() for n in names if n.strip()]
     if not wanted:
         return []
 
-    User = get_user_model()
     lookup = Q()
     for name in wanted:
         lookup |= Q(username__iexact=name)
-    found = {
-        u.username.lower(): u.id for u in User.objects.filter(lookup, is_active=True)
-    }
+    found = {u.username.lower(): u.id for u in pickable_users().filter(lookup)}
     unknown = sorted({n for n in wanted if n.lower() not in found})
     if unknown:
         raise ToolError(

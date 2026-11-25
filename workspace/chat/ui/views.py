@@ -35,6 +35,7 @@ from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
 from workspace.common.dates import time_ago
 from workspace.common.prefetch import prefetchable
+from workspace.common.services.image import SOURCE_TYPES
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.users.services.settings import get_setting
 
@@ -87,6 +88,15 @@ def _chat_prefs(user):
     """Chat preferences shaped for json_script, guarded against non-dict values."""
     prefs = get_setting(user, "chat", "preferences", default={})
     return prefs if isinstance(prefs, dict) else {}
+
+
+def _notification_levels():
+    """Each ConversationMember notification level with its label and icon."""
+    icons = ConversationMember.NOTIFICATION_LEVEL_ICONS
+    return [
+        {"value": level.value, "label": str(level.label), "icon": icons[level]}
+        for level in ConversationMember.NotificationLevel
+    ]
 
 
 def _build_conversation_context(user, conversation_uuids=None, *, embed_members=False):
@@ -211,6 +221,8 @@ def chat_view(request, conversation_uuid=None):
             "message_animations": MESSAGE_ANIMATIONS,
             "chat_groups": _chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
+            "notification_levels": _notification_levels(),
+            "group_avatar_types": SOURCE_TYPES,
         },
     )
 
@@ -264,6 +276,8 @@ def chat_room_view(request, conversation_uuid):
             "current_user_id": request.user.id,
             "chat_groups": _chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
+            "notification_levels": _notification_levels(),
+            "group_avatar_types": SOURCE_TYPES,
         },
     )
 

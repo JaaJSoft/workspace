@@ -23,13 +23,13 @@ usage() {
     cat <<'EOF'
 Usage: seed_demo.sh <preset> [extra seed_demo.py args...]
 
-Presets (approx. scale — files/events are randomized per user):
+Presets (approx. scale - files/events are randomized per user):
 
   tiny     3 users     ~30 files      quick smoke test
   small    10 users    ~300 files     local dev / screenshots
   medium   50 users    ~3k files      realistic company demo
   large    200 users   ~40k files     stress listings & queries
-  xl       1000 users  ~400k files    heavy load (slow — minutes)
+  xl       1000 users  ~400k files    heavy load (slow - minutes)
 
 Examples:
   seed_demo.sh small --purge --yes        # wipe prior demo data, then seed

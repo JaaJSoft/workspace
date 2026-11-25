@@ -168,7 +168,7 @@ class QueueLengthCollectorTests(TestCase):
         ):
             families = list(collector.collect())
 
-        # We yielded a (possibly empty) family — the scrape must not crash.
+        # We yielded a (possibly empty) family - the scrape must not crash.
         self.assertEqual(len(families), 1)
         self.assertEqual(list(families[0].samples), [])
 

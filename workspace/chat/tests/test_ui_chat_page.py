@@ -14,6 +14,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.chat.models import Conversation, ConversationMember
+from workspace.common.services.image import SOURCE_TYPES
 
 from .test_chat import ChatTestMixin
 
@@ -67,3 +68,10 @@ class ChatPageMemberPayloadTests(ChatTestMixin, TestCase):
         payload = self._embedded_conversations()
         group = next(c for c in payload if c["uuid"] == str(self.group.uuid))
         self.assertNotIn(self.member.id, {m["user"]["id"] for m in group["members"]})
+
+
+class ChatPageGroupAvatarInputTests(ChatTestMixin, TestCase):
+    def test_the_file_picker_offers_the_types_the_upload_accepts(self):
+        self.client.force_login(self.creator)
+        response = self.client.get("/chat")
+        self.assertContains(response, f'accept="{",".join(SOURCE_TYPES)}"')

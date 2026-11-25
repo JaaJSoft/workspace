@@ -1,5 +1,7 @@
 from django.urls import path, re_path
 
+from workspace.common.uuids import UUID_PATTERN
+
 from .views import caldav, calendars, events, external, feeds, invitees, polls
 
 urlpatterns = [
@@ -103,12 +105,12 @@ urlpatterns = [
         name="caldav-home",
     ),
     re_path(
-        r"^caldav/calendars/(?P<username>[^/]+)/(?P<calendar_id>[0-9a-fA-F-]{32,36})/?$",
+        rf"^caldav/calendars/(?P<username>[^/]+)/(?P<calendar_id>{UUID_PATTERN})/?$",
         caldav.CalendarCollectionView.as_view(),
         name="caldav-calendar",
     ),
     re_path(
-        r"^caldav/calendars/(?P<username>[^/]+)/(?P<calendar_id>[0-9a-fA-F-]{32,36})/(?P<name>[^/]+)$",
+        rf"^caldav/calendars/(?P<username>[^/]+)/(?P<calendar_id>{UUID_PATTERN})/(?P<name>[^/]+)$",
         caldav.CalendarObjectView.as_view(),
         name="caldav-object",
     ),

@@ -17,7 +17,7 @@
   }
 }
 
-/* Grouped bubble radius adjustments — connected look */
+/* Grouped bubble radius adjustments - connected look */
 
 /* Other user (left-aligned): reduce top-left corner on subsequent bubbles */
 .msg-group-start .msg-bubble:not(:first-child) {
@@ -154,7 +154,7 @@
   word-break: break-all;
 }
 
-/* Chat input: remove inner textarea focus ring — outer container handles it */
+/* Chat input: remove inner textarea focus ring - outer container handles it */
 .textarea-ghost:focus {
   outline: none !important;
   box-shadow: none !important;
@@ -316,7 +316,7 @@ emoji-picker {
   border-radius: 0.25rem;
 }
 
-/* Pygments token colors — DaisyUI-aware via oklch */
+/* Pygments token colors - DaisyUI-aware via oklch */
 .msg-body .code-block .c,
 .msg-body .code-block .cm,
 .msg-body .code-block .c1,

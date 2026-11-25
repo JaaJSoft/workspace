@@ -1,7 +1,9 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load i18n static %}
 
-{% block title %}Vault - Workspace{% endblock %}
+{% block title %}
+  {% translate "Vault - Workspace" %}
+{% endblock %}
 
 {% comment %}
   No inline script and no inline style attribute anywhere in this file, nor in
@@ -83,13 +85,13 @@
         <main class="flex-1 flex flex-col min-w-0 min-h-0" x-show="!hasNoVault()">
           {% include "vault/ui/partials/browser_header.html" %}
 
-          <inline-alert type="warning" title="This vault is out of reach" message="Nothing here holds a key for your account, or the vault does not exist." class="mx-5 mt-4" x-show="missing" x-cloak></inline-alert>
+          <inline-alert type="warning" title="{% translate "This vault is out of reach" %}" message="{% translate "Nothing here holds a key for your account, or the vault does not exist." %}" class="mx-5 mt-4" x-show="missing" x-cloak></inline-alert>
 
-          <inline-alert type="warning" title="No vault could be opened" message="Every vault on this account either failed to verify or holds no key for it. The switcher still lists them." class="mx-5 mt-4" x-show="noOpenableVaultReason() === 'refused'" x-cloak></inline-alert>
+          <inline-alert type="warning" title="{% translate "No vault could be opened" %}" message="{% translate "Every vault on this account either failed to verify or holds no key for it. The switcher still lists them." %}" class="mx-5 mt-4" x-show="noOpenableVaultReason() === 'refused'" x-cloak></inline-alert>
 
-          <inline-alert type="warning" icon="refresh-cw" title="Your vaults need a newer version of the app" message="They were saved by a more recent version than the one this page is running. Reload the page to read them." class="mx-5 mt-4" x-show="noOpenableVaultReason() === 'newer'" x-cloak></inline-alert>
+          <inline-alert type="warning" icon="refresh-cw" title="{% translate "Your vaults need a newer version of the app" %}" message="{% translate "They were saved by a more recent version than the one this page is running. Reload the page to read them." %}" class="mx-5 mt-4" x-show="noOpenableVaultReason() === 'newer'" x-cloak></inline-alert>
 
-          <inline-alert type="warning" icon="refresh-cw" title="No vault could be opened" message="Some vaults were saved by a newer version of the app: reload the page to read them. The others failed to verify or hold no key for this account. The switcher still lists them all." class="mx-5 mt-4" x-show="noOpenableVaultReason() === 'mixed'" x-cloak></inline-alert>
+          <inline-alert type="warning" icon="refresh-cw" title="{% translate "No vault could be opened" %}" message="{% translate "Some vaults were saved by a newer version of the app: reload the page to read them. The others failed to verify or hold no key for this account. The switcher still lists them all." %}" class="mx-5 mt-4" x-show="noOpenableVaultReason() === 'mixed'" x-cloak></inline-alert>
 
           <inline-alert type="error" x-show="error" x-cloak class="mx-5 mt-4">
           <span x-text="error"></span>
@@ -105,14 +107,14 @@
             </inline-alert>
           </template>
 
-          <inline-alert type="warning" icon="key-round" message="Unlocked with your previous password. Your new one takes over the first time you use it." class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
+          <inline-alert type="warning" icon="key-round" message="{% translate "Unlocked with your previous password. Your new one takes over the first time you use it." %}" class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
 
           {% comment %}
               x-if, not x-show: inline-alert reads its attributes once, when
               it connects.
           {% endcomment %}
           <template x-if="migrationWarning">
-            <inline-alert type="info" dismissible class="mx-5 mt-4" message="Some items could not be updated to the latest encryption. They still open normally; the app will try again next time."></inline-alert>
+            <inline-alert type="info" dismissible class="mx-5 mt-4" message="{% translate "Some items could not be updated to the latest encryption. They still open normally; the app will try again next time." %}"></inline-alert>
           </template>
 
           {% comment %}
@@ -126,15 +128,13 @@
           <template x-if="tamperedCount > 0">
             <inline-alert type="error" icon="shield-alert" class="mx-5 mt-4">
             <span class="text-sm">
-              <b>
-                <span x-text="tamperedCount"></span>
-                <span x-text="tamperedCount === 1 ? 'entry was' : 'entries were'"></span>
-                removed from the list.
-              </b>
-              The signature does not match what your account signed. No field
-              was decrypted, and nothing was tried a second time under another
-              context. Nobody can repair this from here: the entry has to be
-              written again by whoever holds the key.
+              <b x-text="tamperedHeadline()"></b>
+              {% blocktranslate trimmed %}
+                The signature does not match what your account signed. No field
+                was decrypted, and nothing was tried a second time under another
+                context. Nobody can repair this from here: the entry has to be
+                written again by whoever holds the key.
+              {% endblocktranslate %}
             </span>
             </inline-alert>
           </template>
@@ -146,14 +146,8 @@
           <template x-if="unsupportedCount > 0">
             <inline-alert type="warning" icon="refresh-cw" class="mx-5 mt-4">
             <span class="text-sm">
-              <b>
-                <span x-text="unsupportedCount"></span>
-                <span x-text="unsupportedCount === 1 ? 'entry needs' : 'entries need'"></span>
-                a newer version of the app.
-              </b>
-              <span
-                x-text="unsupportedCount === 1 ? 'It was saved by a more recent version than the one this page is running. Reload the page to read it.' : 'They were saved by a more recent version than the one this page is running. Reload the page to read them.'"
-              ></span>
+              <b x-text="unsupportedHeadline()"></b>
+              <span x-text="unsupportedDetail()"></span>
             </span>
             </inline-alert>
           </template>

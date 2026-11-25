@@ -153,4 +153,4 @@ CHAT_CALL_TURN_CREDENTIAL=...
 
 ### API
 
-All endpoints are under `/api/v1/chat/`. See the [Swagger UI](/schema/swagger-ui/).
+All endpoints are under `/api/v1/chat/`. See the [Swagger UI](/api/schema/swagger-ui).

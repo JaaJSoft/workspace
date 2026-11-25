@@ -1,20 +1,54 @@
-from .models import MailAccount, MailAttachment, MailFolder, MailMessage
+from .models import (
+    MailAccount,
+    MailAttachment,
+    MailFolder,
+    MailLabel,
+    MailMessage,
+    MailRule,
+)
+
+
+def user_accounts(user):
+    """The mail accounts the user owns."""
+    return MailAccount.objects.filter(owner=user)
 
 
 def user_account_ids(user):
     """Return mail account UUIDs owned by the user."""
-    return MailAccount.objects.filter(owner=user).values_list("uuid", flat=True)
+    return user_accounts(user).values_list("uuid", flat=True)
+
+
+def reachable_account(user, uuid):
+    """The user's mail account with that UUID, or None."""
+    return user_accounts(user).filter(uuid=uuid).first()
+
+
+def user_folders(user):
+    """Folders of the user's accounts, aliases and hidden ones included."""
+    return MailFolder.objects.filter(account_id__in=user_account_ids(user))
+
+
+def user_labels(user):
+    """Labels of the user's accounts."""
+    return MailLabel.objects.filter(account_id__in=user_account_ids(user))
+
+
+def user_messages(user):
+    """Messages of the user's accounts, soft-deleted ones included."""
+    return MailMessage.objects.filter(account_id__in=user_account_ids(user))
+
+
+def user_rules(user):
+    """Rules of the user's accounts."""
+    return MailRule.objects.filter(account_id__in=user_account_ids(user))
 
 
 def reachable_message(user, uuid):
     """The user's non-deleted message with that UUID, or None."""
     return (
-        MailMessage.objects.select_related("account", "folder")
-        .filter(
-            uuid=uuid,
-            account_id__in=user_account_ids(user),
-            deleted_at__isnull=True,
-        )
+        user_messages(user)
+        .select_related("account", "folder")
+        .filter(uuid=uuid, deleted_at__isnull=True)
         .first()
     )
 

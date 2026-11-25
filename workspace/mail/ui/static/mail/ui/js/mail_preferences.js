@@ -23,17 +23,11 @@ window._mailPrefsCache = (function () {
 // component listening to `mail:preferences-changed` re-renders.
 window.updateMailPref = function updateMailPref(key, value) {
     window._mailPrefsCache = { ...window._mailPrefsCache, [key]: value };
-    fetch('/api/v1/settings/mail/preferences', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ value: window._mailPrefsCache }),
-        credentials: 'same-origin',
-    }).catch(function() {});
+    window.saveUserSetting('mail', 'preferences', window._mailPrefsCache).catch(function() {});
     window.dispatchEvent(new CustomEvent('mail:preferences-changed', { detail: window._mailPrefsCache }));
 };
 
 window.mailPreferences = function mailPreferences() {
-    const API_URL = '/api/v1/settings/mail/preferences';
     let _saveTimer = null;
 
     return {
@@ -65,30 +59,17 @@ window.mailPreferences = function mailPreferences() {
 
         saveAiFeature(feature, value) {
             this.ai[feature] = value;
-            fetch('/api/v1/settings/mail/ai_' + feature, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                body: JSON.stringify({ value: value }),
-            }).catch(function() {});
+            window.saveUserSetting('mail', 'ai_' + feature, value).catch(function() {});
         },
 
         saveNotifyMode(value) {
             this.notifyMode = value;
-            this._saveMailSetting('notify_mode', value);
+            window.saveUserSetting('mail', 'notify_mode', value).catch(function() {});
         },
 
         saveNotifyBurst(value) {
             this.notifyBurst = value;
-            this._saveMailSetting('notify_max_burst', value);
-        },
-
-        _saveMailSetting(key, value) {
-            fetch('/api/v1/settings/mail/' + key, {
-                method: 'PUT',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                body: JSON.stringify({ value: value }),
-            }).catch(function() {});
+            window.saveUserSetting('mail', 'notify_max_burst', value).catch(function() {});
         },
 
         _broadcast() {
@@ -99,11 +80,7 @@ window.mailPreferences = function mailPreferences() {
         _saveRemote() {
             clearTimeout(_saveTimer);
             _saveTimer = setTimeout(function() {
-                fetch(API_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                    body: JSON.stringify({ value: this.prefs }),
-                }).catch(function() {});
+                window.saveUserSetting('mail', 'preferences', this.prefs).catch(function() {});
             }.bind(this), 500);
         },
     };

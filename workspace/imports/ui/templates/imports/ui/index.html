@@ -23,6 +23,9 @@
   {{ open_wizard|json_script:"open-wizard-data" }}
   {{ highlight_job|json_script:"highlight-job-data" }}
   {{ groups|json_script:"groups-data" }}
+  {{ kinds|json_script:"import-kinds-data" }}
+  {{ job_statuses|json_script:"import-job-statuses-data" }}
+  {{ conflict_policies|json_script:"import-conflict-policies-data" }}
 
   <div class="py-6" x-data="importsApp()">
     <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -488,9 +491,9 @@
                   x-model="wizard.options.files.on_conflict"
                   class="select select-sm w-full min-w-0"
                 >
-                  <option value="rename">{% translate "Keep both (rename the imported one)" %}</option>
-                  <option value="skip">{% translate "Keep mine (skip the imported one)" %}</option>
-                  <option value="replace">{% translate "Replace mine with the imported one" %}</option>
+                  {% for policy in conflict_policies %}
+                    <option value="{{ policy.value }}">{{ policy.label }}</option>
+                  {% endfor %}
                 </select>
               </div>
             </div>

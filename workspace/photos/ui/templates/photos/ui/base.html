@@ -98,6 +98,7 @@
   {{ library_extensions|json_script:"photos-library-extensions-data" }}
   {{ photos_prefs|json_script:"photos-prefs-data" }}
   {{ sensitive_blur_choices|json_script:"photos-sensitive-blur-choices" }}
+  {{ album_share_roles|json_script:"photos-album-share-roles" }}
   {{ hidden_folders|json_script:"photos-hidden-folders-data" }}
   <input id="photos-import-input" type="file" class="hidden" multiple accept="{% for extension in library_extensions %}.{{ extension }}{% if not forloop.last %},{% endif %}{% endfor %}" @change="onImportInput($event)" />
   {% comment %}

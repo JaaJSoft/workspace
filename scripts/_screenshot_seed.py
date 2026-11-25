@@ -607,7 +607,7 @@ def _seed_chat(alex, sam, jordan, now):
         (sam, "Morning! The new palette is live on the staging site 🎨", 130),
         (jordan, "Looks great. The contrast on the hero text is much better.", 121),
         (alex, "Agreed. Can we try the **indigo** variant for the buttons?", 104),
-        (sam, "Sure, pushing it now — refresh in a minute.", 98),
+        (sam, "Sure, pushing it now - refresh in a minute.", 98),
         (jordan, "🚀", 95),
     ]
     posted = [
@@ -659,11 +659,11 @@ def _seed_ai(alex, now):
         (
             nova,
             "Here's where **Website Redesign** stands right now:\n\n"
-            "- **In progress** — the new landing page hero (Sam) and the blog "
+            "- **In progress** - the new landing page hero (Sam) and the blog "
             "migration (Jordan)\n"
-            "- **Up next** — the mobile navigation fix is *urgent* and due "
+            "- **Up next** - the mobile navigation fix is *urgent* and due "
             "tomorrow\n"
-            "- **Done** — the performance audit and the new color palette\n\n"
+            "- **Done** - the performance audit and the new color palette\n\n"
             "The board is on track for the release on Friday. 🚀",
             46,
         ),
@@ -671,7 +671,7 @@ def _seed_ai(alex, now):
         (
             nova,
             "Here's a first draft:\n\n"
-            "> Our website just got a fresh coat of paint 🎨 — a faster, "
+            "> Our website just got a fresh coat of paint 🎨 - a faster, "
             "cleaner site with a brand-new look, redesigned from the ground "
             "up. Take a look and tell us what you think!\n\n"
             "Want a longer version for the blog as well?",
@@ -885,7 +885,7 @@ def _seed_mail(alex, now):
             "Sam Rivera",
             "sam@workspace.dev",
             "Palette variants for the hero",
-            "I attached the two indigo variants we discussed — I prefer the deeper one.",
+            "I attached the two indigo variants we discussed - I prefer the deeper one.",
             2,
             False,
             True,
@@ -911,7 +911,7 @@ def _seed_mail(alex, now):
         (
             "Product Weekly",
             "digest@productweekly.dev",
-            "Issue #142 — Onboarding that works",
+            "Issue #142 - Onboarding that works",
             "This week: onboarding flows, pricing page teardowns, and a great case study.",
             26,
             True,
@@ -930,7 +930,7 @@ def _seed_mail(alex, now):
             "Sam Rivera",
             "sam@workspace.dev",
             "Offsite photos",
-            "Uploaded the offsite photos to the shared drive — some really good ones!",
+            "Uploaded the offsite photos to the shared drive - some really good ones!",
             50,
             True,
             False,
@@ -1195,7 +1195,7 @@ def _seed_projects(alex, sam, jordan, now):
 
     # Comment thread for the task-panel capture.
     for author, body, hours_ago in [
-        (sam, "First iteration is on staging — used the deeper indigo.", 6),
+        (sam, "First iteration is on staging - used the deeper indigo.", 6),
         (jordan, "Looks sharp. Can we A/B the headline before launch?", 3),
     ]:
         comment = TaskComment.objects.create(task=hero, author=author, body=body)
@@ -1532,7 +1532,7 @@ def _seed_notifications(alex, sam, jordan, now):
             "projects",
             sam,
             "Sam Rivera assigned you WR-3",
-            "Fix mobile navigation overlap — due tomorrow",
+            "Fix mobile navigation overlap - due tomorrow",
             "/projects",
             "high",
             None,
@@ -1566,7 +1566,7 @@ def _seed_notifications(alex, sam, jordan, now):
 
 
 # ---------------------------------------------------------------------------
-# Shot list — name matches the file in docs/images/, path is formatted with
+# Shot list - name matches the file in docs/images/, path is formatted with
 # the context returned by seed(). "prep" runs on the loaded page before the
 # capture (switch views, open panels, ...).
 # ---------------------------------------------------------------------------

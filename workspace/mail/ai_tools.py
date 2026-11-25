@@ -28,7 +28,7 @@ from workspace.ai.services.confirmation import (
 )
 from workspace.ai.tool_registry import ToolDeps, ToolError, ToolProvider, tool
 from workspace.common.logging import scrub
-from workspace.mail.queries import reachable_message
+from workspace.mail.queries import reachable_message, user_accounts
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +48,7 @@ def _resolve_account(user, hint):
     guessing which identity to write as is the one mistake that cannot be
     walked back, so the choice goes to the model with the list in hand.
     """
-    from workspace.mail.models import MailAccount
-
-    accounts = list(
-        MailAccount.objects.filter(owner=user, is_active=True).order_by("email")
-    )
+    accounts = list(user_accounts(user).filter(is_active=True).order_by("email"))
     if not accounts:
         return None, "No active mail account is configured on this workspace."
 

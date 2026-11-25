@@ -79,19 +79,18 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
     // Short enough for the switcher's width; the full instruction is the
     // row's tooltip.
     vaultRowLabel: function (vault) {
-      if (vault.unsupported) return 'Newer version';
-      if (vault.unopenable) return 'Awaiting a key';
-      if (this.vaultIsDegraded(vault)) return 'Unreadable vault';
-      return vault.name || 'Unnamed';
+      if (vault.unsupported) return gettext('Newer version');
+      if (vault.unopenable) return gettext('Awaiting a key');
+      if (this.vaultIsDegraded(vault)) return gettext('Unreadable vault');
+      return vault.name || gettext('Unnamed');
     },
 
     vaultRowTitle: function (vault) {
       if (vault.unsupported) {
-        return 'Saved by a newer version of the app. Reload the page to read it.';
+        return gettext('Saved by a newer version of the app. Reload the page to read it.');
       }
       if (vault.unopenable) {
-        return 'Your account holds no key for this vault any more. '
-          + 'A member who can still open it has to share it with you again.';
+        return gettext('Your account holds no key for this vault any more. A member who can still open it has to share it with you again.');
       }
       return null;
     },
@@ -183,10 +182,10 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
 
       if (action.id === 'delete') {
         const confirmed = await this.confirm(
-          'Delete this vault and everything in it?',
+          gettext('Delete this vault and everything in it?'),
           {
-            title: 'This cannot be undone',
-            okLabel: 'Delete the vault',
+            title: gettext('This cannot be undone'),
+            okLabel: gettext('Delete the vault'),
             okClass: 'btn-error',
             icon: 'trash-2',
             iconClass: 'bg-error/10 text-error',
@@ -202,7 +201,7 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
           await this.load();
         } catch (err) {
           if (err && err.reason === 'locked') return;
-          this.error = 'The vault could not be deleted. Try again.';
+          this.error = gettext('The vault could not be deleted. Try again.');
         }
         return;
       }
@@ -227,10 +226,10 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
       } catch (err) {
         if (err && err.reason === 'locked') return;
         if (err && err.name === 'VaultResignBlocked') {
-          this.error = 'This vault could not be verified. It was left untouched.';
+          this.error = gettext('This vault could not be verified. It was left untouched.');
           return;
         }
-        this.error = 'That change could not be saved. Try again.';
+        this.error = gettext('That change could not be saved. Try again.');
       }
     },
 
@@ -245,6 +244,12 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
     },
 
     // ---- rename and appearance --------------------------------------------
+
+    vaultDialogTitle: function () {
+      return this.vaultDialog && this.vaultDialog.mode === 'rename'
+        ? gettext('Name and description')
+        : gettext('Icon and colour');
+    },
 
     openVaultDialog: function (mode, vault) {
       this.closeVaultMenu();
@@ -302,10 +307,10 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
       } catch (err) {
         if (err && err.reason === 'locked') return;
         if (err && err.name === 'VaultResignBlocked') {
-          this.error = 'This vault could not be verified. It was left untouched.';
+          this.error = gettext('This vault could not be verified. It was left untouched.');
           return;
         }
-        this.error = 'That change could not be saved. Try again.';
+        this.error = gettext('That change could not be saved. Try again.');
       } finally {
         this.busy = false;
       }
@@ -378,7 +383,7 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
             if (!window.vaultSession.isUnlocked()) return;
             const pending = this.pendingVaultUuid;
             if (!this.vaults.some(function (v) { return v.uuid === pending; })) {
-              this.error = 'The vault could not be created. Try again.';
+              this.error = gettext('The vault could not be created. Try again.');
               return;
             }
             this.closeCreateDialog();
@@ -388,10 +393,10 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
             this.goToVault(pending);
             await this.load();
           } catch (reloadErr) {
-            this.error = 'Your vault was created, but it could not be opened.';
+            this.error = gettext('Your vault was created, but it could not be opened.');
           }
         } else {
-          this.error = 'The vault could not be created. Try again.';
+          this.error = gettext('The vault could not be created. Try again.');
         }
       } finally {
         this.busy = false;

@@ -993,7 +993,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         """A WebDAV MOVE on a file must migrate its bytes on disk.
 
         Regression: bypassing tree.move() left the bytes at the old
-        storage path while the DB row pointed at the new parent — subsequent
+        storage path while the DB row pointed at the new parent - subsequent
         reads served stale storage state.
         """
         tree.create_folder(self.user, "Target")
@@ -1432,7 +1432,7 @@ class WebDAVIntegrationTests(TestCase):
         clients tolerate the omission, but the ``davfs2`` Linux mount
         client does not.
         """
-        # Depth: 0 — only the root entry is returned, so any match
+        # Depth: 0 - only the root entry is returned, so any match
         # belongs to the root collection.
         code, _, body = self._request("PROPFIND", "/", headers={"Depth": "0"})
         self.assertEqual(code, 207)

@@ -13,7 +13,6 @@
 {% translate "Face, leave out" as face_leave_out_aria %}
 {% translate "Open the photo" as open_photo_label %}
 {% translate "Open the video" as open_video_label %}
-{% translate "%(count)s more faces of this group, closer to the rest, go with the answer." as more_faces_label %}
 {% translate "The next %(count)s come once these are settled." as next_label %}
 {% translate "Someone else? Type a name" as someone_else_placeholder %}
 {% translate "Who is this? Type a name" as who_placeholder %}
@@ -117,7 +116,7 @@
     x-show="card.total > card.faces.length"
     x-cloak
     class="mt-2 text-xs text-base-content/60"
-    x-text="interpolate(card.kind === 'cluster' ? '{{ more_faces_label|escapejs }}' : '{{ next_label|escapejs }}', { count: card.total - card.faces.length }, true)"
+    x-text="card.kind === 'cluster' ? photosCountLabels.moreFaces(card.total - card.faces.length) : interpolate('{{ next_label|escapejs }}', { count: card.total - card.faces.length }, true)"
   ></p>
 
   <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -219,7 +218,7 @@
               <span
                 x-show="option.kind === 'person' && option.person.photo_count"
                 class="text-xs text-base-content/60 tabular-nums"
-                x-text="option.kind === 'person' ? photoLabel(option.person.photo_count) : ''"
+                x-text="option.kind === 'person' ? photosCountLabels.photos(option.person.photo_count) : ''"
               ></span>
             </button>
           </li>

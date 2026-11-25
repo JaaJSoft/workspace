@@ -195,6 +195,15 @@ class ProjectPageLanguageTests(ProjectTestMixin, TestCase):
         self.assertContains(response, "Vue d’ensemble")
         self.assertNotContains(response, "Search tasks")
 
+    def test_board_embeds_every_priority_in_french(self):
+        set_setting(self.admin, "core", "language", "fr")
+        response = self.client.get(self.board_url)
+        self.assertEqual(
+            {p["value"]: p["label"] for p in response.context["priorities_data"]},
+            {"low": "Basse", "medium": "Moyenne", "high": "Haute", "urgent": "Urgente"},
+        )
+        self.assertContains(response, 'id="priorities-data"')
+
     def test_board_stays_english_by_default(self):
         response = self.client.get(self.board_url)
         self.assertContains(response, "Search tasks")
@@ -228,4 +237,16 @@ class ProjectApiLanguageTests(ProjectTestMixin, TestCase):
         self.assertEqual(
             self._duplicate(),
             ["A label with this name already exists in this project."],
+        )
+
+    def test_refused_column_deletion_is_translated(self):
+        set_setting(self.admin, "core", "language", "fr")
+        backlog = self.project.statuses.get(category="backlog")
+        response = self.client.delete(
+            f"/api/v1/projects/{self.project.uuid}/statuses/{backlog.uuid}"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"],
+            "Impossible de supprimer la dernière colonne « Backlog ».",
         )

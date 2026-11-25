@@ -72,13 +72,13 @@ window.vaultGeneratorMixin = function vaultGeneratorMixin() {
       // an unfocused document - has to say so next to the button that was
       // pressed, or the user closes on an empty clipboard believing otherwise.
       try {
-        await window.vaultClipboard.copy(policy.label || 'Password', value, {
+        await window.vaultClipboard.copy(policy.label || gettext('Password'), value, {
           transient: true,
           seconds: policy.seconds,
         });
         this.generatorError = '';
       } catch (err) {
-        this.generatorError = 'That value could not be copied.';
+        this.generatorError = gettext('That value could not be copied.');
       }
     },
 

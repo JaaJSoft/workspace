@@ -102,50 +102,28 @@
               :class="notificationLevel() !== 'all' ? 'text-warning' : ''"
               :title="interpolate('{{ notifications_level_title|escapejs }}', { level: notificationLevelLabel() }, true)"
             >
-              <i
-                x-show="notificationLevel() === 'all'"
-                data-lucide="bell"
-                class="w-4 h-4"
-              ></i>
-              <i
-                x-show="notificationLevel() === 'mentions'"
-                data-lucide="at-sign"
-                class="w-4 h-4"
-              ></i>
-              <i
-                x-show="notificationLevel() === 'none'"
-                data-lucide="bell-off"
-                class="w-4 h-4"
-              ></i>
+              {% for level in notification_levels %}
+                <i
+                  x-show="notificationLevel() === '{{ level.value|escapejs }}'"
+                  data-lucide="{{ level.icon }}"
+                  class="w-4 h-4"
+                ></i>
+              {% endfor %}
             </button>
             <ul
               tabindex="0"
               class="dropdown-content menu menu-sm gap-1 bg-base-100 border border-base-300 rounded-box shadow-lg w-56 mt-2 z-50"
             >
-              <li>
-                <a
-                  @click="document.activeElement.blur(); setNotificationLevel('all')"
-                  :class="notificationLevel() === 'all' ? 'menu-active' : ''"
-                >
-                  <i data-lucide="bell" class="w-4 h-4"></i> {% translate "All messages" %}
-                </a>
-              </li>
-              <li>
-                <a
-                  @click="document.activeElement.blur(); setNotificationLevel('mentions')"
-                  :class="notificationLevel() === 'mentions' ? 'menu-active' : ''"
-                >
-                  <i data-lucide="at-sign" class="w-4 h-4"></i> {% translate "Mentions only" %}
-                </a>
-              </li>
-              <li>
-                <a
-                  @click="document.activeElement.blur(); setNotificationLevel('none')"
-                  :class="notificationLevel() === 'none' ? 'menu-active' : ''"
-                >
-                  <i data-lucide="bell-off" class="w-4 h-4"></i> {% translate "Nothing" %}
-                </a>
-              </li>
+              {% for level in notification_levels %}
+                <li>
+                  <a
+                    @click="document.activeElement.blur(); setNotificationLevel('{{ level.value|escapejs }}')"
+                    :class="notificationLevel() === '{{ level.value|escapejs }}' ? 'menu-active' : ''"
+                  >
+                    <i data-lucide="{{ level.icon }}" class="w-4 h-4"></i> {{ level.label }}
+                  </a>
+                </li>
+              {% endfor %}
             </ul>
           </div>
           {# On a phone the menu next to it opens the info too; the name needs the room. #}
@@ -516,6 +494,7 @@
 {% include "chat/ui/partials/new_conversation_dialog.html" %}
 {% include "chat/ui/partials/add_member_dialog.html" %}
 {% include "chat/ui/partials/group_avatar_cropper.html" %}
+{{ notification_levels|json_script:"chat-notification-levels-data" }}
 {% if ai_enabled %}
   {% include "chat/ui/partials/agent_goal_dialog.html" %}
 {% endif %}

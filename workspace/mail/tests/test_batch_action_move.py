@@ -5,6 +5,7 @@ original folder, otherwise DB and IMAP go out of sync: the next reconcile
 would soft-delete the message that's still actually present on the server.
 """
 
+import uuid
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -250,3 +251,42 @@ class BatchMoveMergeTests(APITestCase):
         move.assert_not_called()
         msg.refresh_from_db()
         self.assertEqual(msg.folder_id, self.corbeille.pk)
+
+
+class BatchMoveForeignTargetTests(BatchMoveMixin, TestCase):
+    """Another user's folder answers exactly like a folder that does not exist."""
+
+    def _move_to(self, target_uuid):
+        return self.client.post(
+            "/api/v1/mail/messages/batch-action",
+            {
+                "message_ids": [str(self.msg.uuid)],
+                "action": "move",
+                "target_folder_id": str(target_uuid),
+            },
+            format="json",
+        )
+
+    def test_foreign_target_answers_like_an_unknown_one(self):
+        other = User.objects.create_user(username="moveother", password="pass")
+        other_account = MailAccount.objects.create(
+            owner=other,
+            email="other@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="other@example.com",
+        )
+        foreign = MailFolder.objects.create(
+            account=other_account, name="Archive", folder_type="archive"
+        )
+
+        hidden = self._move_to(foreign.uuid)
+        unknown = self._move_to(uuid.uuid4())
+
+        self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            (hidden.status_code, hidden.content),
+            (unknown.status_code, unknown.content),
+        )
+        self.msg.refresh_from_db()
+        self.assertEqual(self.msg.folder_id, self.inbox.pk)

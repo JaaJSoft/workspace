@@ -9,12 +9,14 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
 
-function loadPage() {
+function loadPage({ reply = { ok: true } } = {}) {
   const listeners = {};
   const saved = [];
+  const puts = [];
   const timers = [];
   const ctx = loadScripts(
     [
+      'workspace/core/static/core/js/user_settings.js',
       'workspace/files/ui/static/files/ui/js/preferences.js',
       'workspace/files/ui/static/files/ui/js/table.js',
     ],
@@ -32,14 +34,16 @@ function loadPage() {
       getCSRFToken: () => 'token',
       fetch: async (url, options) => {
         saved.push(JSON.parse(options.body).value);
-        return { ok: true };
+        puts.push({ url, method: options.method });
+        if (reply instanceof Error) throw reply;
+        return reply;
       },
       setTimeout: (fn) => { timers.push(fn); return timers.length; },
       clearTimeout: () => {},
     },
   );
   const flushTimers = () => { while (timers.length) timers.shift()(); };
-  return { ctx, saved, flushTimers };
+  return { ctx, saved, puts, flushTimers };
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -65,4 +69,15 @@ test('a popover change keeps the view mode and tile size the toolbar saved', asy
   assert.equal(last.mosaicTileSize, 5);
   assert.equal(toolbar.viewMode, 'mosaic');
   assert.equal(toolbar.mosaicTileSize, 5);
+});
+
+test('saveFilePrefs puts the whole object and resolves to whether the server took it', async () => {
+  const { ctx, saved, puts } = loadPage();
+  ctx.updateFilePrefs({ defaultSort: 'size' });
+  assert.equal(await ctx.saveFilePrefs(), true);
+  assert.deepEqual(puts, [{ url: '/api/v1/settings/files/preferences', method: 'PUT' }]);
+  assert.equal(saved.at(-1).defaultSort, 'size');
+
+  assert.equal(await loadPage({ reply: { ok: false, status: 400 } }).ctx.saveFilePrefs(), false);
+  assert.equal(await loadPage({ reply: new TypeError('offline') }).ctx.saveFilePrefs(), false);
 });

@@ -5,28 +5,27 @@
 // list always reflects the server, and a slow poll covers a missed event.
 
 const IMPORTS_API = '/api/v1/imports';
-const ACTIVE_STATUSES = ['pending', 'running'];
 const JOBS_POLL_MS = 10000;
 
-// What each data kind means to the user; providers declare which ones they serve.
-const KIND_LABELS = {
-  files: { name: gettext('Files'), description: gettext('Folders and files, with their dates.') },
-  contacts: { name: gettext('Contacts'), description: gettext('Address books, with their contact groups as lists.') },
-};
+function readJson(id, fallback) {
+  const el = document.getElementById(id);
+  if (!el) return fallback;
+  try { return JSON.parse(el.textContent); } catch (e) { return fallback; }
+}
 
-const STATUS_LABELS = {
-  pending: pgettext('import status', 'pending'),
-  running: pgettext('import status', 'running'),
-  completed: pgettext('import status', 'completed'),
-  failed: pgettext('import status', 'failed'),
-  cancelled: pgettext('import status', 'cancelled'),
-};
+// The kinds the server can import, in run order, with what each means to the
+// user; providers declare which ones they serve.
+const IMPORT_KINDS = readJson('import-kinds-data', []);
+const JOB_STATUSES = readJson('import-job-statuses-data', []);
+const CONFLICT_POLICIES = readJson('import-conflict-policies-data', []);
 
-const CONFLICT_LABELS = {
-  rename: gettext('keep both'),
-  skip: gettext('keep mine'),
-  replace: gettext('replace mine'),
-};
+function importKind(kind) {
+  return IMPORT_KINDS.find((k) => k.kind === kind);
+}
+
+function jobStatus(value) {
+  return JOB_STATUSES.find((s) => s.value === value);
+}
 
 function countLabel(translated, n) {
   return interpolate(translated, { count: n }, true);
@@ -82,12 +81,6 @@ const PROVIDER_HINTS = {
     secret: gettext('Password or app token for that account.'),
   },
 };
-
-function readJson(id, fallback) {
-  const el = document.getElementById(id);
-  if (!el) return fallback;
-  try { return JSON.parse(el.textContent); } catch (e) { return fallback; }
-}
 
 async function api(path, { method = 'GET', body } = {}) {
   const headers = { 'X-CSRFToken': getCSRFToken() };
@@ -236,11 +229,12 @@ window.importsApp = function importsApp() {
     },
 
     hasActiveJobs() {
-      return this.jobs.some((j) => ACTIVE_STATUSES.includes(j.status));
+      return this.jobs.some((j) => this.isActive(j));
     },
 
     isActive(job) {
-      return ACTIVE_STATUSES.includes(job.status);
+      const known = jobStatus(job.status);
+      return !!known && known.active;
     },
 
     quotaLabel(conn) {
@@ -257,11 +251,13 @@ window.importsApp = function importsApp() {
     },
 
     statusLabel(status) {
-      return STATUS_LABELS[status] || status;
+      const known = jobStatus(status);
+      return known ? known.label : status;
     },
 
     conflictLabel(policy) {
-      return CONFLICT_LABELS[policy] || policy || '';
+      const known = CONFLICT_POLICIES.find((p) => p.value === policy);
+      return known ? known.summary : policy || '';
     },
 
     stopLabel(job) {
@@ -359,7 +355,7 @@ window.importsApp = function importsApp() {
           if (!parts.length) return '';
           const text = parts.join(' · ');
           if (!labelled) return text;
-          const name = (KIND_LABELS[kind] || { name: kind }).name;
+          const name = (importKind(kind) || { name: kind }).name;
           return interpolate(gettext('%(kind)s: %(summary)s'), { kind: name, summary: text }, true);
         })
         .filter(Boolean)
@@ -573,16 +569,18 @@ window.importsApp = function importsApp() {
       if (!conn) return [];
       const provider = this.providers.find((p) => p.slug === conn.provider);
       const kinds = provider ? provider.kinds : [];
-      // Known kinds show in the step 3 / run order (KIND_LABELS); anything
+      // Known kinds show in the step 3 / run order (IMPORT_KINDS); anything
       // else keeps the order the provider declared it in.
-      const known = Object.keys(KIND_LABELS);
+      const known = IMPORT_KINDS.map((k) => k.kind);
       const ordered = [
         ...known.filter((kind) => kinds.includes(kind)),
         ...kinds.filter((kind) => !known.includes(kind)),
       ];
       return ordered.map((kind) => ({
+        name: kind,
+        description: '',
+        ...importKind(kind),
         kind,
-        ...(KIND_LABELS[kind] || { name: kind, description: '' }),
       }));
     },
 

@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Rows of the folder menu. The panel around them is
   ui/partials/context_menu_panel.html, included from browser_folder_menu.html.
@@ -7,9 +8,9 @@
     class="menu-title text-xs truncate px-3 py-1"
     x-text="folderMenu.folder ? folderMenu.folder.name : ''"
   ></li>
-  {% include "ui/partials/context_menu_item.html" with icon="folder-open" label="Open" click="openFolderFromRow(folderMenu.folder); closeFolderMenu()" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="pencil" label="Rename" click="renameFolder(folderMenu.folder)" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="folder-open" label=_("Open") click="openFolderFromRow(folderMenu.folder); closeFolderMenu()" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="pencil" label=_("Rename") click="renameFolder(folderMenu.folder)" only %}
   <li class="mt-0.5 pt-0.5 border-t border-base-300">
-    {% include "ui/partials/context_menu_item.html" with bare=1 icon="trash-2" label="Delete folder" tone="error" click="deleteFolder(folderMenu.folder); closeFolderMenu()" only %}
+    {% include "ui/partials/context_menu_item.html" with bare=1 icon="trash-2" label=_("Delete folder") tone="error" click="deleteFolder(folderMenu.folder); closeFolderMenu()" only %}
   </li>
 </ul>

@@ -1158,7 +1158,7 @@ window.fileBrowser = function fileBrowser() {
 
     // Hands `selectedFile` back to whoever owned it before the picker.
     // Every dismissal path (Done, backdrop, Escape) routes here, so it
-    // must stay idempotent — the guard is what makes it so.
+    // must stay idempotent - the guard is what makes it so.
     onTagPickerClosed() {
       if (!this._tagPickerOpen) return;
       this._tagPickerOpen = false;

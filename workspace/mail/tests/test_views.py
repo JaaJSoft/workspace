@@ -119,19 +119,19 @@ class MailAccountSignatureApiTests(APITestCase):
 
     def test_patch_keeps_sync_state_written_while_it_ran(self):
         """A sync landing between the PATCH's read and its write survives it."""
-        from workspace.mail.views.accounts import MailAccountDetailView
+        from workspace.mail.views import accounts as account_views
 
-        load = MailAccountDetailView._get_account
+        load = account_views.reachable_account
 
-        def load_then_sync_lands(view, request, uuid):
-            account = load(view, request, uuid)
+        def load_then_sync_lands(user, uuid):
+            account = load(user, uuid)
             MailAccount.objects.filter(pk=account.pk).update(
                 last_sync_error="Some folders failed to sync.",
                 imap_delimiter=".",
             )
             return account
 
-        with patch.object(MailAccountDetailView, "_get_account", load_then_sync_lands):
+        with patch.object(account_views, "reachable_account", load_then_sync_lands):
             resp = self.client.patch(
                 self.url,
                 data=orjson.dumps({"display_name": "New Name", "password": "pw"}),

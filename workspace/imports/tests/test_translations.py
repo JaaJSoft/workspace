@@ -134,3 +134,15 @@ class ApiMessageLanguageTests(TestCase):
             response.json()["detail"],
             "Seul un import échoué ou annulé peut être relancé.",
         )
+
+    def test_a_refused_removal_answers_in_the_users_language(self):
+        ImportJob.objects.create(
+            connection=self.conn, kinds=["files"], status=ImportJob.Status.RUNNING
+        )
+        response = self.client.delete(f"/api/v1/imports/connections/{self.conn.pk}")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["detail"],
+            "Un import est en cours sur cette connexion : arrêtez-le avant de la "
+            "supprimer.",
+        )

@@ -19,7 +19,7 @@ class UnauthenticatedAccessTests(PlaywrightTestCase):
     """Hitting a protected URL anonymously lands on /login?next=..."""
 
     def test_files_redirects_anonymous_to_login_with_next(self):
-        # No login_as — visit a protected URL anonymously.
+        # No login_as - visit a protected URL anonymously.
         self.page.goto(f"{self.live_server_url}/files")
         # Browsers decode %2F back to /, so match on either form.
         expect(self.page).to_have_url(

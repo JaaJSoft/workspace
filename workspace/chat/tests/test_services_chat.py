@@ -163,7 +163,7 @@ class NotifyNewMessageTests(TestCase):
         mock_sse.reset_mock()
         with self.captureOnCommitCallbacks(execute=True):
             notify_new_message(self.conv, self.author, "second")
-        # SSE still fires on the merge path — recipients need the bell
+        # SSE still fires on the merge path - recipients need the bell
         # content refresh even when the notif count is unchanged.
         self.assertEqual(mock_sse.call_count, 2)
 
@@ -241,7 +241,7 @@ class NotifyNewMessageTests(TestCase):
 
     def test_bot_members_get_no_notification(self, mock_push, mock_sse):
         """A bot never reads its notifications, so a row created for one is
-        never marked read and never pruned — it must not be created at all."""
+        never marked read and never pruned - it must not be created at all."""
         from workspace.ai.models import BotProfile
 
         bot = User.objects.create_user(username="notifbot", password="p")
@@ -276,7 +276,7 @@ class NotifyNewMessageTests(TestCase):
             )
 
         self.assertFalse(Notification.objects.filter(recipient=self.alice).exists())
-        # Even a direct mention stays silent — 'none' means none.
+        # Even a direct mention stays silent - 'none' means none.
         self.assertTrue(Notification.objects.filter(recipient=self.bob).exists())
 
     def test_level_mentions_skips_ordinary_messages(self, mock_push, mock_sse):

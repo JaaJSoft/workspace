@@ -11,8 +11,7 @@ from .base import DEBUG
 METRICS_USER = os.getenv("METRICS_USER", "").strip()
 METRICS_PASSWORD = os.getenv("METRICS_PASSWORD", "").strip()
 
-# Par défaut on loggue vers stdout, pour que l'orchestrateur (Docker/K8s)
-# collecte les logs. Le niveau peut être contrôlé via l'env DJANGO_LOG_LEVEL.
+# Logs go to stdout so the orchestrator (Docker, Kubernetes) collects them.
 DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
 
 LOGGING = {

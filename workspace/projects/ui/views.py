@@ -22,6 +22,7 @@ from workspace.projects.models import (
     ProjectMember,
     ProjectNotificationLevel,
     Sprint,
+    Task,
     TaskAttachment,
     TaskStatus,
 )
@@ -230,6 +231,10 @@ def _base_context(request, project, role, view):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
+        "priorities_data": [
+            {"value": value, "label": str(label)}
+            for value, label in Task.Priority.choices
+        ],
         # In both render paths: the sidebar sits outside #project-content,
         # so every swap carries fresh counts for the shell to pick up after
         # a task moved in or out of the backlog.
@@ -967,6 +972,7 @@ def settings_view(request, project_uuid):
         "archived": project.is_archived,
     }
     context["board_models"] = BOARD_MODELS
+    context["retention_presets"] = Project.DONE_RETENTION_PRESETS
     return _render_project_view(request, context)
 
 

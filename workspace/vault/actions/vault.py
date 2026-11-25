@@ -9,6 +9,8 @@ the caller *may do*, not what the row *is*; the client shows the one matching
 ``is_favorite``, which it already holds.
 """
 
+from django.utils.translation import gettext_lazy as _
+
 from . import VaultTargetActionRegistry
 from .base import ActionCategory, BaseVaultTargetAction
 
@@ -16,7 +18,7 @@ from .base import ActionCategory, BaseVaultTargetAction
 @VaultTargetActionRegistry.register
 class RenameVaultAction(BaseVaultTargetAction):
     id = "rename"
-    label = "Name and description"
+    label = _("Name and description")
     icon = "pencil"
     category = ActionCategory.EDIT
 
@@ -24,7 +26,7 @@ class RenameVaultAction(BaseVaultTargetAction):
 @VaultTargetActionRegistry.register
 class SetVaultAppearanceAction(BaseVaultTargetAction):
     id = "set_appearance"
-    label = "Icon and colour"
+    label = _("Icon and colour")
     icon = "palette"
     category = ActionCategory.EDIT
 
@@ -32,7 +34,7 @@ class SetVaultAppearanceAction(BaseVaultTargetAction):
 @VaultTargetActionRegistry.register
 class FavoriteVaultAction(BaseVaultTargetAction):
     id = "favorite"
-    label = "Add to favourites"
+    label = _("Add to favourites")
     icon = "star"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -41,7 +43,7 @@ class FavoriteVaultAction(BaseVaultTargetAction):
 @VaultTargetActionRegistry.register
 class UnfavoriteVaultAction(BaseVaultTargetAction):
     id = "unfavorite"
-    label = "Remove from favourites"
+    label = _("Remove from favourites")
     icon = "star-off"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -53,7 +55,7 @@ class UnfavoriteVaultAction(BaseVaultTargetAction):
 # addresses several vaults at once.
 class DeleteVaultAction(BaseVaultTargetAction):
     id = "delete"
-    label = "Delete vault"
+    label = _("Delete vault")
     icon = "trash-2"
     category = ActionCategory.DANGER
     css_class = "text-error"

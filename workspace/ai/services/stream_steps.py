@@ -7,7 +7,7 @@ active member of the conversation, then wakes their SSE stream via
 same call ending: a round runs independent tools together, so which ones
 are still in flight cannot be read off the order the steps arrived in.
 
-Mirrors the call-signaling mailbox pattern: nothing here is durable — a
+Mirrors the call-signaling mailbox pattern: nothing here is durable - a
 lost step only means the progress label lags until the next one (or the
 final message) arrives, so failures must never abort the generation they
 report on.

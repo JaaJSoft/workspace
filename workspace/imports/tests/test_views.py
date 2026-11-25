@@ -1,9 +1,13 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
+from workspace.imports.importers.base import importer_registry
+from workspace.imports.importers.files import FilesImportOptionsSerializer
 from workspace.imports.models import ImportConnection, ImportJob
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -13,6 +17,9 @@ class ImportsPageTests(TestCase):
         self.user = User.objects.create_user(
             username="alice", password="pw", is_staff=True
         )
+
+    def tearDown(self):
+        cache.clear()
 
     def test_requires_login(self):
         response = self.client.get(reverse("imports_ui:index"))
@@ -75,6 +82,46 @@ class ImportsPageTests(TestCase):
         response = self.client.get(reverse("imports_ui:index"))
         self.assertEqual(response.context["groups"], [{"id": team.id, "name": "Team"}])
         self.assertContains(response, 'id="groups-data"')
+
+    def test_embeds_the_lists_the_page_script_labels(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("imports_ui:index"))
+        context = response.context
+        self.assertEqual(
+            [k["kind"] for k in context["kinds"]], importer_registry.kinds()
+        )
+        self.assertEqual(
+            {s["value"]: s["active"] for s in context["job_statuses"]},
+            {
+                "pending": True,
+                "running": True,
+                "completed": False,
+                "failed": False,
+                "cancelled": False,
+            },
+        )
+        on_conflict = FilesImportOptionsSerializer().fields["on_conflict"]
+        self.assertEqual(
+            {p["value"] for p in context["conflict_policies"]},
+            set(on_conflict.choices),
+        )
+        for data_id in (
+            "import-kinds-data",
+            "import-job-statuses-data",
+            "import-conflict-policies-data",
+        ):
+            self.assertContains(response, f'id="{data_id}"')
+        self.assertContains(response, '<option value="skip">Keep mine')
+
+    def test_embedded_labels_follow_the_users_language(self):
+        set_setting(self.user, "core", "language", "fr")
+        self.client.force_login(self.user)
+        context = self.client.get(reverse("imports_ui:index")).context
+        self.assertEqual(context["kinds"][0]["name"], "Fichiers")
+        statuses = {s["value"]: s["label"] for s in context["job_statuses"]}
+        self.assertEqual(statuses["running"], "en cours")
+        summaries = {p["value"]: p["summary"] for p in context["conflict_policies"]}
+        self.assertEqual(summaries["rename"], "garder les deux")
 
 
 class UserMenuEntryTests(TestCase):

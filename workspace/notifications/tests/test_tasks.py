@@ -1,6 +1,6 @@
 """Tests for workspace.notifications.tasks.send_push_notification.
 
-pywebpush.webpush is patched out — the suite never makes real HTTP calls.
+pywebpush.webpush is patched out - the suite never makes real HTTP calls.
 """
 
 from unittest import mock

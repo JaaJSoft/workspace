@@ -20,6 +20,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import (
     mark_source_read,
 )
+from workspace.users.queries import pickable_users
 from workspace.users.services.settings import get_setting
 
 from ..models import Calendar, Event, EventMember, Poll, PollInvitee, PollSlot, PollVote
@@ -462,7 +463,8 @@ class PollInviteView(APIView):
 
         user_ids = ser.validated_data["user_ids"]
         newly_invited = list(
-            User.objects.filter(id__in=user_ids)
+            pickable_users()
+            .filter(id__in=user_ids)
             .exclude(id=request.user.id)
             .exclude(poll_invitations__poll=poll)
         )

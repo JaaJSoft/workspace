@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   The standalone generator, reached from the sidebar: draw a password and copy
   it, without creating an entry to hold it.
@@ -11,7 +12,7 @@
 <template x-if="generatorOpen">
   <div class="modal modal-open">
     <div class="modal-box max-w-md">
-      {% include "ui/partials/dialog_header.html" with icon="dices" title="Password generator" close_expr="closeGeneratorDialog()" only %}
+      {% include "ui/partials/dialog_header.html" with icon="dices" title=_("Password generator") close_expr="closeGeneratorDialog()" only %}
 
       {% comment %}
         Inside the dialog, not in the page's own alert: the backdrop covers
@@ -33,7 +34,7 @@
           class="btn btn-sm btn-ghost"
           @click="closeGeneratorDialog()"
         >
-          Close
+          {% translate "Close" %}
         </button>
       </div>
     </div>

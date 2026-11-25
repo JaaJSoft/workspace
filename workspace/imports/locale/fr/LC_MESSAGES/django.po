@@ -583,3 +583,62 @@ msgstr "Lancer l’import"
 #, python-format
 msgid "%(summary)s - favorites and tags not imported: %(reason)s"
 msgstr "%(summary)s - favoris et étiquettes non importés : %(reason)s"
+
+#: services/connections.py
+#, python-format
+msgid "%(provider)s does not provide contacts."
+msgstr "%(provider)s ne fournit pas de contacts."
+
+#: services/connections.py
+msgid ""
+"An import is running on this connection - stop it before removing the "
+"connection."
+msgstr ""
+"Un import est en cours sur cette connexion : arrêtez-le avant de la "
+"supprimer."
+
+#: importers/files.py
+msgid "Folders and files, with their dates."
+msgstr "Dossiers et fichiers, avec leurs dates."
+
+#: importers/contacts.py
+msgid "Address books, with their contact groups as lists."
+msgstr ""
+"Carnets d’adresses, avec leurs groupes de contacts sous forme de listes."
+
+#: models.py
+msgctxt "import status"
+msgid "pending"
+msgstr "en attente"
+
+#: models.py
+msgctxt "import status"
+msgid "running"
+msgstr "en cours"
+
+#: models.py
+msgctxt "import status"
+msgid "completed"
+msgstr "terminé"
+
+#: models.py
+msgctxt "import status"
+msgid "failed"
+msgstr "échoué"
+
+#: models.py
+msgctxt "import status"
+msgid "cancelled"
+msgstr "annulé"
+
+#: importers/files.py
+msgid "keep both"
+msgstr "garder les deux"
+
+#: importers/files.py
+msgid "keep mine"
+msgstr "garder le mien"
+
+#: importers/files.py
+msgid "replace mine"
+msgstr "remplacer le mien"

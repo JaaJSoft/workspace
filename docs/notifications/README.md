@@ -81,4 +81,4 @@ Push is off until the instance has a VAPID key pair. Generate one with
 - The Django admin lists notifications and push subscriptions; the *Send test
   push notification* action on a subscription checks delivery end to end.
 
-The API is documented in the [Swagger UI](/schema/swagger-ui/).
+The API is documented in the [Swagger UI](/api/schema/swagger-ui).

@@ -10,7 +10,8 @@ from rest_framework.views import APIView
 
 from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import MailAccount, MailLabel, MailMessage, MailMessageLabel
+from ..models import MailLabel, MailMessageLabel
+from ..queries import reachable_account, user_labels, user_messages
 from ..serializers import (
     MailLabelAssignSerializer,
     MailLabelCreateSerializer,
@@ -33,16 +34,18 @@ class MailLabelListView(APIView):
         account_id = request.query_params.get("account")
         if not account_id:
             return Response(
-                {"detail": "account query parameter is required"},
+                {
+                    "detail": _("The %(parameter)s query parameter is required.")
+                    % {"parameter": "account"}
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         account_uuid = parse_uuid_or_none(account_id)
         if account_uuid is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        try:
-            account = MailAccount.objects.get(uuid=account_uuid, owner=request.user)
-        except MailAccount.DoesNotExist:
+        account = reachable_account(request.user, account_uuid)
+        if account is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         labels = MailLabel.objects.filter(account=account)
@@ -53,12 +56,8 @@ class MailLabelListView(APIView):
         ser = MailLabelCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        try:
-            account = MailAccount.objects.get(
-                uuid=ser.validated_data["account_id"],
-                owner=request.user,
-            )
-        except MailAccount.DoesNotExist:
+        account = reachable_account(request.user, ser.validated_data["account_id"])
+        if account is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         if MailLabel.objects.filter(
@@ -89,13 +88,12 @@ class MailLabelDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_label(self, request, uuid):
-        try:
-            label = MailLabel.objects.select_related("account").get(uuid=uuid)
-        except MailLabel.DoesNotExist:
-            return None
-        if label.account.owner != request.user:
-            return None
-        return label
+        return (
+            user_labels(request.user)
+            .select_related("account")
+            .filter(uuid=uuid)
+            .first()
+        )
 
     @extend_schema(summary="Update a label", request=MailLabelUpdateSerializer)
     def patch(self, request, uuid):
@@ -149,13 +147,12 @@ class MailMessageLabelView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_message(self, request, uuid):
-        try:
-            msg = MailMessage.objects.select_related("account").get(uuid=uuid)
-        except MailMessage.DoesNotExist:
-            return None
-        if msg.account.owner != request.user:
-            return None
-        return msg
+        return (
+            user_messages(request.user)
+            .select_related("account")
+            .filter(uuid=uuid)
+            .first()
+        )
 
     @extend_schema(
         summary="Assign labels to a message", request=MailLabelAssignSerializer
@@ -207,7 +204,7 @@ class MailMessageLabelView(APIView):
             )
         )
         # Mirror post(): reject unknown / cross-account label ids instead of
-        # silently ignoring them — keeps the API symmetrical and helps catch
+        # silently ignoring them - keeps the API symmetrical and helps catch
         # client-side bugs early.
         if len(affected_labels) != len(ser.validated_data["label_ids"]):
             return Response(

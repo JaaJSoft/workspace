@@ -1,7 +1,7 @@
 """Tests for workspace.chat.services.typing.
 
 NOTE: patches replace the ``time`` module reference inside
-``workspace.chat.services.typing`` — patching ``time.time`` globally would
+``workspace.chat.services.typing`` - patching ``time.time`` globally would
 also affect Django's cache backend, which uses it for TTL computation.
 """
 

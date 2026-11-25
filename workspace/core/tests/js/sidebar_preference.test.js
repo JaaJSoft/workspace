@@ -4,16 +4,16 @@
 // the components write back through the settings API.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
-const SCRIPT = 'workspace/core/static/core/js/sidebar_preference.js';
+const SCRIPTS = ['workspace/core/static/core/js/user_settings.js', 'workspace/core/static/core/js/sidebar_preference.js'];
 
 function load({ embedded, fetch } = {}) {
   const document = {
     getElementById: (id) =>
       id === 'sidebar-collapsed-data' && embedded !== undefined ? { textContent: embedded } : null,
   };
-  return loadScript(SCRIPT, { document, fetch, getCSRFToken: () => 'csrf-token' });
+  return loadScripts(SCRIPTS, { document, fetch, getCSRFToken: () => 'csrf-token' });
 }
 
 test('initial() is the value the shell rendered', () => {

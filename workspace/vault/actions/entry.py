@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from ..models import VaultRole
 from . import VaultActionRegistry
 from .base import ActionCategory, BaseVaultAction, RequiresFieldMixin
@@ -6,7 +8,7 @@ from .base import ActionCategory, BaseVaultAction, RequiresFieldMixin
 @VaultActionRegistry.register
 class EditEntryAction(BaseVaultAction):
     id = "edit"
-    label = "Edit"
+    label = _("Edit")
     icon = "pencil"
     category = ActionCategory.EDIT
 
@@ -14,7 +16,7 @@ class EditEntryAction(BaseVaultAction):
 @VaultActionRegistry.register
 class CopyUsernameAction(RequiresFieldMixin, BaseVaultAction):
     id = "copy_username"
-    label = "Copy username"
+    label = _("Copy username")
     icon = "user"
     category = ActionCategory.CLIPBOARD
     requires_field = "username"
@@ -23,7 +25,7 @@ class CopyUsernameAction(RequiresFieldMixin, BaseVaultAction):
 @VaultActionRegistry.register
 class CopyPasswordAction(RequiresFieldMixin, BaseVaultAction):
     id = "copy_password"
-    label = "Copy password"
+    label = _("Copy password")
     icon = "key-round"
     category = ActionCategory.CLIPBOARD
     requires_field = "password"
@@ -32,7 +34,7 @@ class CopyPasswordAction(RequiresFieldMixin, BaseVaultAction):
 @VaultActionRegistry.register
 class CopyTotpAction(RequiresFieldMixin, BaseVaultAction):
     id = "copy_totp"
-    label = "Copy authenticator code"
+    label = _("Copy authenticator code")
     icon = "timer"
     category = ActionCategory.CLIPBOARD
     requires_field = "totp"
@@ -41,7 +43,7 @@ class CopyTotpAction(RequiresFieldMixin, BaseVaultAction):
 @VaultActionRegistry.register
 class OpenUriAction(RequiresFieldMixin, BaseVaultAction):
     id = "open_uri"
-    label = "Open website"
+    label = _("Open website")
     icon = "external-link"
     category = ActionCategory.EDIT
     requires_field = "uri"
@@ -50,7 +52,7 @@ class OpenUriAction(RequiresFieldMixin, BaseVaultAction):
 @VaultActionRegistry.register
 class MoveEntryAction(BaseVaultAction):
     id = "move"
-    label = "Move to folder"
+    label = _("Move to folder")
     icon = "folder"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -59,7 +61,7 @@ class MoveEntryAction(BaseVaultAction):
 @VaultActionRegistry.register
 class SetTagsAction(BaseVaultAction):
     id = "set_tags"
-    label = "Edit tags"
+    label = _("Edit tags")
     icon = "tag"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -68,7 +70,7 @@ class SetTagsAction(BaseVaultAction):
 @VaultActionRegistry.register
 class FavoriteAction(BaseVaultAction):
     id = "favorite"
-    label = "Add to favourites"
+    label = _("Add to favourites")
     icon = "star"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -77,7 +79,7 @@ class FavoriteAction(BaseVaultAction):
 @VaultActionRegistry.register
 class UnfavoriteAction(BaseVaultAction):
     id = "unfavorite"
-    label = "Remove from favourites"
+    label = _("Remove from favourites")
     icon = "star-off"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -86,7 +88,7 @@ class UnfavoriteAction(BaseVaultAction):
 @VaultActionRegistry.register
 class TrashEntryAction(BaseVaultAction):
     id = "trash"
-    label = "Move to trash"
+    label = _("Move to trash")
     icon = "trash-2"
     category = ActionCategory.DANGER
     css_class = "text-error"
@@ -96,7 +98,7 @@ class TrashEntryAction(BaseVaultAction):
 @VaultActionRegistry.register
 class RestoreEntryAction(BaseVaultAction):
     id = "restore"
-    label = "Restore"
+    label = _("Restore")
     icon = "undo-2"
     category = ActionCategory.ORGANIZE
     only_when_trashed = True
@@ -106,7 +108,7 @@ class RestoreEntryAction(BaseVaultAction):
 @VaultActionRegistry.register
 class DeleteEntryForeverAction(BaseVaultAction):
     id = "delete_forever"
-    label = "Delete permanently"
+    label = _("Delete permanently")
     icon = "trash-2"
     category = ActionCategory.DANGER
     css_class = "text-error"

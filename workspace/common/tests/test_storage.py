@@ -401,6 +401,13 @@ class BlobStorageContract:
             [e.name for e in self.storage.scan("files/users/alice")], ["doc.txt"]
         )
 
+    def test_replace_keeps_the_bytes_as_they_are(self):
+        payload = bytes(range(256)) + b"\r\n\n\x1a"
+
+        name = self.storage.replace("files/users/alice/blob.bin", ContentFile(payload))
+
+        self.assertEqual(_read(self.storage, name), payload)
+
     def test_replace_takes_an_upload_spooled_to_disk(self):
         self.save("files/users/alice/doc.txt", b"old")
         upload = _spooled_upload(b"new")

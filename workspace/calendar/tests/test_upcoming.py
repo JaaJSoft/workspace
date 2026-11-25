@@ -1,4 +1,4 @@
-"""Tests for ``get_upcoming_for_user`` — dashboard "today" event widget.
+"""Tests for ``get_upcoming_for_user`` - dashboard "today" event widget.
 
 The function should return events that are happening today AND not yet
 finished. That covers three buckets:
@@ -47,7 +47,7 @@ class GetUpcomingForUserTests(TestCase):
     # ── ongoing ────────────────────────────────────────────────────
 
     def test_ongoing_event_included(self):
-        """Started 30min ago, ends in 1h — must appear."""
+        """Started 30min ago, ends in 1h - must appear."""
         self._make(
             "Ongoing meeting",
             start=self.now - timedelta(minutes=30),
@@ -58,7 +58,7 @@ class GetUpcomingForUserTests(TestCase):
         self.assertEqual(result[0].title, "Ongoing meeting")
 
     def test_multiday_event_spanning_today_included(self):
-        """Started yesterday, ends tomorrow — still ongoing today."""
+        """Started yesterday, ends tomorrow - still ongoing today."""
         self._make(
             "Conference",
             start=self.now - timedelta(days=1),
@@ -86,7 +86,7 @@ class GetUpcomingForUserTests(TestCase):
     # ── excluded ───────────────────────────────────────────────────
 
     def test_already_finished_today_excluded(self):
-        """Started this morning, finished an hour ago — not relevant anymore."""
+        """Started this morning, finished an hour ago - not relevant anymore."""
         self._make(
             "Done",
             start=self.now - timedelta(hours=3),

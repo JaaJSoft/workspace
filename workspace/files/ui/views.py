@@ -383,7 +383,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         "shortcut_count": 0,
         "total_size": 0,
     }
-    # Tags actually present in this listing — the toolbar filter offers only
+    # Tags actually present in this listing - the toolbar filter offers only
     # those, so it never lists tags that would match nothing here.
     listing_tags = {}
     for node in nodes:
@@ -633,7 +633,7 @@ def properties(request, uuid):
             FileShareLink.objects.filter(file=file_obj).order_by("-created_at")
         )
 
-    # Tags — only personal files can be tagged (FileTagView scopes writes to
+    # Tags - only personal files can be tagged (FileTagView scopes writes to
     # user_files_qs), so shared/group items don't get the tag editor.
     can_tag = file_obj.owner_id == request.user.id and file_obj.group_id is None
     file_tags = []

@@ -6,8 +6,6 @@
 {% translate "Merge people" as merge_title %}
 {% translate "Pick the people who are the same person as this one. Their photos move here, and the people you pick disappear from the list." as merge_subtitle %}
 {% translate "This person" as this_person_label %}
-{% translate "%(count)s photo" as photo_count_one %}
-{% translate "%(count)s photos" as photo_count_other %}
 {% translate "Merge %(count)s people" as merge_count_label %}
 {% translate "Merge" as merge_label %}
 <dialog id="merge-clusters-dialog" class="modal">
@@ -79,7 +77,7 @@
           ></span>
           <span
             class="text-xs text-base-content/60 tabular-nums"
-            x-text="interpolate(cluster.photo_count === 1 ? '{{ photo_count_one|escapejs }}' : '{{ photo_count_other|escapejs }}', { count: cluster.photo_count }, true)"
+            x-text="photosCountLabels.photos(cluster.photo_count)"
           ></span>
           <span
             x-show="isMergeSelected(cluster)"

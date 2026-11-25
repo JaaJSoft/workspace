@@ -49,7 +49,7 @@ class CalendarIndexViewTests(TestCase):
         self.assertEqual(len(data["owned"]), 1)
         self.assertEqual(data["owned"][0]["name"], "Personal")
 
-    # ── prefs — server-rendered to avoid double-fetch on init ──
+    # ── prefs - server-rendered to avoid double-fetch on init ──
     # The view passes the raw dict; the template renders it via |json_script
     # into <script id="calendar-prefs-data" type="application/json">.
 

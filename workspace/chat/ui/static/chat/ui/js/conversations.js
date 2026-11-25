@@ -3,15 +3,20 @@
 // list-level context menu, conversation display helpers (name, avatar,
 // member list).
 
-// Human label for a ConversationMember.NotificationLevel value. Unknown and
-// missing values read as 'all', matching the model default, so a conversation
-// serialized before the field existed does not render a blank menu.
+// ConversationMember.NotificationLevel values with their labels, embedded by
+// the conversation pane.
+function chatNotificationLevels() {
+  const el = document.getElementById('chat-notification-levels-data');
+  return el ? JSON.parse(el.textContent) : [];
+}
+
+// Human label for a notification level. Unknown and missing values read as
+// 'all', matching the model default, so a conversation serialized before the
+// field existed does not render a blank menu.
 function chatNotificationLevelLabel(level) {
-  switch (level) {
-    case 'mentions': return gettext('Mentions only');
-    case 'none': return gettext('Nothing');
-    default: return gettext('All messages');
-  }
+  const levels = chatNotificationLevels();
+  const match = levels.find((l) => l.value === level) || levels.find((l) => l.value === 'all');
+  return match ? match.label : '';
 }
 window.chatNotificationLevelLabel = chatNotificationLevelLabel;
 
@@ -29,7 +34,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
   // an active conversation. Without this, on mobile, `/chat/<uuid>` paints
   // the drawer sidebar visible (because `activeConversation` is still null),
   // then `init()` awaits `selectConversationById`, sets `activeConversation`,
-  // and the `:style` binding finally hides the drawer — visible flash. The
+  // and the `:style` binding finally hides the drawer - visible flash. The
   // flag is consumed in init() right after the conversation is loaded.
   let pendingUuid = null;
   try {
@@ -143,7 +148,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     },
 
     // The full list is server-ordered by -updated_at, but a targeted swap
-    // replaces the row in place — reproduce the ordering by moving the
+    // replaces the row in place - reproduce the ordering by moving the
     // refreshed row to the top of its section. Pinned rows (they carry the
     // draggable attribute) keep their manual pin order.
     _moveConversationItemToTop(uuid) {

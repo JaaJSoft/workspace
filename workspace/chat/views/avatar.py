@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.services.image import SOURCE_TYPES
 
 from ..models import Conversation, ConversationMember
 from ..services import avatar as group_avatar_service
@@ -20,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 AVATAR_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
-AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
 @extend_schema(tags=["Chat - Conversations"])
@@ -86,7 +86,7 @@ class GroupAvatarUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if image.content_type not in AVATAR_ALLOWED_TYPES:
+        if image.content_type not in SOURCE_TYPES:
             return Response(
                 {
                     "errors": [

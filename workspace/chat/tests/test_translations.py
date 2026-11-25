@@ -56,6 +56,22 @@ class ChatPageLanguageTests(TestCase):
         self.assertContains(response, "Search conversations")
         self.assertNotContains(response, "Écrivez un message...")
 
+    def test_notification_levels_are_embedded_in_french(self):
+        set_setting(self.user, "core", "language", "fr")
+        response = self.client.get(f"/chat/{self.conversation.pk}")
+        self.assertEqual(
+            [
+                (level["value"], level["label"])
+                for level in response.context["notification_levels"]
+            ],
+            [
+                ("all", "Tous les messages"),
+                ("mentions", "Mentions uniquement"),
+                ("none", "Rien"),
+            ],
+        )
+        self.assertContains(response, 'id="chat-notification-levels-data"')
+
 
 class NotificationLanguageTests(TestCase):
     def setUp(self):
@@ -197,3 +213,15 @@ class SystemCallLabelTests(TestCase):
         with translation.override("fr"):
             self.assertEqual(_render_system_call_body("active"), "Call started")
             self.assertEqual(_render_system_call_body("ended", 45), "Call ended - 45s")
+
+
+class MemberRoleLabelTests(TestCase):
+    def test_role_labels_follow_the_active_language(self):
+        admin = ConversationMember(role=ConversationMember.Role.ADMIN)
+        member = ConversationMember(role=ConversationMember.Role.MEMBER)
+        with translation.override("fr"):
+            self.assertEqual(admin.get_role_display(), "Administrateur")
+            self.assertEqual(member.get_role_display(), "Membre")
+        with translation.override("en"):
+            self.assertEqual(admin.get_role_display(), "Admin")
+            self.assertEqual(member.get_role_display(), "Member")

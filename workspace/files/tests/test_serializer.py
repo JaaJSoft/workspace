@@ -51,7 +51,7 @@ class FileSerializerIsViewableTests(APITestCase):
 
 
 class FileSerializerCreateTests(APITestCase):
-    """Tests for FileSerializer.create — ensures it delegates to the tree services."""
+    """Tests for FileSerializer.create - ensures it delegates to the tree services."""
 
     def setUp(self):
         self.user = User.objects.create_user(

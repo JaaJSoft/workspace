@@ -250,14 +250,6 @@ msgid "Member"
 msgstr "Membre"
 
 #: ui/static/chat/ui/js/conversations.js
-msgid "Mentions only"
-msgstr "Mentions uniquement"
-
-#: ui/static/chat/ui/js/conversations.js
-msgid "All messages"
-msgstr "Tous les messages"
-
-#: ui/static/chat/ui/js/conversations.js
 msgid "Direct message"
 msgstr "Message privé"
 

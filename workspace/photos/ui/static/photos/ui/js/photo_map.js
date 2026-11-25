@@ -27,12 +27,7 @@ window.photoMapPreference = function photoMapPreference() {
       if (this.savingMapPreference) return;
       this.savingMapPreference = true;
       try {
-        const response = await fetch('/api/v1/settings/photos/show_map', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ value: enabled }),
-        });
-        if (!response.ok) throw new Error(String(response.status));
+        await window.saveUserSetting('photos', 'show_map', enabled);
       } catch (_) {
         this.savingMapPreference = false;
         window.AppAlert.error(gettext('Could not save the preference'));

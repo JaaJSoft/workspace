@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
+from django.utils.translation import gettext
 
 from ..models import Task, TaskStatus
 from .events import move_event_type, record_task_event
@@ -88,7 +89,8 @@ def delete_status(status, *, move_to=None, actor=None):
         )
         if not has_category_sibling:
             raise LastCategoryStatusError(
-                f"Cannot delete the last {status.category} column."
+                gettext("Cannot delete the last %(category)s column.")
+                % {"category": status.get_category_display()}
             )
 
         tasks = list(
@@ -96,10 +98,12 @@ def delete_status(status, *, move_to=None, actor=None):
         )
         if tasks:
             if move_to is None:
-                raise StatusTargetError("Target column required while tasks remain.")
+                raise StatusTargetError(
+                    gettext("Target column required while tasks remain.")
+                )
             if move_to.pk == status.pk or move_to.project_id != project.pk:
                 raise StatusTargetError(
-                    "Target column must be a different column of this project."
+                    gettext("Target column must be a different column of this project.")
                 )
             last = project.tasks.filter(status=move_to).aggregate(last=Max("position"))[
                 "last"

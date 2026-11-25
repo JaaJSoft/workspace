@@ -1,5 +1,5 @@
 /**
- * <user-avatar> — a user's picture, with an initials fallback, an optional
+ * <user-avatar> - a user's picture, with an initials fallback, an optional
  * presence ring and dot, an optional name beside it, and an optional hover
  * card.
  *
@@ -37,7 +37,7 @@
  * hover target. Never write an avatar next to a bare name span - that is the
  * shape this attribute exists to delete.
  *
- * Geometry invariant — the reason the image and the initials cannot drift
+ * Geometry invariant - the reason the image and the initials cannot drift
  * apart: the initials are ALWAYS rendered, and the image sits on top of them,
  * absolutely positioned within the same box. A missing picture removes the
  * image and reveals what was already there; no class is swapped, no box is
@@ -64,7 +64,7 @@
 // RGB against what these classes actually paint in the compiled bundle.
 //
 // Only the palette is shared, not the index into it: this picks by user id,
-// the seeder picks by seed string. They never disagree in practice — a seeded
+// the seeder picks by seed string. They never disagree in practice - a seeded
 // user has a real picture, so this fallback colour is not the one on screen.
 const AVATAR_COLORS = [
   'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500',

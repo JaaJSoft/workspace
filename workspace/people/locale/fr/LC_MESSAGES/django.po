@@ -96,10 +96,6 @@ msgid "New"
 msgstr "Nouveau"
 
 #: ui/templates/people/ui/index.html
-msgid "Export"
-msgstr "Exporter"
-
-#: ui/templates/people/ui/index.html
 #: ui/templates/people/ui/partials/dialogs.html
 msgid "Export contacts"
 msgstr "Exporter des contacts"
@@ -194,10 +190,6 @@ msgstr "Contact : %%(name)s"
 #, python-format
 msgid "List: %%(name)s"
 msgstr "Liste : %%(name)s"
-
-#: ui/templates/people/ui/partials/dialogs.html
-msgid "Everything"
-msgstr "Tout"
 
 #: ui/templates/people/ui/partials/dialogs.html
 msgid ""
@@ -546,3 +538,7 @@ msgstr "Fichier trop volumineux. La taille maximale est de 20 Mo."
 #: views/vcard.py
 msgid "This is not a vCard file."
 msgstr "Ce n’est pas un fichier vCard."
+
+#: views/lists.py
+msgid "A list with this name already exists."
+msgstr "Une liste de ce nom existe déjà."

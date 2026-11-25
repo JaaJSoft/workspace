@@ -1,5 +1,5 @@
 /**
- * <chat-message-group> — the message bubble shell, one implementation for
+ * <chat-message-group> - the message bubble shell, one implementation for
  * both rendering paths (following <user-avatar> / <inline-alert> / <tag-chip>).
  *
  * The SHELL is: the msg-group row (alignment, avatar column, message column),
@@ -7,7 +7,7 @@
  * block, the attachment chip/preview fragments, and the footer line. Compact
  * mode is part of the shell: every density-dependent class is written as an
  * Alpine `:class` binding on `chatPrefs.compactMessageView`, so the element
- * only builds markup and Alpine keeps it reactive — the pending bubble now
+ * only builds markup and Alpine keeps it reactive - the pending bubble now
  * follows compact mode like every other bubble.
  *
  * Server path (chat/ui/partials/message_group.html) writes the element with
@@ -24,7 +24,7 @@
  *     <span slot="footer">12:34</span>
  *   </chat-message-group>
  *
- * Per-message contract — each slot="message" child IS the bubble element
+ * Per-message contract - each slot="message" child IS the bubble element
  * (so server-rendered ids, data-message-uuid and data-body survive into the
  * live DOM for scroll anchors, edits and e2e selectors). The shell:
  *   - styles it as the bubble (colour variant, compact padding),
@@ -32,7 +32,7 @@
  *     (data-reply-uuid / -author / -preview / -thread-root / -deleted),
  *   - replaces its inline JSON script with the attachment block built from
  *     that payload ({media: [{uuid,name,type,is_image}], files:
- *     [{uuid,name,type,size}]}) — the script's position marks where the block
+ *     [{uuid,name,type,size}]}) - the script's position marks where the block
  *     goes; audio players ride along as data-part="audio" children and are
  *     placed between the media grid and the file chips,
  *   - wraps it in the hover-anchor wrapper and moves data-part="after-bubble"
@@ -44,7 +44,7 @@
  *
  * Optimistic path (chatMessagesMixin._injectOptimisticMessage) creates the
  * element at runtime and sets its properties before insertion,
- * <inline-alert>-style — attributes and children are read once at connect:
+ * <inline-alert>-style - attributes and children are read once at connect:
  *
  *   const group = document.createElement('chat-message-group');
  *   group.setAttribute('own', ''); group.setAttribute('pending', '');
@@ -58,7 +58,7 @@
  * Alpine interplay: the element upgrades synchronously on insertion, before
  * Alpine initializes the subtree (both the initial page and alpine-ajax
  * merges insert parsed-but-uninitialized nodes), so slotted directives are
- * moved — never cloned — prior to their first evaluation, and directives the
+ * moved - never cloned - prior to their first evaluation, and directives the
  * shell writes (`:class`, `@click`, x-if avatar templates) initialize with
  * the rest. Re-insertions keep the already-built tree, so an alpine-ajax
  * morph or reparenting never re-runs slot handling.
@@ -87,7 +87,7 @@
   // saveAttachmentToFiles). They come from our own DB, but gate on shape
   // anyway so a malformed payload can never smuggle script into a directive.
   function safeUuid(value) {
-    return typeof value === 'string' && /^[0-9a-fA-F-]{1,36}$/.test(value) ? value : null;
+    return window.isValidUuid(value) ? value : null;
   }
 
   class ChatMessageGroup extends HTMLElement {

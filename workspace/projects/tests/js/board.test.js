@@ -265,6 +265,7 @@ test('activeFilterCount counts panel filters and ignores the search box', () => 
 test('priority and status filter chips resolve their display name and color', () => {
   const board = panelBoard();
   board.statuses = [{ uuid: 's1', name: 'Doing', color: '#123456' }];
+  board.priorities = [{ value: 'high', label: 'High' }];
   board.filters.priority = 'high';
   board.filters.status = 's1';
   assert.equal(board.filterPriorityName(), 'High');

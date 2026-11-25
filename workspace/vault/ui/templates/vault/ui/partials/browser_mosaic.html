@@ -1,3 +1,6 @@
+{% load i18n %}
+{% translate "Actions for %(name)s" as actions_for %}
+{% translate "Select %(name)s" as select_named %}
 {% comment %}
   The tile of the file browser, as the vault listing already draws it: a
   square face carrying the icon, a name strip under a border, a checkbox that
@@ -36,7 +39,7 @@
           <button
             type="button"
             class="btn btn-ghost btn-xs btn-square bg-base-100/80 hover:bg-base-300 backdrop-blur-xs opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-            :aria-label="'Actions for ' + folder.name"
+            :aria-label="interpolate('{{ actions_for|escapejs }}', { name: folder.name }, true)"
             @click="openFolderMenu($event, folder)"
           >
             <i data-lucide="more-horizontal" class="w-4 h-4"></i>
@@ -89,7 +92,7 @@
             class="checkbox checkbox-sm bg-base-100/80 backdrop-blur-xs"
             :class="isSelected(entry.uuid) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100'"
             :checked="isSelected(entry.uuid)"
-            :aria-label="'Select ' + entry.name"
+            :aria-label="interpolate('{{ select_named|escapejs }}', { name: entry.name }, true)"
             @click="toggleSelection(entry.uuid)"
           />
         </div>
@@ -105,7 +108,7 @@
           <button
             type="button"
             class="btn btn-ghost btn-xs btn-square bg-base-100/80 hover:bg-base-300 backdrop-blur-xs opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-            :aria-label="'Actions for ' + entry.name"
+            :aria-label="interpolate('{{ actions_for|escapejs }}', { name: entry.name }, true)"
             @click="openMenu($event, entry)"
           >
             <i data-lucide="more-horizontal" class="w-4 h-4"></i>

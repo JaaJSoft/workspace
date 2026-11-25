@@ -36,6 +36,6 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 
 Interactive API documentation is served by the running instance:
 
-- Swagger UI - `/schema/swagger-ui/`
-- ReDoc - `/schema/redoc/`
-- OpenAPI schema - `/schema/`
+- Swagger UI - `/api/schema/swagger-ui`
+- ReDoc - `/api/schema/redoc`
+- OpenAPI schema - `/api/schema`

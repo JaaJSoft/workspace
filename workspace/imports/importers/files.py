@@ -40,6 +40,22 @@ ON_CONFLICT_SKIP = "skip"
 ON_CONFLICT_RENAME = "rename"
 ON_CONFLICT_REPLACE = "replace"
 
+# Per policy: the wizard's option, then the job recap's short form.
+ON_CONFLICT_LABELS = {
+    ON_CONFLICT_RENAME: (
+        gettext_lazy("Keep both (rename the imported one)"),
+        gettext_lazy("keep both"),
+    ),
+    ON_CONFLICT_SKIP: (
+        gettext_lazy("Keep mine (skip the imported one)"),
+        gettext_lazy("keep mine"),
+    ),
+    ON_CONFLICT_REPLACE: (
+        gettext_lazy("Replace mine with the imported one"),
+        gettext_lazy("replace mine"),
+    ),
+}
+
 # Remote bytes are spooled before they reach ``tree.create_file``, which needs a
 # seekable stream (type detection, hashing and the storage write are three
 # passes). Small files stay in memory, bigger ones go through a temp file.
@@ -62,7 +78,7 @@ class FilesImportOptionsSerializer(serializers.Serializer):
     source_path = RemotePathField()
     destination = serializers.UUIDField(required=False, allow_null=True, default=None)
     on_conflict = serializers.ChoiceField(
-        choices=[ON_CONFLICT_SKIP, ON_CONFLICT_RENAME, ON_CONFLICT_REPLACE],
+        choices=list(ON_CONFLICT_LABELS),
         default=ON_CONFLICT_RENAME,
     )
     create_root_folder = serializers.BooleanField(default=True)
@@ -92,6 +108,7 @@ def safe_local_name(name: str) -> str:
 class FilesImporter(Importer):
     kind = KIND_FILES
     label = gettext_lazy("Files")
+    description = gettext_lazy("Folders and files, with their dates.")
     option_serializer = FilesImportOptionsSerializer
 
     def run(self, ctx):

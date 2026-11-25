@@ -91,7 +91,7 @@ test('a snapshot that omits `bot` keeps the previously known bots', () => {
   assert.equal(p.statusOf(42), 'bot');
 
   // A later presence update carries no bot info (e.g. partial/empty payload).
-  // The bot ring must survive — this is the regression: with a destructive
+  // The bot ring must survive - this is the regression: with a destructive
   // full-replace (`new Set(data.bot || [])`) the bot would drop to 'offline'.
   p.handleSnapshot({ online: [1], away: [], busy: [] });
   assert.equal(p.statusOf(42), 'bot');

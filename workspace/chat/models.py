@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils.translation import gettext_lazy, pgettext_lazy
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -35,7 +36,7 @@ class Conversation(models.Model):
         ]
 
     def __str__(self):
-        return self.title or f"{self.kind} — {self.uuid}"
+        return self.title or f"{self.kind} - {self.uuid}"
 
 
 class ConversationMember(models.Model):
@@ -47,9 +48,15 @@ class ConversationMember(models.Model):
         messages when the user goes looking for them.
         """
 
-        ALL = "all", "All messages"
-        MENTIONS = "mentions", "Mentions only"
-        NONE = "none", "Nothing"
+        ALL = "all", gettext_lazy("All messages")
+        MENTIONS = "mentions", gettext_lazy("Mentions only")
+        NONE = "none", gettext_lazy("Nothing")
+
+    NOTIFICATION_LEVEL_ICONS = {
+        NotificationLevel.ALL: "bell",
+        NotificationLevel.MENTIONS: "at-sign",
+        NotificationLevel.NONE: "bell-off",
+    }
 
     class Role(models.TextChoices):
         """Who may manage a group: its members, name, avatar and admins.
@@ -59,8 +66,8 @@ class ConversationMember(models.Model):
         so nobody comes back as an admin.
         """
 
-        ADMIN = "admin", "Admin"
-        MEMBER = "member", "Member"
+        ADMIN = "admin", pgettext_lazy("chat group role", "Admin")
+        MEMBER = "member", pgettext_lazy("chat group role", "Member")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     conversation = models.ForeignKey(

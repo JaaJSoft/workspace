@@ -1,5 +1,7 @@
 from io import BytesIO
+from unittest import mock
 
+from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import TestCase
 from PIL import Image
@@ -76,6 +78,31 @@ class SaveImageTests(TestCase):
             save_image(path, b"second")
             with default_storage.open(path, "rb") as f:
                 self.assertEqual(f.read(), b"second")
+        finally:
+            if default_storage.exists(path):
+                default_storage.delete(path)
+
+
+class _UploadCutMidway(ContentFile):
+    def chunks(self, chunk_size=None):
+        yield self.read(2)
+        raise OSError("connection reset")
+
+
+class SaveImageFailureTests(TestCase):
+    def test_a_write_that_dies_midway_keeps_the_previous_image(self):
+        path = "test_cut_img.webp"
+        try:
+            save_image(path, b"previous")
+            with (
+                mock.patch(
+                    "workspace.common.services.image.ContentFile", _UploadCutMidway
+                ),
+                self.assertRaises(OSError),
+            ):
+                save_image(path, b"replacement")
+            with default_storage.open(path, "rb") as f:
+                self.assertEqual(f.read(), b"previous")
         finally:
             if default_storage.exists(path):
                 default_storage.delete(path)

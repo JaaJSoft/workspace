@@ -2,7 +2,7 @@
 
 The profile template (``profile.html``) picks between
 ``first_name + last_name`` and ``username`` for the main ``<h1>``. This
-test proves the full-name branch is exercised end-to-end — template
+test proves the full-name branch is exercised end-to-end - template
 extension, context injection, and rendering.
 """
 

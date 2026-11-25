@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 // fetch is hit inside saveCallSounds. A thenable that returns itself
 // satisfies the `.catch(...)` chain.
@@ -26,7 +26,7 @@ function makeDocument(seedValue, prefsSeed) {
 }
 
 function load(seedValue, chatCallSounds, prefsSeed) {
-  return loadScript('workspace/chat/ui/static/chat/ui/js/chat_preferences.js', {
+  return loadScripts(['workspace/core/static/core/js/user_settings.js', 'workspace/chat/ui/static/chat/ui/js/chat_preferences.js'], {
     fetch: fetchStub(),
     document: makeDocument(seedValue, prefsSeed),
     getCSRFToken: () => 'csrf',

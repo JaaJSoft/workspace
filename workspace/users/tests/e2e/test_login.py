@@ -1,7 +1,7 @@
 """End-to-end tests for the login page.
 
 These tests also validate the `login_as` and `login_via_ui` helpers on
-``workspace.common.tests.e2e.base.PlaywrightTestCase`` — if they pass,
+``workspace.common.tests.e2e.base.PlaywrightTestCase`` - if they pass,
 both helpers work against the real app.
 
 Skipped unless ``E2E=1`` is set (see the base class docstring).
@@ -41,7 +41,7 @@ class LoginPageTests(PlaywrightTestCase):
             self.page.get_by_text("Invalid username or password", exact=False)
         ).to_be_visible()
 
-        # And we must still be on /login — the form didn't redirect.
+        # And we must still be on /login - the form didn't redirect.
         assert "/login" in self.page.url, (
             f"expected to still be on /login, at {self.page.url}"
         )
@@ -69,7 +69,7 @@ class LoginPageTests(PlaywrightTestCase):
     def test_login_as_helper_skips_form(self):
         user = self.create_user(username="dave", password="pass12345")
 
-        # No form submission — straight session-cookie injection.
+        # No form submission - straight session-cookie injection.
         self.login_as(user)
 
         # Dashboard (/) requires @login_required; if the cookie works the

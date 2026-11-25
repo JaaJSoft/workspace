@@ -4,7 +4,7 @@ presses Escape.
 We pick the chat "New conversation" dialog as a representative target:
 it is reachable in a single click from ``/chat``, requires no fixture
 data, and combines the two close mechanisms a typical modal in this
-codebase relies on — the browser's native ``<dialog>`` ESC handling
+codebase relies on - the browser's native ``<dialog>`` ESC handling
 *and* an explicit Alpine ``@keydown.escape="$refs.newConvDialog.close()"``
 handler on the element.
 
@@ -31,7 +31,7 @@ class DialogEscapeTests(PlaywrightTestCase):
         self.page.goto(f"{self.live_server_url}/chat")
 
         # The "New conversation" trigger is a square icon button in the
-        # sidebar header — no visible label, only a ``title`` attribute.
+        # sidebar header - no visible label, only a ``title`` attribute.
         # ``get_by_title`` matches the full string including the shortcut
         # hint, which is the most stable selector (the lucide icon name
         # could be swapped without changing UX).

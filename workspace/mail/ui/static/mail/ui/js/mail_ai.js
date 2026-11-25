@@ -84,7 +84,7 @@ window.mailAiMixin = function mailAiMixin() {
           body: JSON.stringify({ ai_summary: '' }),
         });
       } catch (e) {
-        // silent — summary already hidden locally
+        // silent - summary already hidden locally
       }
     },
 

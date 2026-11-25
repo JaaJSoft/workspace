@@ -12,7 +12,7 @@ by hit-testing the live layout.
 
 The bug classes these guard against:
 
-  * a ``dragover`` handler that stops calling ``preventDefault()`` —
+  * a ``dragover`` handler that stops calling ``preventDefault()`` -
     the browser then refuses the drop and the ``drop`` event never
     fires at all, silently. Nothing in the JS errors out.
   * the custom ``application/x-pin-folder`` MIME type drifting apart
@@ -22,7 +22,7 @@ The bug classes these guard against:
     ``<li>`` carried two ``:class`` attributes, the HTML parser kept
     only the first, and Alpine never saw the binding driving the
     dragged-item fade and the drop-target ring. Reordering still
-    worked, but with zero feedback — indistinguishable from broken.
+    worked, but with zero feedback - indistinguishable from broken.
 
 The feedback assertions deliberately read *computed style*
 (``opacity``, ``box-shadow``) rather than class strings: a class name
@@ -46,7 +46,7 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
         self.user = self.create_user(username="alice")
         # ``sidebarCollapse()`` force-collapses below the ``lg``
         # breakpoint (1024 px), and a collapsed sidebar hides both the
-        # empty-state placeholder and the drop hint — the drop zone
+        # empty-state placeholder and the drop hint - the drop zone
         # then has zero height and nothing can be dropped on it.
         self.page.set_viewport_size({"width": 1280, "height": 800})
 
@@ -125,14 +125,14 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
 
     def test_drag_source_declares_the_effect_the_drop_zone_asks_for(self):
         """Per the HTML spec the browser silently resets ``dropEffect``
-        to ``none`` — and refuses the drop — unless the value the target
+        to ``none`` - and refuses the drop - unless the value the target
         asks for is a member of the source's ``effectAllowed``.
 
         This zone used to ask for ``link`` while the source declared
         nothing, so the browser derived a default. Chrome on Linux
         derives ``copyMove``, which excludes ``link``; the drop was
         rejected even though ``dragover`` had called
-        ``preventDefault()`` — no ``drop`` event, no request, no error.
+        ``preventDefault()`` - no ``drop`` event, no request, no error.
         Forcing ``effectAllowed = 'link'`` did not help either: Chrome
         clamps it down to ``copy``. ``copy`` is the only effect that
         belongs to every default set, so both sides now name it.
@@ -184,7 +184,7 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
         )
         assert effects["dropEffect"] == "copy", (
             f"drop zone should ask for the 'copy' effect, got "
-            f"{effects['dropEffect']!r} — source and target must agree"
+            f"{effects['dropEffect']!r} - source and target must agree"
         )
 
     def test_dragging_a_folder_row_pins_it(self):
@@ -258,7 +258,7 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
 
     def test_grabbing_the_folder_name_drags_the_row_not_the_link(self):
         """The folder name is an anchor, and anchors are draggable by
-        default — so grabbing the name used to start a *link* drag
+        default - so grabbing the name used to start a *link* drag
         carrying a ``text/uri-list`` payload. Chrome routes that flavour
         of drag through the OS rather than the page, so the sidebar
         never received the drop while Firefox handled it fine.
@@ -289,7 +289,7 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
             f"browser picked <{started['source'].lower()}>"
         )
         assert "text/uri-list" not in started["types"], (
-            f"grabbing the name started a link drag — DataTransfer carries "
+            f"grabbing the name started a link drag - DataTransfer carries "
             f"{started['types']}"
         )
 
@@ -324,7 +324,7 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
 
         self.drag(items.nth(0), items.nth(1), mid_drag=capture)
 
-        # The dragged entry fades and the hovered entry gets a ring —
+        # The dragged entry fades and the hovered entry gets a ring -
         # the two affordances that tell the user the gesture is live.
         assert feedback["dragged_opacity"] == "0.5", (
             f"dragged item should fade to 0.5 opacity while dragging, "

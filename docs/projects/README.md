@@ -157,4 +157,4 @@ preferences. From the task panel you can watch a task or mute it.
 - **Sharing**: a file, folder or photo album can be shared with a project.
   This reaches every member.
 
-The REST API is documented in the [Swagger UI](/schema/swagger-ui/).
+The REST API is documented in the [Swagger UI](/api/schema/swagger-ui).

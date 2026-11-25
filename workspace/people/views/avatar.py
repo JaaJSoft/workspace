@@ -10,13 +10,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.services.image import SOURCE_TYPES
 
 from ..models import Person
 from ..queries import reachable_person
 from ..services import avatar as avatar_service
 
 AVATAR_MAX_SIZE = 10 * 1024 * 1024
-AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
 @extend_schema(tags=["People"])
@@ -70,7 +70,7 @@ class PersonAvatarView(CacheControlMixin, APIView):
             return Response(
                 {"errors": ["No image provided."]}, status=status.HTTP_400_BAD_REQUEST
             )
-        if image.content_type not in AVATAR_ALLOWED_TYPES:
+        if image.content_type not in SOURCE_TYPES:
             return Response(
                 {"errors": ["Unsupported image type. Use JPEG, PNG, WebP, or GIF."]},
                 status=status.HTTP_400_BAD_REQUEST,

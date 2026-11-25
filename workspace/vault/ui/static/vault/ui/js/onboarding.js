@@ -105,7 +105,7 @@ window.vaultOnboarding = function vaultOnboarding() {
           this.firstVaultUuid = window.vaultCrypto.uuidV7();
         }
         const body = await window.buildVaultCreateRequest(
-          this.vaultSession(), { name: 'Personal' }, this.firstVaultUuid
+          this.vaultSession(), { name: gettext('Personal') }, this.firstVaultUuid
         );
         await window.vaultApi.createVault(body);
         this.rememberOnThisDevice();
@@ -123,8 +123,7 @@ window.vaultOnboarding = function vaultOnboarding() {
         // sound, only the vault is missing. Saying so keeps the retry on the
         // one screen that can still explain it.
         this.error =
-          'Your vault could not be created. Your account is set up and your ' +
-          'recovery key is valid - try again.';
+          gettext('Your vault could not be created. Your account is set up and your recovery key is valid - try again.');
       } finally {
         this.busy = false;
       }
@@ -306,11 +305,10 @@ window.vaultOnboarding = function vaultOnboarding() {
         }
         if (landed === 'elsewhere') {
           this.error =
-            'Your vault was already set up elsewhere, with a different ' +
-            'recovery key. The key on this page does not open it.';
+            gettext('Your vault was already set up elsewhere, with a different recovery key. The key on this page does not open it.');
         } else if (conflict && !this.sentKexPublic) {
           this.error =
-            'Your vault has already been set up. Reload this page to open it.';
+            gettext('Your vault has already been set up. Reload this page to open it.');
         } else if (conflict) {
           // 409 means an active identity exists, and sentKexPublic means this
           // page sent an envelope - so the probe above is the only thing that
@@ -318,12 +316,10 @@ window.vaultOnboarding = function vaultOnboarding() {
           // one certainty: something was saved. Telling the user otherwise
           // walks them off the only screen that can still show the key.
           this.error =
-            'Your vault is already set up, but we could not confirm from ' +
-            'here whether this page holds its recovery key. Do not close ' +
-            'this page - try again.';
+            gettext('Your vault is already set up, but we could not confirm from here whether this page holds its recovery key. Do not close this page - try again.');
         } else {
           this.error =
-            'Your vault could not be created. Nothing was saved; try again.';
+            gettext('Your vault could not be created. Nothing was saved; try again.');
         }
       } finally {
         this.busy = false;

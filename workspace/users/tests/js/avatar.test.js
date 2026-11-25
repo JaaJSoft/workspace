@@ -51,7 +51,7 @@ test('away status shows the last-seen time too', () => {
   assert.equal(ago.textContent, '· 1h ago');
 });
 
-test('a last-seen under a minute is suppressed — it would contradict the status', () => {
+test('a last-seen under a minute is suppressed - it would contradict the status', () => {
   const { ago } = patchWithStatus('offline', minutesAgo(0.5));
   assert.equal(ago.textContent, '');
 });

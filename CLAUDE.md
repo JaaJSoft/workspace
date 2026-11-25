@@ -285,7 +285,7 @@ assert.equal(ctx.isValidUuid('...'), true);
 - Only top-level `function`/`var` declarations and `window.X` assignments are reachable on the returned context; top-level `const`/`let` are not (global lexical scope). Test the public surface.
 - If a script touches `document`/`fetch` at load time, pass stubs: `loadScript(path, { document: stub })`.
 - **Cross-realm gotcha:** arrays/objects created inside the vm carry that realm's prototypes, so `assert.deepStrictEqual` fails its prototype check against test-side literals ("same structure but not reference-equal"). Normalize first: `Array.from(ctx.fn(...))` or `{ ...result }`.
-- **Cross-realm, the dangerous half:** it is not only assertions. A value built on the test side and passed *into* the vm carries the outer realm's prototypes, and a bundled library that branches on `constructor === Array` (or any other identity check against a built-in) then takes a different path than it would in a browser — same input, different output, silently. We hit this with `cbor-x`, which fell through to its iterator branch and emitted indefinite-length CBOR arrays that a browser encodes with a definite length; the suite reported 142 failures that did not exist in production. **When the test feeds data to the bundle, build that data inside the vm:** pass the JSON as a string through `extraGlobals` and parse it in the context (`vm.runInContext('JSON.parse(__text)', ctx)`), rather than parsing on the test side. If the output has to match a browser byte for byte, assert it in a real browser too — see `workspace/vault/tests/e2e/test_crypto_browser.py`.
+- **Cross-realm, the dangerous half:** it is not only assertions. A value built on the test side and passed *into* the vm carries the outer realm's prototypes, and a bundled library that branches on `constructor === Array` (or any other identity check against a built-in) then takes a different path than it would in a browser - same input, different output, silently. We hit this with `cbor-x`, which fell through to its iterator branch and emitted indefinite-length CBOR arrays that a browser encodes with a definite length; the suite reported 142 failures that did not exist in production. **When the test feeds data to the bundle, build that data inside the vm:** pass the JSON as a string through `extraGlobals` and parse it in the context (`vm.runInContext('JSON.parse(__text)', ctx)`), rather than parsing on the test side. If the output has to match a browser byte for byte, assert it in a real browser too - see `workspace/vault/tests/e2e/test_crypto_browser.py`.
 - CI runs these in the per-module `js` matrix of `.github/workflows/tests.yml`, one `JS (<module>)` job each.
 
 ## Backend Conventions
@@ -480,11 +480,17 @@ membership = get_active_membership(user, conversation_id)
 #### Mail - `workspace.mail.queries`
 
 ```python
-from workspace.mail.queries import user_account_ids
-account_ids = user_account_ids(user)  # returns queryset of account UUIDs
+from workspace.mail.queries import (
+    reachable_account, reachable_message, user_account_ids, user_accounts,
+    user_folders, user_labels, user_messages, user_rules,
+)
+account_ids = user_account_ids(user)            # returns queryset of account UUIDs
+account = reachable_account(user, uuid)         # the account or None - 404 on None
+msg = reachable_message(user, uuid)             # a non-deleted message or None
+folder = user_folders(user).filter(uuid=uuid).first()   # same for labels, messages, rules
 ```
 
-Returns mail account UUIDs owned by the user. Use for filtering messages: `MailMessage.objects.filter(account_id__in=account_ids, ...)`.
+Returns mail account UUIDs owned by the user. Use for filtering messages: `MailMessage.objects.filter(account_id__in=account_ids, ...)`. Never compare `obj.account.owner` with the user in a view: start from the `user_*` queryset, so a row of another user's account and a missing row both come back as `None`.
 
 #### Calendar - `workspace.calendar.queries`
 
@@ -646,7 +652,7 @@ prefs = get_module_settings(user, 'dashboard')
 
 **Rules:**
 - Never call `UserSetting.objects.create/update/delete/update_or_create` from application code - use `set_setting`/`delete_setting` instead. Raw ORM bypasses the cache invalidation and causes "F5 reverts my setting" bugs.
-- The REST endpoint `PUT/DELETE /api/v1/settings/<module>/<key>` already delegates to these helpers - new UI that toggles a setting should just call it (fire-and-forget `fetch` is the idiom, see `themePickerForm()` in `settings_appearance.html` and `dashboardPrefsForm()` in `dashboard/index.html`). It only writes a setting its module declared - see below.
+- The REST endpoint `PUT/DELETE /api/v1/settings/<module>/<key>` already delegates to these helpers - new UI that toggles a setting should just call it through `window.saveUserSetting(module, key, value)` (`core/static/core/js/user_settings.js`, loaded by `base.html` on every page), which rejects when the server refuses the value so the caller can roll back; the rejection carries the response as `error.response` when there was one. `window.saveUserSettings(module, values)` writes several keys of a module in one request. `window.deleteUserSetting(module, key)` removes one, so its readers get their default back. The public share pages load the helper too (`files/ui/shared_base.html`). Never hand-write the `fetch`. It only writes a setting its module declared - see below.
 - In tests that call `set_setting`/`delete_setting`, **always `cache.clear()` in `tearDown`**. Django's `LocMemCache` is process-global and is NOT reset between `TestCase` runs, so leaked cache entries can cause order-dependent failures.
 
 ```python

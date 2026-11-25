@@ -12,7 +12,8 @@ from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import MailAccount, MailFolder
+from ..models import MailFolder
+from ..queries import reachable_account, user_folders
 from ..serializers import (
     MailFolderCreateSerializer,
     MailFolderMergeSerializer,
@@ -39,7 +40,10 @@ class MailFolderListView(APIView):
         account_id = request.query_params.get("account")
         if not account_id:
             return Response(
-                {"detail": "account query parameter is required"},
+                {
+                    "detail": _("The %(parameter)s query parameter is required.")
+                    % {"parameter": "account"}
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -49,12 +53,14 @@ class MailFolderListView(APIView):
             # "Query parameter parsing"). 404 is reserved for well-formed
             # UUIDs that don't resolve to an accessible account.
             return Response(
-                {"detail": '"account" must be a valid UUID.'},
+                {
+                    "detail": _('"%(parameter)s" must be a valid UUID.')
+                    % {"parameter": "account"}
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        try:
-            account = MailAccount.objects.get(uuid=account_uuid, owner=request.user)
-        except MailAccount.DoesNotExist:
+        account = reachable_account(request.user, account_uuid)
+        if account is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         folders = MailFolder.objects.filter(account=account).prefetch_related("aliases")
@@ -69,12 +75,8 @@ class MailFolderListView(APIView):
         ser = MailFolderCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        try:
-            account = MailAccount.objects.get(
-                uuid=ser.validated_data["account_id"],
-                owner=request.user,
-            )
-        except MailAccount.DoesNotExist:
+        account = reachable_account(request.user, ser.validated_data["account_id"])
+        if account is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         from ..services.imap_folders import create_folder
@@ -104,17 +106,13 @@ class MailFolderUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_folder(self, request, uuid):
-        try:
-            folder = (
-                MailFolder.objects.select_related("account")
-                .prefetch_related("aliases")
-                .get(uuid=uuid)
-            )
-        except MailFolder.DoesNotExist:
-            return None
-        if folder.account.owner != request.user:
-            return None
-        return folder
+        return (
+            user_folders(request.user)
+            .select_related("account")
+            .prefetch_related("aliases")
+            .filter(uuid=uuid)
+            .first()
+        )
 
     @extend_schema(
         summary="Update folder (icon, color, rename, move)",
@@ -252,15 +250,12 @@ class MailFolderMergeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_folder(self, request, uuid):
-        try:
-            folder = MailFolder.objects.select_related("account", "alias_of").get(
-                uuid=uuid
-            )
-        except MailFolder.DoesNotExist:
-            return None
-        if folder.account.owner != request.user:
-            return None
-        return folder
+        return (
+            user_folders(request.user)
+            .select_related("account", "alias_of")
+            .filter(uuid=uuid)
+            .first()
+        )
 
     def _serialized(self, folder):
         folder = MailFolder.objects.prefetch_related("aliases").get(pk=folder.pk)
@@ -315,12 +310,13 @@ class MailFolderMarkReadView(APIView):
 
     @extend_schema(summary="Mark all messages in a folder as read")
     def post(self, request, uuid):
-        try:
-            folder = MailFolder.objects.select_related("account").get(uuid=uuid)
-        except MailFolder.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        if folder.account.owner != request.user:
+        folder = (
+            user_folders(request.user)
+            .select_related("account")
+            .filter(uuid=uuid)
+            .first()
+        )
+        if folder is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         from ..services.triage import mark_folder_read

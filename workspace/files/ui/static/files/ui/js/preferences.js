@@ -40,12 +40,7 @@ window.updateFilePrefs = function updateFilePrefs(changes) {
 
 // Resolves to whether the server took the save.
 window.saveFilePrefs = function saveFilePrefs() {
-  return fetch('/api/v1/settings/files/preferences', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-    body: JSON.stringify({ value: window._filePrefsCache }),
-    credentials: 'same-origin',
-  }).then((resp) => resp.ok, () => false);
+  return window.saveUserSetting('files', 'preferences', window._filePrefsCache).then(() => true, () => false);
 };
 
 window.filePreferences = function filePreferences() {

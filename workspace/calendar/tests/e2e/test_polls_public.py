@@ -50,13 +50,13 @@ class SharedPollVotingTests(PlaywrightTestCase):
         # The editable "You" row is the only table row that contains a
         # ``data-lucide="pencil"`` icon (the template uses it to mark the
         # user's own row). We match on that instead of the Tailwind class
-        # ``bg-primary/5`` — escaped Tailwind selectors are fragile and
+        # ``bg-primary/5`` - escaped Tailwind selectors are fragile and
         # the pencil icon is a stable semantic marker owned by the poll
         # template itself.
         vote_row = self.page.locator('tr:has([data-lucide="pencil"])')
         expect(vote_row).to_be_visible()
 
-        # One vote button per slot — we created two slots, so we expect
+        # One vote button per slot - we created two slots, so we expect
         # two buttons in this row.
         vote_buttons = vote_row.locator("button")
         expect(vote_buttons).to_have_count(2)
@@ -73,7 +73,7 @@ class SharedPollVotingTests(PlaywrightTestCase):
         ).to_be_visible()
 
         # Verify the vote actually landed in the DB for extra confidence
-        # — this guards against the UI silently swallowing errors.
+        # - this guards against the UI silently swallowing errors.
         self.assertEqual(poll.slots.first().votes.filter(choice="yes").count(), 1)
 
     def test_participant_count_includes_the_visitors_own_vote(self):

@@ -313,9 +313,9 @@ class SettingCacheTests(TestCase):
             self.assertEqual(get_setting(self.user, "core", "theme"), "dark")
 
     def test_get_setting_caches_default(self):
-        # First call — cache miss, DB miss, caches default
+        # First call - cache miss, DB miss, caches default
         self.assertIsNone(get_setting(self.user, "core", "missing"))
-        # Second call — served from cache, no DB
+        # Second call - served from cache, no DB
         with self.assertNumQueries(0):
             self.assertIsNone(get_setting(self.user, "core", "missing"))
 
@@ -356,7 +356,7 @@ class SettingCacheTests(TestCase):
         set_setting(self.user, "core", "theme", "dark")
         # Next read reflects the new value (cache was invalidated)
         self.assertEqual(get_setting(self.user, "core", "theme"), "dark")
-        # And is now cached — second read is a hit
+        # And is now cached - second read is a hit
         with self.assertNumQueries(0):
             self.assertEqual(get_setting(self.user, "core", "theme"), "dark")
 
@@ -365,7 +365,7 @@ class SettingCacheTests(TestCase):
         # Warm cache
         get_setting(self.user, "core", "theme")
         delete_setting(self.user, "core", "theme")
-        # Cache should be cleared — next get hits DB and returns default
+        # Cache should be cleared - next get hits DB and returns default
         self.assertIsNone(get_setting(self.user, "core", "theme"))
 
     def test_get_module_settings_caches_result(self):
@@ -376,7 +376,7 @@ class SettingCacheTests(TestCase):
             get_module_settings(self.user, "profile"),
             {"bio": "hi", "role": "dev"},
         )
-        # Second call served from cache — no DB hit
+        # Second call served from cache - no DB hit
         with self.assertNumQueries(0):
             self.assertEqual(
                 get_module_settings(self.user, "profile"),

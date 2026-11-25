@@ -6,7 +6,7 @@ Renders the list of pinned folders for the sidebar.
 
 Swapped in place via `$ajax('/files/pinned', { target: 'pinned-folders-list' })`,
 so the outer `<ul id="pinned-folders-list">` wrapper is rendered here (not in the
-parent template) — alpine-ajax needs the id in the response to morph it.
+parent template) - alpine-ajax needs the id in the response to morph it.
 
 Context variables:
 - pinned_folders: QuerySet of PinnedFolder objects

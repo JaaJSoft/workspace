@@ -113,6 +113,38 @@ class SharedAlbumPageTests(AlbumPageTestCase):
         self.assertIn("2 members", owner_view)
         self.assertNotIn("Shared by", owner_view)
 
+    def test_the_header_names_the_viewers_role(self):
+        share, _ = share_album(
+            self.album, role="viewer", acting_user=self.owner, user=self.bob
+        )
+        for role, label in (
+            ("viewer", "Viewer"),
+            ("contributor", "Contributor"),
+            ("manager", "Manager"),
+        ):
+            with self.subTest(role=role):
+                type(share).objects.filter(pk=share.pk).update(role=role)
+                html = self.page(self.bob)
+                badge = html[html.index("data-album-role") :]
+                self.assertEqual(
+                    badge[badge.index(">") + 1 : badge.index("</span>")].strip(),
+                    label,
+                )
+        self.assertNotIn("data-album-role", self.page(self.owner))
+
+    def test_the_share_modal_offers_every_role_a_share_grants_lowest_first(self):
+        html = self.page(self.owner)
+        start = html.index('id="photos-album-share-roles"')
+        roles = json.loads(
+            html[html.index(">", start) + 1 : html.index("</script>", start)]
+        )
+
+        self.assertEqual(
+            [role["value"] for role in roles], ["viewer", "contributor", "manager"]
+        )
+        self.assertEqual(roles[0]["label"], "Viewer")
+        self.assertEqual(roles[0]["hint"], "Browses the album")
+
     def test_an_album_nobody_else_opens_names_no_members(self):
         self.assertNotIn("data-album-sharing", self.page(self.owner))
 

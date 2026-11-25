@@ -7,8 +7,8 @@ Context:
 - file_events: list of FileEvent matching the active filter (capped at events_limit)
 - events_limit: how many events the response embeds (for the "Load more" math)
 - total_event_count: total events matching the active filter
-- action_filter: current ``?action=`` value, '' when "All"
-- grouped_actions: ``[(category, [(value, label), ...]), ...]`` of actions
+- action_filter: current ?action= value, '' when "All"
+- grouped_actions: [(category, [(value, label), ...]), ...] of actions
   that exist on this file. Empty when the file has no events at all -
   the entire Activity section is hidden in that case. Source of truth
   for icons + grouping is FileEvent in models.py.

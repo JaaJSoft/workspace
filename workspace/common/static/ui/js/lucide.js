@@ -188,7 +188,7 @@ function observeLucideIcons(root = document.body) {
       }
       for (const node of mutation.addedNodes) {
         if (node.nodeType !== 1) continue;
-        // Skip SVG elements — Lucide copies data-lucide onto created <svg>,
+        // Skip SVG elements - Lucide copies data-lucide onto created <svg>,
         // so without this check we'd re-process them in an infinite loop.
         if (node instanceof SVGElement) continue;
         if (node.hasAttribute?.('data-lucide') || node.querySelector?.('[data-lucide]:not(svg)')) {

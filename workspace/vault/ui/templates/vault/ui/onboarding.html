@@ -1,7 +1,9 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load i18n static %}
 
-{% block title %}Set up your master password - Workspace{% endblock %}
+{% block title %}
+  {% translate "Set up your master password - Workspace" %}
+{% endblock %}
 
 {% comment %}
   No inline script and no inline style attribute anywhere in this file, nor in
@@ -31,7 +33,7 @@
     data-email="{{ request.user.email }}"
     data-vault-url="{{ vault_url }}"
   >
-    <h1 class="text-2xl font-semibold mb-6">Set up your master password</h1>
+    <h1 class="text-2xl font-semibold mb-6">{% translate "Set up your master password" %}</h1>
 
     <div
       class="card bg-base-100 border border-base-300 shadow-xs overflow-hidden"
@@ -69,8 +71,8 @@
                 <span class="w-px flex-1 bg-base-300 my-1"></span>
               </div>
               <div class="pb-5">
-                <p class="text-sm font-medium">How it works</p>
-                <p class="text-xs text-base-content/50">One password opens every vault</p>
+                <p class="text-sm font-medium">{% translate "How it works" %}</p>
+                <p class="text-xs text-base-content/50">{% translate "One password opens every vault" %}</p>
               </div>
             </li>
 
@@ -94,9 +96,9 @@
                   class="text-sm font-medium"
                   :class="step < 2 && 'text-base-content/40'"
                 >
-                  Master password
+                  {% translate "Master password" %}
                 </p>
-                <p class="text-xs text-base-content/50">Typed every time you unlock</p>
+                <p class="text-xs text-base-content/50">{% translate "Typed every time you unlock" %}</p>
               </div>
             </li>
 
@@ -112,9 +114,9 @@
                   class="text-sm font-medium"
                   :class="step < 3 && 'text-base-content/40'"
                 >
-                  Recovery key
+                  {% translate "Recovery key" %}
                 </p>
-                <p class="text-xs text-base-content/50">Shown once, on this screen</p>
+                <p class="text-xs text-base-content/50">{% translate "Shown once, on this screen" %}</p>
               </div>
             </li>
           </ol>
@@ -128,10 +130,12 @@
           >
             <i data-lucide="lock" class="w-4 h-4 shrink-0 text-module"></i>
             <span>
-              Encrypted on this device. There is no password reset, and
-              unlocking takes both your password and your recovery key. Lose
-              your password and your vaults are gone. Lose your recovery key
-              and only a device that still remembers it can open them.
+              {% blocktranslate trimmed %}
+                Encrypted on this device. There is no password reset, and
+                unlocking takes both your password and your recovery key. Lose
+                your password and your vaults are gone. Lose your recovery key
+                and only a device that still remembers it can open them.
+              {% endblocktranslate %}
             </span>
           </p>
         </aside>
@@ -150,9 +154,9 @@
               </span>
             </div>
             <h2 class="font-bold text-lg flex-1">
-              <span x-show="step === 1">How it works</span>
-              <span x-show="step === 2" x-cloak>Master password</span>
-              <span x-show="step === 3" x-cloak>Your recovery key</span>
+              <span x-show="step === 1">{% translate "How it works" %}</span>
+              <span x-show="step === 2" x-cloak>{% translate "Master password" %}</span>
+              <span x-show="step === 3" x-cloak>{% translate "Your recovery key" %}</span>
             </h2>
           </div>
 
@@ -165,29 +169,35 @@
             <template x-if="step === 1">
               <section class="space-y-5">
                 <div>
-                  <h3 class="font-semibold mb-1">One password opens everything</h3>
+                  <h3 class="font-semibold mb-1">{% translate "One password opens everything" %}</h3>
                   <p class="text-sm text-base-content/60">
-                    Your master password unlocks your account, and every vault
-                    in it - today's and the ones you create later. Vaults do not
-                    have their own passwords. It is not your Workspace password
-                    either, and changing one never changes the other.
+                    {% blocktranslate trimmed %}
+                      Your master password unlocks your account, and every vault
+                      in it - today's and the ones you create later. Vaults do not
+                      have their own passwords. It is not your Workspace password
+                      either, and changing one never changes the other.
+                    {% endblocktranslate %}
                   </p>
                 </div>
                 <div>
-                  <h3 class="font-semibold mb-1">It never leaves this browser</h3>
+                  <h3 class="font-semibold mb-1">{% translate "It never leaves this browser" %}</h3>
                   <p class="text-sm text-base-content/60">
-                    It is used here, on this device, to open the keys that
-                    decrypt your data. What we store, we cannot read - which is
-                    also why nobody here can reset it.
+                    {% blocktranslate trimmed %}
+                      It is used here, on this device, to open the keys that
+                      decrypt your data. What we store, we cannot read - which is
+                      also why nobody here can reset it.
+                    {% endblocktranslate %}
                   </p>
                 </div>
                 <div>
-                  <h3 class="font-semibold mb-1">Your recovery key is the other half</h3>
+                  <h3 class="font-semibold mb-1">{% translate "Your recovery key is the other half" %}</h3>
                   <p class="text-sm text-base-content/60">
-                    We will create one on this device in a moment and show it
-                    once. It does not recover your password: it is the second
-                    half of the lock, the part you bring to a new device. Keep
-                    it offline.
+                    {% blocktranslate trimmed %}
+                      We will create one on this device in a moment and show it
+                      once. It does not recover your password: it is the second
+                      half of the lock, the part you bring to a new device. Keep
+                      it offline.
+                    {% endblocktranslate %}
                   </p>
                 </div>
               </section>
@@ -200,9 +210,9 @@
                 x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
                 @strength-change="strengthChanged($event.detail)"
               >
-                <p>Pick your master password. It never leaves this browser.</p>
+                <p>{% translate "Pick your master password. It never leaves this browser." %}</p>
                 <label class="fieldset w-full">
-                  <span class="text-sm">Master password</span>
+                  <span class="text-sm">{% translate "Master password" %}</span>
                   {% comment %}
                     On input, not change: the corpus check gates the step, and
                     hanging it off change would leave the button disabled for
@@ -233,7 +243,7 @@
                 {% endcomment %}
                 {% include "ui/partials/password_strength.html" with password_expr="password" %}
                 <label class="fieldset w-full">
-                  <span class="text-sm">Confirm it</span>
+                  <span class="text-sm">{% translate "Confirm it" %}</span>
                   <input
                     type="password"
                     class="input w-full"
@@ -254,8 +264,10 @@
                 x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
               >
                 <p>
-                  Save it somewhere safe and offline. With your master password,
-                  it is the only way into your vaults.
+                  {% blocktranslate trimmed %}
+                    Save it somewhere safe and offline. With your master password,
+                    it is the only way into your vaults.
+                  {% endblocktranslate %}
                 </p>
                 {% comment %}
                   The key takes the focus when the step opens, so a screen reader
@@ -269,7 +281,7 @@
                   x-text="groupedSecret()"
                 ></pre>
                 <button type="button" class="btn btn-outline btn-sm" @click="downloadKit()">
-                  Download the emergency kit (PDF)
+                  {% translate "Download the emergency kit (PDF)" %}
                 </button>
                 <label class="label cursor-pointer justify-start gap-3 whitespace-normal">
                   <input
@@ -279,16 +291,20 @@
                     x-model="acknowledged"
                   />
                   <span>
-                    I have saved my recovery key. Without it, nobody can open my
-                    vaults.
+                    {% blocktranslate trimmed %}
+                      I have saved my recovery key. Without it, nobody can open my
+                      vaults.
+                    {% endblocktranslate %}
                   </span>
                 </label>
                 <label class="label cursor-pointer justify-start gap-3 whitespace-normal">
                   <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
                   <span>
-                    Remember my recovery key on this device. Anything that can run
-                    code on this page can then read it, so leave it off on a shared
-                    computer.
+                    {% blocktranslate trimmed %}
+                      Remember my recovery key on this device. Anything that can run
+                      code on this page can then read it, so leave it off on a shared
+                      computer.
+                    {% endblocktranslate %}
                   </span>
                 </label>
               </section>
@@ -307,7 +323,7 @@
               @click="step = 1"
             >
               <i data-lucide="chevron-left" class="w-4 h-4"></i>
-              Back
+              {% translate "Back" %}
             </button>
             <span x-show="step !== 2"></span>
 
@@ -317,7 +333,7 @@
               x-show="step === 1"
               @click="step = 2"
             >
-              I understand
+              {% translate "I understand" %}
               <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </button>
             <button
@@ -329,7 +345,7 @@
               @click="generateAndSeal()"
             >
               <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
-              Set my master password
+              {% translate "Set my master password" %}
             </button>
             <button
               type="button"
@@ -340,7 +356,7 @@
               @click="finish()"
             >
               <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
-              Create my first vault
+              {% translate "Create my first vault" %}
               <i data-lucide="check" class="w-4 h-4"></i>
             </button>
           </div>

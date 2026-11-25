@@ -5,7 +5,7 @@ sync_user_files and sync_folder delegate the actual disk work to
 logic: active-user filtering, fan-out and its lock guard, access control
 via user_files_qs, and argument passing.
 
-purge_trash is not mocked at all — it runs the real ORM filter against
+purge_trash is not mocked at all - it runs the real ORM filter against
 File rows created by the test.
 """
 

@@ -1,4 +1,4 @@
-"""Tests for workspace.core.services.search — the shared unified-search path.
+"""Tests for workspace.core.services.search - the shared unified-search path.
 
 The API view and the assistant's `search_everything` tool both go through
 these helpers, so the visibility filter is pinned here rather than once per

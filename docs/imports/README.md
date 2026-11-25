@@ -87,4 +87,4 @@ feeds, the AI assistant's web reading, chat link previews and Web Push
 endpoints. Those refuse private networks whatever the two settings above say;
 the settings only open them for imports.
 
-The API is documented in the [Swagger UI](/schema/swagger-ui/).
+The API is documented in the [Swagger UI](/api/schema/swagger-ui).

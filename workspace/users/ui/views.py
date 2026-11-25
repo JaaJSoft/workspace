@@ -13,6 +13,7 @@ from django.utils.formats import date_format
 from django.utils.translation import ngettext, pgettext_lazy
 
 from workspace.common.prefetch import prefetchable
+from workspace.common.services.image import SOURCE_TYPES
 from workspace.core.services.activity import (
     allowed_activity_sources,
     annotate_time_ago,
@@ -209,7 +210,7 @@ def profile_view(request, username=None):
         allowed_sources=allowed_activity_sources(request.user),
     )
 
-    # Profile fields — single query for all three keys instead of one per get_setting
+    # Profile fields - single query for all three keys instead of one per get_setting
     profile_settings = get_module_settings(profile_user, "profile")
     profile_bio = profile_settings.get("bio")
     profile_role = profile_settings.get("role")
@@ -303,6 +304,7 @@ def settings_view(request):
         "users/ui/settings.html",
         {
             "has_avatar": avatar_service.has_avatar(request.user),
+            "avatar_types": SOURCE_TYPES,
             "usage_stats": get_usage_stats(request.user.id),
             "storage_usage": storage_usage,
             "storage_quota": storage_quota,

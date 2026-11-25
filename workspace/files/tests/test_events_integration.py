@@ -81,7 +81,7 @@ class FileEventUpdateTests(APITestCase):
             node_type=File.NodeType.FILE,
             mime_type="text/plain",
         )
-        # Setup created an initial event via the model? No — direct ORM
+        # Setup created an initial event via the model? No - direct ORM
         # create bypasses the viewset, so the event log starts empty here.
         FileEvent.objects.all().delete()
 
@@ -392,13 +392,13 @@ class PropertiesPanelEventsTests(APITestCase):
         body = response.content.decode()
 
         # Events are lazy-loaded, so the rename payload (final.txt) must
-        # not appear in the initial properties body — it'll come back via
+        # not appear in the initial properties body - it'll come back via
         # the alpine-ajax fetch against /files/<uuid>/events.
         self.assertNotIn("final.txt", body)
 
 
 class EventsPanelEndpointTests(APITestCase):
-    """GET /files/<uuid>/events — alpine-ajax target for "Load more"."""
+    """GET /files/<uuid>/events - alpine-ajax target for "Load more"."""
 
     def setUp(self):
         self.user = User.objects.create_user(

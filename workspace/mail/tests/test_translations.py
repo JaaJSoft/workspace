@@ -4,10 +4,11 @@ request."""
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone, translation
 
-from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.models import MailAccount, MailAttachment, MailFolder, MailMessage
 from workspace.mail.services.notifications import notify_new_messages
 from workspace.notifications.models import Notification
 from workspace.users.services.settings import set_setting
@@ -124,3 +125,76 @@ class MailNotificationLanguageTests(TestCase):
         notification = self._notification()
         self.assertEqual(notification.title, "New email")
         self.assertEqual(notification.body, "(no subject)")
+
+
+class MailQueryParameterRefusalLanguageTests(TestCase):
+    """A request the mail API refuses for a missing or malformed parameter
+    answers in the reader's language, like every other refusal."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alix", password="pass")
+        self.client.force_login(self.user)
+        set_setting(self.user, "core", "language", "fr")
+
+    def tearDown(self):
+        cache.clear()
+
+    def assertRefusedWith(self, url, detail):
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 400, url)
+        self.assertEqual(response.json()["detail"], detail, url)
+
+    def test_missing_account_is_refused_in_french(self):
+        for url in (
+            "/api/v1/mail/folders",
+            "/api/v1/mail/labels",
+            "/api/v1/mail/rules",
+        ):
+            self.assertRefusedWith(url, "Le paramètre account est obligatoire.")
+
+    def test_malformed_uuid_is_refused_in_french(self):
+        for url, parameter in (
+            ("/api/v1/mail/folders?account=nope", "account"),
+            ("/api/v1/mail/rules?account=nope", "account"),
+            ("/api/v1/mail/messages?folder=nope", "folder"),
+            ("/api/v1/mail/messages?label=nope", "label"),
+            ("/api/v1/mail/contacts/autocomplete?q=ab&account_id=nope", "account_id"),
+        ):
+            self.assertRefusedWith(url, f"« {parameter} » doit être un UUID valide.")
+
+    def test_missing_message_scope_is_refused_in_french(self):
+        self.assertRefusedWith(
+            "/api/v1/mail/messages",
+            "Un paramètre folder, label ou inbox=all est obligatoire.",
+        )
+
+    def test_unknown_oauth_provider_is_refused_in_french(self):
+        response = self.client.get("/api/v1/mail/oauth2/authorize?provider=nope")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.content.decode(), "Fournisseur inconnu")
+
+    def test_malformed_save_to_files_folder_is_refused_in_french(self):
+        account = MailAccount.objects.create(
+            owner=self.user,
+            email="a@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="a@example.test",
+        )
+        folder = MailFolder.objects.create(account=account, name="INBOX")
+        message = MailMessage.objects.create(account=account, folder=folder, imap_uid=1)
+        attachment = MailAttachment.objects.create(
+            message=message,
+            filename="doc.pdf",
+            size=3,
+            content=SimpleUploadedFile("doc.pdf", b"pdf"),
+        )
+        response = self.client.post(
+            f"/api/v1/mail/attachments/{attachment.uuid}/save-to-files",
+            {"folder_id": "nope"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"], "« folder_id » doit être un UUID valide."
+        )

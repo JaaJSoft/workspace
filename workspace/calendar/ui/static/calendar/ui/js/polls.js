@@ -1,4 +1,4 @@
-// Shared poll utilities — used by calendar.js, shared.html, and pollDetail
+// Shared poll utilities - used by calendar.js, shared.html, and pollDetail
 window.pollUtils = {
   voteClass(choice) {
     if (choice === 'yes') return 'bg-success/20 text-success';

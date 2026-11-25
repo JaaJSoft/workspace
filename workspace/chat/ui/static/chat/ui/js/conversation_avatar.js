@@ -1,5 +1,5 @@
 /**
- * <conversation-avatar> — the circle standing for a chat conversation: the
+ * <conversation-avatar> - the circle standing for a chat conversation: the
  * other participant's avatar for a direct message, the uploaded group picture
  * for a group that has one, its members' initials otherwise.
  *

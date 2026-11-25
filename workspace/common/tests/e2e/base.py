@@ -26,7 +26,7 @@ import unittest
 # context" and uses to raise ``SynchronousOnlyOperation`` on every
 # ``Model.objects.create(...)`` call made from the test thread. We are
 # not actually running Django in an async runtime, so opt out of that
-# safety check — this is the officially documented escape hatch.
+# safety check - this is the officially documented escape hatch.
 # ``setdefault`` avoids clobbering an explicit opt-out from the caller.
 os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
@@ -74,7 +74,7 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
     # exception (``pageerror``) or any same-origin request failed during
     # the test. Third-party CDN failures and navigation-aborted requests
     # (``net::ERR_ABORTED``, fired e.g. when an in-flight SSE long-poll
-    # is cancelled by ``page.goto`` / teardown) are tolerated — they're
+    # is cancelled by ``page.goto`` / teardown) are tolerated - they're
     # operational, not regressions in our code.
     #
     # Default is **opt-in** for now: ``base.html`` currently emits
@@ -144,7 +144,7 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         self.page.on(
             "requestfailed",
             lambda req: self._failed_requests.append(
-                f"{req.method} {req.url} — {req.failure}"
+                f"{req.method} {req.url} - {req.failure}"
             ),
         )
 
@@ -173,15 +173,15 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         a misconfigured CSP. ``pageerror`` captures uncaught JS
         exceptions; ``requestfailed`` captures network-level failures
         (DNS, TCP reset, blocked by browser). Note this does *not*
-        observe HTTP responses — a 401 / 500 that the UI swallows
+        observe HTTP responses - a 401 / 500 that the UI swallows
         without raising will not be caught here; add a ``response``
         listener if you need that signal.
 
         Tolerated:
 
-        * Third-party CDN failures (cropper, lucide…) — flake
+        * Third-party CDN failures (cropper, lucide…) - flake
           independently of the code under test.
-        * ``net::ERR_ABORTED`` on any URL — fired when the browser
+        * ``net::ERR_ABORTED`` on any URL - fired when the browser
           cancels an in-flight request because the page navigated or
           tore down (typical for the SSE ``/api/v1/stream`` long-poll
           on logout / teardown). Aborts are intentional, not failures.
@@ -207,7 +207,7 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         raise AssertionError("\n".join(parts))
 
     def _dump_diagnostics(self):
-        """Print captured browser diagnostics — only when something failed."""
+        """Print captured browser diagnostics - only when something failed."""
         import sys
 
         exc_type, exc, _tb = sys.exc_info()
@@ -231,7 +231,7 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
             print(f"[e2e] requestfailed: {req}")
         try:
             body = self.page.locator("body").inner_text(timeout=1000)
-            # Keep the dump bounded — 2000 chars is enough to see error alerts.
+            # Keep the dump bounded - 2000 chars is enough to see error alerts.
             print(f"[e2e] body text (first 2000 chars):\n{body[:2000]}")
         except Exception as e:
             print(f"[e2e] body text: <unavailable: {e}>")
@@ -301,7 +301,7 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         """Log in through the actual login form.
 
         Use this only when the test is exercising the login page itself;
-        for every other authenticated test use ``login_as`` (far faster —
+        for every other authenticated test use ``login_as`` (far faster -
         no form, no network round-trip through the UI).
 
         When ``wait_for_redirect`` is False the helper returns immediately
@@ -320,7 +320,7 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
 
         Creates a session in the test DB via Django's test ``Client`` and
         copies the session cookie into the Playwright ``BrowserContext``.
-        Fast (~10 ms) — prefer this over ``login_via_ui`` for every test
+        Fast (~10 ms) - prefer this over ``login_via_ui`` for every test
         that is not exercising the login page itself.
 
         Works because ``StaticLiveServerTestCase`` runs the live server

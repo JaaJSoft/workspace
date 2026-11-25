@@ -12,7 +12,7 @@ Human content (names, emails, sentences, paragraphs, addresses) is generated
 with `faker` across several locales for an international feel; the app-specific
 taxonomy (folders, departments, event titles) stays curated. Users and group
 conversations get a locally-generated avatar (colored square + initials, via
-Pillow — no network), processed through the app's real avatar services.
+Pillow - no network), processed through the app's real avatar services.
 
 All activity is backdated across ``--history-days`` (default 180) so listings,
 the calendar and the activity feed/heatmap look lived-in rather than all
@@ -463,7 +463,7 @@ def _make_file_content():
 # value is forced at INSERT / SAVE. To spread activity over time we must rewrite
 # the column with a bulk ``queryset.update(...)`` (which bypasses the auto flags)
 # AFTER creation. Crucially, backdating a File also requires backdating its
-# FileEvent CREATED row — the activity feed + heatmap order/display by
+# FileEvent CREATED row - the activity feed + heatmap order/display by
 # FileEvent.created_at, so leaving it at "now" makes an old file look brand new.
 # File.last_event_at follows, since the feed picks its candidate files by it.
 
@@ -1197,7 +1197,7 @@ def purge(domain, assume_yes):
             print("Aborted.")
             sys.exit(1)
     # Avatar webp blobs live in storage outside the ORM cascade, so remove them
-    # explicitly — otherwise deleting the rows orphans the files (and since user
+    # explicitly - otherwise deleting the rows orphans the files (and since user
     # ids change every run, they would accumulate on disk).
     for user in qs:
         avatar_service.delete_avatar(user)

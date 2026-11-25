@@ -10,12 +10,9 @@ Optional context:
 - title: tooltip text (default "Refresh").
 - size: button size modifier (default "sm").
 
-Note: the reactive ``:class`` binding lives on a ``<span>`` wrapper rather
-than the ``<i>`` itself. Lucide replaces ``<i data-lucide="...">`` with a
-fresh ``<svg>`` at mount time, which orphans any Alpine directive bound
-to the original ``<i>`` - the spin would never start. Wrapping in a
-``<span>`` (which Lucide never touches) preserves the binding and makes
-the SVG inside rotate via ``animate-spin``.
+The :class binding sits on a span wrapper, not on the icon: Lucide replaces
+the icon element with a fresh svg at mount time, which orphans any Alpine
+directive bound to it, so the spin would never start.
 {% endcomment %}
 {% load i18n %}
 {% translate "Refresh" as default_title %}

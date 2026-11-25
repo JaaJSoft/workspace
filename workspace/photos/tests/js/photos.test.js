@@ -18,6 +18,7 @@ function load({ mobile = false, collapsed = false, observers = [], ...extra } = 
   }
   const ctx = loadScripts(
     [
+      'workspace/core/static/core/js/user_settings.js',
       // The real mixin: photos.js spreads it, and the menu drives it.
       'workspace/files/ui/static/files/ui/js/properties_panel.js',
       'workspace/photos/ui/static/photos/ui/js/faces.js',

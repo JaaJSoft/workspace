@@ -341,12 +341,11 @@
         </div>
       </div>
 
-      <!-- Properties sidebar: full-coverage overlay on mobile, in-flow 320 px panel on md+.
-         Mobile width comes from ``inset-0`` (the browser derives it from left:0/right:0),
-         which is more robust than ``max-md:w-full`` — the Tailwind CDN's handling of
-         responsive width utilities + Alpine x-transition can leave the panel sized to
-         its content (~306 px) on some runtimes. Mobile slides in via opacity; desktop
-         keeps the original width animation. -->
+      {% comment %}
+        Properties sidebar: full-coverage overlay on mobile, in-flow 320 px panel on md+.
+        The mobile width comes from inset-0, not max-md:w-full: combined with the
+        x-transition, a width utility can leave the panel sized to its content.
+      {% endcomment %}
       <div
         id="properties-sidebar"
         x-show="showPropertiesPanel"

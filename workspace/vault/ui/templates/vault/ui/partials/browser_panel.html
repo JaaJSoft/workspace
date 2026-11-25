@@ -1,3 +1,12 @@
+{% load i18n %}
+{% translate "Username" context "vault field" as username_label %}
+{% translate "Password" as password_label %}
+{% translate "Hide the password" as hide_password %}
+{% translate "Reveal the password" as reveal_password %}
+{% translate "Hide the authenticator key" as hide_totp %}
+{% translate "Reveal the authenticator key" as reveal_totp %}
+{% translate "Created %(date)s" context "vault entry" as created_on %}
+{% translate "Modified %(date)s" context "vault entry" as modified_on %}
 {% comment %}
   What a row is, without opening what it keeps.
 
@@ -27,7 +36,7 @@
           type="button"
           class="btn btn-ghost btn-xs btn-square"
           @click="closePanel()"
-          aria-label="Close the panel"
+          aria-label="{% translate "Close the panel" %}"
         >
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
@@ -35,15 +44,15 @@
 
       <div class="p-4 space-y-4 text-sm overflow-y-auto">
         <div x-show="panelEntry.username">
-          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Username</div>
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">{{ username_label }}</div>
           <div class="flex items-center gap-2">
             <span class="flex-1 truncate" x-text="panelEntry.username"></span>
             <button
               type="button"
               class="btn btn-ghost btn-xs btn-square"
               x-show="panelHasAction('copy_username')"
-              @click="copyField(panelEntry, 'Username', 'username', false)"
-              aria-label="Copy the username"
+              @click="copyField(panelEntry, '{{ username_label|escapejs }}', 'username', false)"
+              aria-label="{% translate "Copy the username" %}"
             >
               <i data-lucide="copy" class="w-3.5 h-3.5"></i>
             </button>
@@ -51,7 +60,7 @@
         </div>
 
         <div x-show="panelCarries('password')">
-          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Password</div>
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">{% translate "Password" %}</div>
           <div class="flex items-center gap-2">
             <span
               class="flex-1 font-mono break-all"
@@ -63,7 +72,7 @@
               class="btn btn-ghost btn-xs btn-square"
               x-show="panelHasAction('copy_password')"
               @click="toggleReveal('password')"
-              :aria-label="isRevealed('password') ? 'Hide the password' : 'Reveal the password'"
+              :aria-label="isRevealed('password') ? '{{ hide_password|escapejs }}' : '{{ reveal_password|escapejs }}'"
             >
               <i
                 :data-lucide="isRevealed('password') ? 'eye-off' : 'eye'"
@@ -74,8 +83,8 @@
               type="button"
               class="btn btn-ghost btn-xs btn-square"
               x-show="panelHasAction('copy_password')"
-              @click="copyField(panelEntry, 'Password', 'password', true)"
-              aria-label="Copy the password"
+              @click="copyField(panelEntry, '{{ password_label|escapejs }}', 'password', true)"
+              aria-label="{% translate "Copy the password" %}"
             >
               <i data-lucide="copy" class="w-3.5 h-3.5"></i>
             </button>
@@ -89,10 +98,10 @@
           state, so they get a line each.
         {% endcomment %}
         <div x-show="panelCarries('totp') && panelHasAction('copy_totp')">
-          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Authenticator code</div>
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">{% translate "Authenticator code" %}</div>
           <div class="flex items-center gap-2">
             <template x-if="totp && totp.unreadable">
-              <span class="flex-1 text-sm opacity-60">This key cannot be read.</span>
+              <span class="flex-1 text-sm opacity-60">{% translate "This key cannot be read." %}</span>
             </template>
             <template x-if="totp && !totp.unreadable">
               <span
@@ -111,7 +120,7 @@
               class="btn btn-ghost btn-xs btn-square"
               x-show="panelHasAction('copy_totp') && totp && !totp.unreadable"
               @click="copyTotp(panelEntry)"
-              aria-label="Copy the authenticator code"
+              aria-label="{% translate "Copy the authenticator code" %}"
             >
               <i data-lucide="copy" class="w-3.5 h-3.5"></i>
             </button>
@@ -120,7 +129,7 @@
 
         {# Revealed as the base32 key, not the otpauth:// uri it is stored as: what a user does with this row is retype it into another authenticator. #}
         <div x-show="panelCarries('totp')">
-          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Authenticator key</div>
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">{% translate "Authenticator key" %}</div>
           <div class="flex items-center gap-2">
             <span
               class="flex-1 font-mono break-all text-xs"
@@ -131,7 +140,7 @@
               class="btn btn-ghost btn-xs btn-square"
               x-show="panelHasAction('copy_totp')"
               @click="toggleReveal('totp')"
-              :aria-label="isRevealed('totp') ? 'Hide the authenticator key' : 'Reveal the authenticator key'"
+              :aria-label="isRevealed('totp') ? '{{ hide_totp|escapejs }}' : '{{ reveal_totp|escapejs }}'"
             >
               <i
                 :data-lucide="isRevealed('totp') ? 'eye-off' : 'eye'"
@@ -142,12 +151,12 @@
         </div>
 
         <div x-show="panelCarries('uri')">
-          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Website</div>
-          <span class="opacity-60">Opened from the menu, never rendered as a link here.</span>
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">{% translate "Website" %}</div>
+          <span class="opacity-60">{% translate "Opened from the menu, never rendered as a link here." %}</span>
         </div>
 
         <div x-show="panelNotes">
-          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Notes</div>
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">{% translate "Notes" %}</div>
           <div
             class="whitespace-pre-wrap wrap-break-word select-text"
             x-text="panelNotes"
@@ -155,7 +164,7 @@
         </div>
 
         <div x-show="panelEntry.tags.length">
-          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Tags</div>
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">{% translate "Tags" %}</div>
           <div class="flex flex-wrap gap-1">
             <template x-for="tagUuid in panelEntry.tags" :key="tagUuid">
               <template x-if="tagById(tagUuid)">
@@ -166,8 +175,12 @@
         </div>
 
         <div class="pt-2 border-t border-base-300 text-xs opacity-60 space-y-1">
-          <div>Created <span x-text="shortDate(panelEntry.created)"></span></div>
-          <div>Modified <span x-text="shortDate(panelEntry.modified)"></span></div>
+          <div
+            x-text="interpolate('{{ created_on|escapejs }}', { date: shortDate(panelEntry.created) }, true)"
+          ></div>
+          <div
+            x-text="interpolate('{{ modified_on|escapejs }}', { date: shortDate(panelEntry.modified) }, true)"
+          ></div>
         </div>
       </div>
 
@@ -179,7 +192,7 @@
           @click="editEntry(panelEntry)"
         >
           <i data-lucide="pencil" class="w-4 h-4"></i>
-          Edit
+          {% translate "Edit" %}
         </button>
         <button
           type="button"
@@ -188,13 +201,13 @@
           @click="runAction({ id: 'restore' }, panelEntry)"
         >
           <i data-lucide="undo-2" class="w-4 h-4"></i>
-          Restore
+          {% translate "Restore" %}
         </button>
         <button
           type="button"
           class="btn btn-sm btn-ghost text-error btn-square"
           x-show="panelHasAction('trash')"
-          aria-label="Move to trash"
+          aria-label="{% translate "Move to trash" %}"
           @click="runAction({ id: 'trash' }, panelEntry)"
         >
           <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -206,7 +219,7 @@
           @click="runAction({ id: 'delete_forever' }, panelEntry)"
         >
           <i data-lucide="trash-2" class="w-4 h-4"></i>
-          Delete permanently
+          {% translate "Delete permanently" %}
         </button>
       </div>
     </div>

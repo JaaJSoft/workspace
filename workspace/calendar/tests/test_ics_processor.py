@@ -12,7 +12,7 @@ from workspace.mail.models import MailAccount, MailAttachment, MailFolder, MailM
 
 User = get_user_model()
 
-# Event: 2026-03-01 14:00–15:00 UTC
+# Event: 2026-03-01 14:00-15:00 UTC
 ICS_REQUEST = (
     "BEGIN:VCALENDAR\r\n"
     "METHOD:REQUEST\r\n"

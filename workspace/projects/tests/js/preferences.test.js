@@ -1,6 +1,6 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 // Each fetch call is captured as a deferred so tests control completion
 // order - the out-of-order failure races below depend on it.
@@ -12,7 +12,7 @@ function deferredFetch() {
 }
 
 function load(fetchImpl) {
-  return loadScript('workspace/projects/ui/static/projects/ui/js/preferences.js', {
+  return loadScripts(['workspace/core/static/core/js/user_settings.js', 'workspace/projects/ui/static/projects/ui/js/preferences.js'], {
     document: { getElementById: () => null },
     fetch: fetchImpl,
     getCSRFToken: () => 'token',
@@ -27,6 +27,23 @@ function load(fetchImpl) {
 function settle() {
   return new Promise((resolve) => setImmediate(resolve));
 }
+
+test('update puts the value under its key and announces a new notify level', async () => {
+  const { impl, calls } = deferredFetch();
+  const events = [];
+  const ctx = load(impl);
+  ctx.dispatchEvent = (event) => events.push(event);
+  const prefs = ctx.projectsPreferences();
+
+  prefs.update('notify_level', 'none');
+  assert.equal(calls[0].url, '/api/v1/settings/projects/notify_level');
+  assert.equal(calls[0].opts.method, 'PUT');
+  assert.deepEqual(JSON.parse(calls[0].opts.body), { value: 'none' });
+  calls[0].resolve({ ok: true });
+  await settle();
+
+  assert.deepEqual(events.map((e) => [e.name, e.detail.level]), [['projects-notify-level-changed', 'none']]);
+});
 
 test('update rolls back the optimistic value when the request fails', async () => {
   const { impl, calls } = deferredFetch();

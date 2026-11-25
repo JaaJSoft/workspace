@@ -723,6 +723,8 @@
   {{ notify_mode|json_script:"mail-notify-mode-data" }}
   {{ notify_max_burst|json_script:"mail-notify-burst-data" }}
   {{ mail_prefs|json_script:"mail-prefs-data" }}
+  {{ rule_condition_fields|json_script:"mail-rule-condition-fields-data" }}
+  {{ filing_rules|json_script:"mail-filing-rules-data" }}
 {% endblock %}
 
 {% block extra_scripts %}

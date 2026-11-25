@@ -96,7 +96,7 @@ class PurgeTestMixin(IsolatedMediaRootMixin):
 
 
 # ---------------------------------------------------------------
-# Phase 1 — abandoned conversations
+# Phase 1 - abandoned conversations
 # ---------------------------------------------------------------
 
 
@@ -196,7 +196,7 @@ class AbandonedConversationTests(PurgeTestMixin, TestCase):
 
 
 # ---------------------------------------------------------------
-# Phase 2 — orphan files on disk
+# Phase 2 - orphan files on disk
 # ---------------------------------------------------------------
 
 
@@ -269,7 +269,7 @@ class OrphanFileTests(PurgeTestMixin, TestCase):
 
     def test_no_chat_dir_is_noop(self):
         """If chat/ directory doesn't exist, phase 2 silently does nothing."""
-        # media_root exists but has no chat/ subdirectory — should not crash
+        # media_root exists but has no chat/ subdirectory - should not crash
         self._call()
 
 

@@ -23,33 +23,31 @@ class SchemaError(ValueError):
     callers can catch without depending on pydantic."""
 
 
-ALLOWED_FIELDS = {
-    "from",
-    "to",
-    "cc",
-    "recipient",
-    "subject",
-    "body",
-    "folder",
-    "has_attachments",
-    "is_starred",
-    "date",
-}
-TEXT_FIELDS = {"from", "to", "cc", "recipient", "subject", "body", "folder"}
-BOOL_FIELDS = {"has_attachments", "is_starred"}
-DATE_FIELDS = {"date"}
+# Tuples, in the order the rule form offers them: the first operator of a
+# field is the one the form picks when that field is chosen.
+TEXT_FIELDS = ("from", "to", "cc", "recipient", "subject", "body", "folder")
+BOOL_FIELDS = ("has_attachments", "is_starred")
+DATE_FIELDS = ("date",)
+ALLOWED_FIELDS = {*TEXT_FIELDS, *BOOL_FIELDS, *DATE_FIELDS}
 
-TEXT_OPS = {
+TEXT_OPS = (
     "contains",
     "equals",
     "starts_with",
     "ends_with",
     "matches_regex",
     "in_list",
-}
-BOOL_OPS = {"is_true", "is_false"}
-DATE_OPS = {"greater_than", "less_than"}
-ALL_OPS = TEXT_OPS | BOOL_OPS | DATE_OPS
+)
+BOOL_OPS = ("is_true", "is_false")
+DATE_OPS = ("greater_than", "less_than")
+ALL_OPS = {*TEXT_OPS, *BOOL_OPS, *DATE_OPS}
+
+# Each kind of field with the operators it accepts.
+FIELD_KINDS = (
+    (TEXT_FIELDS, TEXT_OPS),
+    (BOOL_FIELDS, BOOL_OPS),
+    (DATE_FIELDS, DATE_OPS),
+)
 
 
 class LeafCondition(BaseModel):

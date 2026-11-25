@@ -144,7 +144,9 @@ def browse_address_books(connection):
     """The connection's address books, by name."""
     prov = get_available_provider(connection.provider)
     if KIND_CONTACTS not in prov.kinds:
-        raise UnsupportedKind(f"{prov.name} does not provide contacts.")
+        raise UnsupportedKind(
+            _("%(provider)s does not provide contacts.") % {"provider": prov.name}
+        )
     source = prov.contact_source(connection)
     try:
         books = list(source.address_books())
@@ -172,7 +174,9 @@ def delete_connection(connection):
             status__in=[ImportJob.Status.PENDING, ImportJob.Status.RUNNING]
         ).exists():
             raise ConnectionBusy(
-                "An import is running on this connection - stop it before removing "
-                "the connection."
+                _(
+                    "An import is running on this connection - stop it before "
+                    "removing the connection."
+                )
             )
         locked.delete()

@@ -1,9 +1,9 @@
 """Management command to delete orphaned chat attachment files from storage.
 
 Two cleanup phases:
-1. Abandoned conversations — all human members have left, only bot messages
+1. Abandoned conversations - all human members have left, only bot messages
    remain.  Deletes attachments (disk + DB), messages, and the conversation.
-2. Orphan files — blobs in storage whose MessageAttachment row no longer exists.
+2. Orphan files - blobs in storage whose MessageAttachment row no longer exists.
 """
 
 import logging

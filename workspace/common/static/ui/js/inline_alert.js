@@ -1,5 +1,5 @@
 /**
- * <inline-alert> — the bordered inline message box, one implementation for
+ * <inline-alert> - the bordered inline message box, one implementation for
  * both rendering paths. Django templates write the element directly; runtime
  * JS creates it with document.createElement:
  *
@@ -16,9 +16,9 @@
  *   - message      plain-text body.
  *   - title        bold heading above the message. Consumed and removed on
  *                  first render so it doesn't double as a native tooltip.
- *   - dismissible  boolean attribute — trailing ✕ removes the alert.
+ *   - dismissible  boolean attribute - trailing ✕ removes the alert.
  *   - icon         lucide icon name override; "none" renders no icon.
- *   - toast        boolean attribute — placement variant for floating
+ *   - toast        boolean attribute - placement variant for floating
  *                  toasts (created by ui/js/toast.js): opaque background
  *                  and shadow instead of the translucent inline surface.
  *
@@ -83,8 +83,8 @@ window.INLINE_ALERT_TYPES = {
     }
 
     // Toasts declare an exit animation (ui/js/toast.js sets
-    // data-animation-out); route every removal path — the ✕ button,
-    // data-dismiss actions, AppAlert.dismiss — through it so they all
+    // data-animation-out); route every removal path - the ✕ button,
+    // data-dismiss actions, AppAlert.dismiss - through it so they all
     // slide out the same way. Alerts without one detach immediately.
     remove() {
       const exit = this.dataset.animationOut;

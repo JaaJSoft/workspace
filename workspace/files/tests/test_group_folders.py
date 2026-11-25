@@ -892,7 +892,7 @@ class BreadcrumbQueryCountTests(TestCase):
                 parent=parent,
             )
 
-        # Re-fetch leaf from DB — simulates the real view path where
+        # Re-fetch leaf from DB - simulates the real view path where
         # the folder is loaded via File.objects.filter(...).first()
         leaf = File.objects.get(pk=parent.pk)
         # 1 query to fetch the 4 ancestors (leaf itself is already in memory)
@@ -1005,7 +1005,7 @@ class BreadcrumbSpecialCharTests(TestCase):
 
 
 class FileNameSlashValidationTests(TestCase):
-    """Names containing '/' must be rejected — it is the path separator."""
+    """Names containing '/' must be rejected - it is the path separator."""
 
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pass")

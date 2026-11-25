@@ -46,7 +46,7 @@ def sync_external_calendar(external_calendar):
     ics_text = _fetch_feed(external_calendar)
 
     if ics_text is None:
-        # 304 Not Modified — just update timestamp
+        # 304 Not Modified - just update timestamp
         external_calendar.last_synced_at = timezone.now()
         external_calendar.save(update_fields=["last_synced_at"])
         return

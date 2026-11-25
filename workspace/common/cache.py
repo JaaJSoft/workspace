@@ -100,7 +100,7 @@ def invalidate(view_name, user=None):
 # ``cached`` below caches arbitrary function return values keyed by whatever
 # the caller wants; invalidation works through tags. Each tag has a version
 # counter, and a cached entry's effective key embeds the version of every tag
-# it carries. ``invalidate_tags`` bumps the counters — entries that referenced
+# it carries. ``invalidate_tags`` bumps the counters - entries that referenced
 # the old version become orphans and expire naturally by TTL.
 #
 # This avoids the "delete every key matching a pattern" dance (needing Redis

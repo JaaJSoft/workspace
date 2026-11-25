@@ -399,11 +399,7 @@ window.photosApp = function photosApp() {
     // Never awaited: the grid has already resized, and a refused write only
     // costs the size on the next load.
     saveTileSize() {
-      return fetch('/api/v1/settings/photos/tile_size', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ value: this.tileSize }),
-      }).catch(() => {});
+      return window.saveUserSetting('photos', 'tile_size', this.tileSize).catch(() => {});
     },
 
     // ── Preferences ─────────────────────────────────────
@@ -417,13 +413,8 @@ window.photosApp = function photosApp() {
       this.photoPrefs[key] = value;
       if (key === 'video_hover_preview' && !value) this.stopHoverPreview();
       this._applyRootAttribute(key, value);
-      return fetch(`/api/v1/settings/${PHOTO_PREF_MODULES[key] || 'photos'}/${key}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ value }),
-      })
-        .then((response) => {
-          if (!response.ok) throw new Error(String(response.status));
+      return window.saveUserSetting(PHOTO_PREF_MODULES[key] || 'photos', key, value)
+        .then(() => {
           // Server-rendered from the preference: the Hidden entry of the
           // sidebar, and for the defaults, what a URL without ?scope= or
           // ?type= shows and every link of the page, which leave out

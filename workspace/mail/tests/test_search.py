@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import translation
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.search import search_contacts, search_mail
@@ -136,3 +137,25 @@ class SearchContactsAccentTests(TestCase):
         self.assertEqual(
             self._emails("dupre"), ["François Dupré <f.dupre@example.com>"]
         )
+
+
+class SubjectlessHitTests(TestCase):
+    def test_subjectless_hit_is_named_in_the_viewers_language(self):
+        user = User.objects.create_user(username="nosubject", password="pass123")
+        account = MailAccount.objects.create(
+            owner=user, email="n@example.com", imap_host="i", smtp_host="s"
+        )
+        folder = MailFolder.objects.create(account=account, name="INBOX")
+        MailMessage.objects.create(
+            account=account,
+            folder=folder,
+            imap_uid=1,
+            subject="",
+            snippet="quarterly invoice attached",
+            date=datetime(2026, 1, 31, tzinfo=UTC),
+        )
+
+        with translation.override("fr"):
+            results = search_mail("invoice", user, 10)
+
+        self.assertEqual(results[0].name, "(sans objet)")

@@ -627,7 +627,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
     canArchive(msg) {
       if (!msg) return false;
       const type = this._messageFolderType(msg);
-      if (['archive', 'trash', 'spam', 'drafts'].includes(type)) return false;
+      if (this.filingRules.archive_refused_from.includes(type)) return false;
       const accountId = msg.account_id || this.selectedFolder?.account_id;
       if (this._accountHasFolderType(accountId, 'archive')) return true;
       // Gmail keeps every message in All Mail: there, archiving is taking a
@@ -639,7 +639,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
     canReportSpam(msg) {
       if (!msg) return false;
       const type = this._messageFolderType(msg);
-      if (['spam', 'trash', 'drafts', 'sent'].includes(type)) return false;
+      if (this.filingRules.spam_refused_from.includes(type)) return false;
       return this._accountHasFolderType(msg.account_id || this.selectedFolder?.account_id, 'spam');
     },
 

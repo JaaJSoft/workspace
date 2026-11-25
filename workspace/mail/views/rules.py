@@ -10,8 +10,8 @@ from rest_framework.views import APIView
 
 from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import MailAccount, MailFolder, MailMessage, MailRule, MailRuleLog
-from ..queries import user_account_ids
+from ..models import MailFolder, MailMessage, MailRule, MailRuleLog
+from ..queries import reachable_account, user_account_ids, user_rules
 from ..serializers import (
     MailRuleApplySerializer,
     MailRuleCreateSerializer,
@@ -32,30 +32,29 @@ def _get_user_account(request, account_id):
     """Return (account, error_response). One of them is None."""
     if not account_id:
         return None, Response(
-            {"detail": "account query parameter is required"},
+            {
+                "detail": _("The %(parameter)s query parameter is required.")
+                % {"parameter": "account"}
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     account_uuid = parse_uuid_or_none(account_id)
     if account_uuid is None:
         return None, Response(
-            {"detail": "account must be a valid UUID"},
+            {
+                "detail": _('"%(parameter)s" must be a valid UUID.')
+                % {"parameter": "account"}
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
-    try:
-        account = MailAccount.objects.get(uuid=account_uuid, owner=request.user)
-    except MailAccount.DoesNotExist:
+    account = reachable_account(request.user, account_uuid)
+    if account is None:
         return None, Response(status=status.HTTP_404_NOT_FOUND)
     return account, None
 
 
 def _get_user_rule(request, uuid):
-    try:
-        rule = MailRule.objects.select_related("account").get(uuid=uuid)
-    except MailRule.DoesNotExist:
-        return None
-    if rule.account.owner_id != request.user.pk:
-        return None
-    return rule
+    return user_rules(request.user).select_related("account").filter(uuid=uuid).first()
 
 
 @extend_schema(tags=["Mail - Rules"])
@@ -81,11 +80,8 @@ class MailRuleListView(APIView):
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
 
-        try:
-            account = MailAccount.objects.get(
-                uuid=data["account_id"], owner=request.user
-            )
-        except MailAccount.DoesNotExist:
+        account = reachable_account(request.user, data["account_id"])
+        if account is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         # Default to end of the list so newly-created rules don't stack at
@@ -194,13 +190,8 @@ class MailRuleTestView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         if "rule_id" in ser.validated_data:
-            try:
-                rule = MailRule.objects.select_related("account").get(
-                    uuid=ser.validated_data["rule_id"],
-                )
-            except MailRule.DoesNotExist:
-                return Response(status=status.HTTP_404_NOT_FOUND)
-            if rule.account.owner_id != request.user.pk:
+            rule = _get_user_rule(request, ser.validated_data["rule_id"])
+            if rule is None:
                 return Response(status=status.HTTP_404_NOT_FOUND)
             conditions = rule.conditions
         else:

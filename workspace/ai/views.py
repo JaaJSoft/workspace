@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class BotListView(APIView):
-    """GET /api/v1/ai/bots — List available AI bots."""
+    """GET /api/v1/ai/bots - List available AI bots."""
 
     permission_classes = [IsAuthenticated]
 
@@ -36,7 +36,7 @@ class BotListView(APIView):
 
 
 class SummarizeView(APIView):
-    """POST /api/v1/ai/tasks/mail/summarize — Start email summarization."""
+    """POST /api/v1/ai/tasks/mail/summarize - Start email summarization."""
 
     permission_classes = [IsAuthenticated]
 
@@ -91,7 +91,7 @@ class SummarizeView(APIView):
 
 
 class ComposeView(APIView):
-    """POST /api/v1/ai/tasks/mail/compose — Start email composition."""
+    """POST /api/v1/ai/tasks/mail/compose - Start email composition."""
 
     permission_classes = [IsAuthenticated]
 
@@ -142,7 +142,7 @@ class ComposeView(APIView):
 
 
 class ReplyView(APIView):
-    """POST /api/v1/ai/tasks/mail/reply — Generate an email reply."""
+    """POST /api/v1/ai/tasks/mail/reply - Generate an email reply."""
 
     permission_classes = [IsAuthenticated]
 
@@ -200,7 +200,7 @@ class ReplyView(APIView):
 
 
 class EditorActionView(APIView):
-    """POST /api/v1/ai/tasks/editor — Run an AI action on editor content."""
+    """POST /api/v1/ai/tasks/editor - Run an AI action on editor content."""
 
     permission_classes = [IsAuthenticated]
 
@@ -246,7 +246,7 @@ class EditorActionView(APIView):
 
 
 class ClassifyView(APIView):
-    """POST /api/v1/ai/tasks/mail/classify — Start batch email classification."""
+    """POST /api/v1/ai/tasks/mail/classify - Start batch email classification."""
 
     permission_classes = [IsAuthenticated]
 
@@ -356,7 +356,7 @@ class ClassifyView(APIView):
 
 
 class TaskDetailView(APIView):
-    """GET /api/v1/ai/tasks/<uuid> — Get task status and result."""
+    """GET /api/v1/ai/tasks/<uuid> - Get task status and result."""
 
     permission_classes = [IsAuthenticated]
 
@@ -373,7 +373,7 @@ class TaskDetailView(APIView):
 
 
 class MemoryListView(APIView):
-    """GET /api/v1/ai/memories — List current user's memories."""
+    """GET /api/v1/ai/memories - List current user's memories."""
 
     permission_classes = [IsAuthenticated]
 
@@ -394,7 +394,7 @@ class MemoryListView(APIView):
 
 
 class MemoryDetailView(APIView):
-    """PATCH/DELETE /api/v1/ai/memories/<id>"""
+    """PATCH/DELETE /api/v1/ai/memories/<uuid>"""
 
     permission_classes = [IsAuthenticated]
 

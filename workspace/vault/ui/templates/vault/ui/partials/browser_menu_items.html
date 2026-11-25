@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Rows of the entry menu. The panel around them is
   ui/partials/context_menu_panel.html, included from browser_menu.html.
@@ -15,6 +16,6 @@
     </li>
   </template>
   <li x-show="menuActions().length === 0">
-    <span class="opacity-50">Nothing can be done with this entry</span>
+    <span class="opacity-50">{% translate "Nothing can be done with this entry" %}</span>
   </li>
 </ul>

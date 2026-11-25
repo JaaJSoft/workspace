@@ -1,4 +1,4 @@
-"""Mail leaves IMAP and the message format to maintained libraries.
+"""Mail and calendar leave IMAP and the message format to maintained libraries.
 
 IMAP goes through IMAPClient, which parses the server's answers and encodes
 mailbox names, and messages through the modern half of the standard
@@ -14,6 +14,8 @@ from pathlib import Path
 from django.test import SimpleTestCase
 
 MAIL = Path(__file__).resolve().parents[1]
+# Calendar sends iTIP replies over the mail account's SMTP: same rule.
+SCANNED = (MAIL, MAIL.parent / "calendar")
 
 # imaplib: the wire protocol, without a parser for its answers.
 # email.mime, email.header: the legacy way to build a message and to decode
@@ -25,11 +27,15 @@ FORBIDDEN_NAMES = {
 
 
 def _sources():
-    for path in sorted(MAIL.rglob("*.py")):
-        relative = path.relative_to(MAIL)
-        if relative.parts[0] in ("tests", "migrations"):
-            continue
-        yield relative.as_posix(), ast.parse(path.read_text(encoding="utf-8"))
+    for root in SCANNED:
+        for path in sorted(root.rglob("*.py")):
+            relative = path.relative_to(root)
+            if relative.parts[0] in ("tests", "migrations"):
+                continue
+            yield (
+                f"{root.name}/{relative.as_posix()}",
+                ast.parse(path.read_text(encoding="utf-8")),
+            )
 
 
 def _imports(tree):
@@ -48,8 +54,9 @@ class ProtocolLibraryTests(SimpleTestCase):
     def test_the_sources_are_found(self):
         names = [name for name, _tree in _sources()]
 
-        self.assertIn("services/imap_sync.py", names)
-        self.assertIn("services/smtp.py", names)
+        self.assertIn("mail/services/imap_sync.py", names)
+        self.assertIn("mail/services/smtp.py", names)
+        self.assertIn("calendar/tasks.py", names)
 
     def test_no_raw_imap_and_no_legacy_email_api(self):
         offences = []

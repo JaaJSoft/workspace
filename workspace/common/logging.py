@@ -4,7 +4,7 @@ Use :func:`scrub` on every value taken from a request (body, headers, path,
 query string), a database row that originated in user input (e.g. a stored
 push-subscription endpoint, a filename, a free-text title), or a third-party
 API response, before passing it to a ``logger.X(...)`` call. This prevents
-log injection (CWE-117) — an attacker can otherwise embed ``\\r\\n`` in their
+log injection (CWE-117) - an attacker can otherwise embed ``\\r\\n`` in their
 input and forge fake log lines, confusing operators and SIEM parsers.
 
 The exact ``str(...).replace('\\r', '').replace('\\n', '')`` chain below is

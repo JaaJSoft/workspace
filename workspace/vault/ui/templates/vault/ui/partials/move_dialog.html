@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Choosing the folder a selection goes to. Mounted under x-if so every opening
   starts with nothing chosen. Escape listens on the window: a click on a row
@@ -13,7 +14,7 @@
       aria-labelledby="vault-move-dialog-title"
       @keydown.escape.window="closeMoveDialog()"
     >
-      {% include "ui/partials/dialog_header.html" with icon="folder-input" title_expr="'Move ' + (moveDialog.uuids.length === 1 ? ((entries.find((e) => e.uuid === moveDialog.uuids[0]) || {}).name || '') : moveDialog.uuids.length + ' entries')" title_id="vault-move-dialog-title" subtitle_expr="moveDialog.uuids.length > 1 ? 'Choose where they go in this vault.' : 'Choose where it goes in this vault.'" close_expr="closeMoveDialog()" only %}
+      {% include "ui/partials/dialog_header.html" with icon="folder-input" title_expr="moveDialogTitle()" title_id="vault-move-dialog-title" subtitle_expr="moveDialogSubtitle()" close_expr="closeMoveDialog()" only %}
 
       <ul
         class="menu bg-base-200/50 rounded-box max-h-72 overflow-y-auto flex-nowrap w-full"
@@ -28,11 +29,11 @@
               class="w-4 h-4"
             ></i>
             <span x-text="vaultName()"></span>
-            <span class="text-xs opacity-50">no folder</span>
+            <span class="text-xs opacity-50">{% translate "no folder" %}</span>
             <span
               class="badge badge-xs badge-ghost ml-auto"
               x-show="commonFolder(moveDialog.uuids) === null"
-            >here now</span>
+            >{% translate "here now" %}</span>
           </a>
         </li>
         <template x-for="folder in folderTree()" :key="folder.uuid">
@@ -47,21 +48,21 @@
               <span
                 class="badge badge-xs badge-ghost ml-auto"
                 x-show="commonFolder(moveDialog.uuids) === folder.uuid"
-              >here now</span>
+              >{% translate "here now" %}</span>
             </a>
           </li>
         </template>
       </ul>
 
       <div class="modal-action">
-        <button type="button" class="btn btn-sm btn-ghost" @click="closeMoveDialog()">Cancel</button>
+        <button type="button" class="btn btn-sm btn-ghost" @click="closeMoveDialog()">{% translate "Cancel" %}</button>
         <button
           type="button"
           class="btn btn-sm btn-module"
           :disabled="!canConfirmMove()"
           @click="confirmMove()"
         >
-          Move
+          {% translate "Move" %}
         </button>
       </div>
     </div>

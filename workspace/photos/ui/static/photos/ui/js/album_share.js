@@ -3,19 +3,18 @@
 // links. Member changes are staged and saved together, as in the Files share
 // modal; a link is created or revoked at once.
 
-const ALBUM_ROLES = [
-  { value: 'viewer', label: pgettext('album role', 'Viewer'), hint: gettext('Browses the album') },
-  {
-    value: 'contributor',
-    label: pgettext('album role', 'Contributor'),
-    hint: gettext('Also adds their own photos, and removes them'),
-  },
-  {
-    value: 'manager',
-    label: pgettext('album role', 'Manager'),
-    hint: gettext('Also edits the album, its members and its links'),
-  },
-];
+// The roles a share grants, lowest first, each a { value, label, hint }
+// (photos/services/album_sharing.py).
+function albumShareRoles() {
+  const el = document.getElementById('photos-album-share-roles');
+  try {
+    const data = el ? JSON.parse(el.textContent) : null;
+    if (Array.isArray(data)) return data;
+  } catch (_) {
+    // Unreadable: the picker has no role to offer.
+  }
+  return [];
+}
 
 // A member is a user, a group or a project, and their ids overlap: every map
 // and set below is keyed by both.
@@ -32,7 +31,7 @@ function albumShareTarget(type, id) {
 
 window.albumShareModal = function albumShareModal() {
   return {
-    roles: ALBUM_ROLES,
+    roles: albumShareRoles(),
     albumUuid: null,
     albumTitle: '',
     owner: null,
@@ -169,7 +168,7 @@ window.albumShareModal = function albumShareModal() {
         return;
       }
       if (this.pendingAdds.some((t) => albumShareKey(t.type, t.id) === key)) return;
-      this.pendingAdds = [...this.pendingAdds, { ...target, role: 'viewer' }];
+      this.pendingAdds = [...this.pendingAdds, { ...target, role: this.roles[0].value }];
     },
 
     stageRemove(key) {
@@ -208,7 +207,7 @@ window.albumShareModal = function albumShareModal() {
     },
 
     roleHint(role) {
-      const found = ALBUM_ROLES.find((r) => r.value === role);
+      const found = this.roles.find((r) => r.value === role);
       return found ? found.hint : '';
     },
 

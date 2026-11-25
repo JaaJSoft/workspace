@@ -74,6 +74,53 @@ def _text_offences(path):
     return offences
 
 
+_PUBLISHED_GLOBAL = re.compile(r"\bwindow\.([A-Za-z_$][\w$]*)\s*=(?!=)")
+
+
+def _published_globals(scripts):
+    names = set()
+    for path in scripts:
+        text = _strip_comments(path, path.read_text(encoding="utf-8"))
+        names.update(_PUBLISHED_GLOBAL.findall(text))
+    return names
+
+
+def _app_scripts():
+    """Scripts other apps serve, the ones a page loads next to common's."""
+    workspace_dir = COMMON_DIR.parent
+    for app in sorted(_other_apps()):
+        for path in sorted((workspace_dir / app).rglob("static/**/*.js")):
+            parts = path.relative_to(workspace_dir).parts
+            if "tests" in parts or "vendor" in parts or "dist" in parts:
+                continue
+            yield path
+
+
+def _global_offences():
+    """Globals another app's script publishes that common reads.
+
+    Classic scripts share one global scope, so no import names the
+    dependency: the script only works on pages that load the other one first.
+    """
+    foreign = _published_globals(_app_scripts()) - _published_globals(
+        _source_files(".js")
+    )
+    found = {}
+    for suffix in (".html", ".js"):
+        for path in _source_files(suffix):
+            text = _strip_comments(path, path.read_text(encoding="utf-8"))
+            used = sorted(
+                name
+                for name in foreign
+                if re.search(rf"(?<![\w$.])(?:window\.)?{re.escape(name)}\b", text)
+            )
+            if used:
+                found[path.relative_to(COMMON_DIR).as_posix()] = [
+                    f"reads global {name}" for name in used
+                ]
+    return found
+
+
 def _inside_common(dotted):
     return dotted == "workspace.common" or dotted.startswith("workspace.common.")
 
@@ -128,6 +175,14 @@ class CommonIsALeafTests(SimpleTestCase):
         self.assertEqual(list(apps.get_app_config("common").get_models()), [])
         for filename in ("urls.py", "tasks.py"):
             self.assertFalse((COMMON_DIR / filename).exists(), filename)
+
+    def test_common_never_reads_a_global_another_app_publishes(self):
+        self.assertEqual(
+            _global_offences(),
+            {},
+            "workspace/common must not depend on another app's script - move "
+            "the helper into common, or take it as a parameter",
+        )
 
     def test_common_never_names_another_app(self):
         self.assertEqual(

@@ -339,24 +339,15 @@ Context:
       {% include "ui/partials/comments.html" with list_url=comments_url current_user_id=request.user.id can_comment=True %}
     {% endif %}
 
-    <!-- Activity (lazy-loaded via alpine-ajax: same endpoint serves
-       initial fetch, refresh, filter changes and "Load more" clicks).
-       Mirrors the dashboard activity feed: a sibling skeleton block
-       toggled by ``loading`` covers the round-trip; the swap target
-       lives in the other branch so it stays present in the DOM while
-       hidden. ``loading: true`` initially so the skeleton covers the
-       first lazy fetch fired from ``x-init``. "Load more" carries
-       ``@ajax:before.stop`` to keep the existing list visible while
-       paginating - see ``_events_list.html``.
-
-       NOTE on the event names: with the default ``replace`` merge
-       strategy, alpine-ajax detaches the trigger element via
-       ``replaceWith`` *before* firing ``ajax:after``, so that event
-       never bubbles up to this wrapper (the trigger == the swap
-       target == the inner ``#file-events-list``). We clear ``loading``
-       on ``ajax:merged`` instead - that one fires on the *new*
-       element, which is attached to the DOM, so it bubbles correctly.
-       ``ajax:error`` is the equivalent for failed requests. -->
+    {% comment %}
+      Activity, lazy-loaded through alpine-ajax: one endpoint serves the first
+      fetch, refreshes, filter changes and "Load more". A sibling skeleton
+      covers each round-trip while the swap target stays in the DOM; "Load
+      more" stops ajax:before to keep the list visible while paginating.
+      loading is cleared on ajax:merged, not ajax:after: the replace strategy
+      detaches the trigger (which is the swap target) before ajax:after fires,
+      so that event never reaches this wrapper.
+    {% endcomment %}
     <div
       x-data="{ loading: true }"
       @ajax:before="loading = true"

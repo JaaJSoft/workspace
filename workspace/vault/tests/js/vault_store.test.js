@@ -114,6 +114,26 @@ test('sorting by name in reverse orders what is on screen', () => {
   assert.deepStrictEqual(names(s.visibleEntries()), ['Streaming', 'Compte courant']);
 });
 
+test('every sort field the page offers orders the rows', () => {
+  const rows = [
+    { uuid: 'a', name: 'Bravo', favorite: false, created: '2026-08-02', modified: '2026-08-30' },
+    { uuid: 'b', name: 'Alpha', favorite: true, created: '2026-08-03', modified: '2026-08-10' },
+    { uuid: 'c', name: 'Charlie', favorite: false, created: '2026-08-01', modified: '2026-08-20' },
+  ];
+  const s = store();
+  const order = (field, dir = 'asc') => {
+    s.sortField = field;
+    s.sortDir = dir;
+    return Array.from(s.sorted(rows), (row) => row.uuid);
+  };
+  assert.deepStrictEqual(order('name'), ['b', 'a', 'c']);
+  assert.deepStrictEqual(order('favorite'), ['b', 'a', 'c']);
+  assert.deepStrictEqual(order('favorite', 'desc'), ['a', 'c', 'b']);
+  assert.deepStrictEqual(order('created'), ['c', 'a', 'b']);
+  assert.deepStrictEqual(order('created', 'desc'), ['b', 'a', 'c']);
+  assert.deepStrictEqual(order('modified'), ['b', 'c', 'a']);
+});
+
 test('sorting never reorders the array it was handed', () => {
   // Asked of `sorted` directly, because the listing path hands it an array
   // `filter` has already copied - so a sort in place there would be

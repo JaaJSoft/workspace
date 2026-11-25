@@ -6,7 +6,7 @@ from django.utils.translation import gettext, gettext_noop
 
 from ..models import Task, TaskEvent, TaskLink, TaskStatus
 from ..queries import user_project_ids
-from .events import record_task_event
+from .events import link_direction_label, record_task_event
 from .members import ProjectRuleError
 
 # Relation names the API accepts, from the anchor task's perspective. A
@@ -166,7 +166,7 @@ def links_for_task(user, task):
             {
                 "uuid": str(link.uuid),
                 "type": link.type,
-                "label": forward if outward else backward,
+                "label": link_direction_label(forward if outward else backward),
                 "task": {
                     "uuid": str(other.uuid),
                     # project is select_related above, so .reference is free.

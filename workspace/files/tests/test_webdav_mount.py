@@ -17,7 +17,7 @@ These tests require:
     * ``mount.davfs`` available in PATH
     * either running as root, or ``mount.davfs`` being SUID-root, or
       passwordless ``sudo -n`` available
-    * a kernel with full FUSE readdir support (e.g. stock Ubuntu — some
+    * a kernel with full FUSE readdir support (e.g. stock Ubuntu - some
       sandboxed/custom kernels accept the FUSE mount call but reject
       readdir with EINVAL)
 
@@ -77,14 +77,14 @@ def _can_mount_directly(path: str) -> bool:
     """True iff the current process can invoke ``mount.davfs`` without sudo.
 
     SUID is necessary but not strictly sufficient for unprivileged
-    mounting — davfs2 also wants the user in the ``davfs2`` group and a
+    mounting - davfs2 also wants the user in the ``davfs2`` group and a
     matching ``user``/``users`` line in ``/etc/fstab``.  We don't probe
     those here: when the SUID-only check is wrong, the actual
     ``mount.davfs`` invocation fails loudly with a clear stderr, and
     ``_check_prereqs`` then falls through to ``sudo -n`` (which is what
     every CI runner has).  The only way this matters is the rare local
     dev box that has SUID set, no davfs2 group, and no passwordless
-    sudo — they get a hard mount failure instead of a clean skip.
+    sudo - they get a hard mount failure instead of a clean skip.
     """
     if os.geteuid() == 0:
         return True
@@ -153,7 +153,7 @@ else:
 # Live-server thread that serves the *workspace* WSGI app (not Django's bare
 # WSGIHandler).  ``LiveServerTestCase`` hardcodes ``WSGIHandler()`` in its
 # thread, which means our /dav dispatcher in ``workspace.wsgi.application``
-# is never reached — every request hits Django's URL resolver and /dav/
+# is never reached - every request hits Django's URL resolver and /dav/
 # returns 404.  Subclassing the thread to plug our dispatcher in fixes that.
 # --------------------------------------------------------------------------- #
 
@@ -163,7 +163,7 @@ class _WorkspaceDavLiveServerThread(LiveServerThread):
 
     Static/media handlers are intentionally dropped: davfs2 never asks
     for ``/static/`` or ``/media/`` URLs, and those handlers are wrappers
-    that ultimately delegate to ``WSGIHandler()`` — exactly what we are
+    that ultimately delegate to ``WSGIHandler()`` - exactly what we are
     trying to bypass for the /dav prefix.
     """
 
@@ -233,14 +233,14 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         # davfs2 tuning.  mount.davfs silently *ignores* davfs2.conf
         # keywords passed as ``-o`` options (its suboption parser drops
         # unknown keys), so they must travel in a config file handed
-        # over with ``-o conf=`` — which is honoured even when the mount
+        # over with ``-o conf=`` - which is honoured even when the mount
         # runs as root.
-        #   delay_upload 0 — upload on close() instead of after the
+        #   delay_upload 0 - upload on close() instead of after the
         #                    default 10 s delay.  Without it every
         #                    written file parks in the local cache for
         #                    10 s before the PUT, which dominated this
         #                    suite's runtime (~10 s per written file).
-        #   gui_optimize 0 — disable directory pre-fetch.
+        #   gui_optimize 0 - disable directory pre-fetch.
         # ``use_locks`` stays at its default (enabled) on purpose:
         # davfs2 then wraps every PUT in LOCK + UNLOCK, which is what
         # exercises the LOCK Content-Type middleware in ``app.py``.
@@ -295,7 +295,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         # ownership so the unprivileged test user can read/write files
         # even when the mount runs as root).  davfs2 *behaviour* tuning
         # (delay_upload, gui_optimize, …) lives in the config file
-        # written by ``setUpClass`` — see the comment there.
+        # written by ``setUpClass`` - see the comment there.
         opts = ",".join(
             [
                 f"username={self.username}",
@@ -362,7 +362,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
                 if pred():
                     return True
             except Exception:
-                # Tolerate transient failures while polling — davfs2's
+                # Tolerate transient failures while polling - davfs2's
                 # cache can briefly raise FileNotFoundError between an
                 # operation and the cache refresh.  The final
                 # ``bool(pred())`` after the timeout will surface any
@@ -465,7 +465,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
     def test_mount_sees_preexisting_file(self):
         """File created server-side is visible via ``stat`` on the mount."""
         tree.create_file(self.user, "preexisting.txt", mime_type="text/plain")
-        # Stat-based check — works even though readdir doesn't.
+        # Stat-based check - works even though readdir doesn't.
         self.assertTrue(
             self._wait_until(
                 lambda: (self.home / "preexisting.txt").exists(),
@@ -481,7 +481,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
         davfs2 does LOCK + PUT (empty body) + UNLOCK.  The LOCK-null
         row appears with ``size=None`` first; only after the empty PUT
-        completes does ``size`` flip to ``0`` — so the wait targets
+        completes does ``size`` flip to ``0`` - so the wait targets
         ``size=0`` explicitly, not just the row's existence.
         """
         target = self.home / "empty.txt"
@@ -505,7 +505,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
             size=len(b"hello davfs\n"),
             deleted_at__isnull=True,
         )
-        # Read back through the mount — exercises GET on the same connection
+        # Read back through the mount - exercises GET on the same connection
         # davfs2 just used for PUT, after its local cache settles.
         self.assertEqual(target.read_bytes(), b"hello davfs\n")
 
@@ -532,7 +532,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         """A 16 MiB upload streams through ``_StreamingWriteBuffer`` intact.
 
         The buffer flushes every ``DjangoFile.DEFAULT_CHUNK_SIZE`` (64 KiB),
-        so 16 MiB triggers ~256 flushes — that's the path real photo/
+        so 16 MiB triggers ~256 flushes - that's the path real photo/
         video uploads take, and the one TCP-backpressure was designed for.
         Content is verified by SHA-256 to avoid keeping two 16 MiB buffers
         in memory at once.
@@ -601,7 +601,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
     def test_stat_reflects_server_state(self):
         """Server-side mutations are visible via stat on the mountpoint.
 
-        Verifies both a folder and a file land — relies on ``.exists()``
+        Verifies both a folder and a file land - relies on ``.exists()``
         (PROPFIND Depth 0) rather than ``iterdir()`` (broken by the
         davfs2/getdents64 kernel-side limitation).
         """
@@ -669,7 +669,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         """``mv a b`` → MOVE same-folder → name changes, content preserved."""
         src = self.home / "src.txt"
         src.write_bytes(b"move me")
-        # Make sure the PUT is fully landed before MOVE — otherwise we
+        # Make sure the PUT is fully landed before MOVE - otherwise we
         # race the rename against a still-empty row.
         self._wait_for_file(owner=self.user, name="src.txt", size=7)
 
@@ -901,12 +901,12 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         """``cp a b`` → both rows live with matching content.
 
         GNU ``cp`` on a davfs2 mount does open(src)+read+open(dst,O_CREAT)+
-        write — i.e. GET on the server then a fresh LOCK+PUT for the
+        write - i.e. GET on the server then a fresh LOCK+PUT for the
         destination, not a WebDAV ``COPY`` method.
         """
         src = self.home / "orig.txt"
         src.write_bytes(b"copy me")
-        # Wait for the source PUT to land *with content* — without the
+        # Wait for the source PUT to land *with content* - without the
         # size filter we'd race ``cp`` against an empty source.
         self._wait_for_file(owner=self.user, name="orig.txt", size=7)
 
@@ -1007,7 +1007,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
 
 # --------------------------------------------------------------------------- #
-# Smoke check helpers — useful when debugging the suite locally
+# Smoke check helpers - useful when debugging the suite locally
 # --------------------------------------------------------------------------- #
 
 
@@ -1015,7 +1015,7 @@ class PrereqSelfCheck(unittest.TestCase):
     """Always-runnable test that surfaces why mount tests will be skipped."""
 
     def test_explain_environment(self):
-        # When the env var is set, prerequisites must be in place — fail
+        # When the env var is set, prerequisites must be in place - fail
         # loudly so a CI image regression is impossible to miss.
         if ENABLED and _PREREQ_REASON is not None:
             self.fail(f"WORKSPACE_DAVFS2_TESTS=1 but: {_PREREQ_REASON}")

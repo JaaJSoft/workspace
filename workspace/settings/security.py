@@ -18,7 +18,7 @@ if not DEBUG:
         "HTTP_X_FORWARDED_PROTO",
         "https",
     )  # Trust X-Forwarded-Proto from proxy
-    # Trust X-Forwarded-Host/Port — only enable when the proxy rewrites them (Cloudflare, cloud LBs)
+    # Trust X-Forwarded-Host/Port - only enable when the proxy rewrites them (Cloudflare, cloud LBs)
     USE_X_FORWARDED_HOST = env_bool("USE_X_FORWARDED_HOST")
     USE_X_FORWARDED_PORT = env_bool("USE_X_FORWARDED_PORT")
 

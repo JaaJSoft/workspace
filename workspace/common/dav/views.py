@@ -10,7 +10,9 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
-from .auth import authenticate_basic, basic_credentials
+from workspace.common.basic_auth import basic_credentials
+
+from .auth import authenticate_basic
 from .xml import DAV, DavError, parse_body, qname, requested_properties
 
 DAV_METHODS = (

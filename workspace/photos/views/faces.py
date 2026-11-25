@@ -355,6 +355,18 @@ class FaceViewSet(
         face_people.give_default_avatar(self.request.user, person, face.pk)
 
 
+def stored_webp_response(name):
+    """The WebP stored under *name*, or a 404 when the row has none or its
+    blob is gone."""
+    if not name:
+        return HttpResponse(status=status.HTTP_404_NOT_FOUND)
+    try:
+        handle = default_storage.open(name, "rb")
+    except FileNotFoundError:
+        return HttpResponse(status=status.HTTP_404_NOT_FOUND)
+    return FileResponse(handle, content_type="image/webp")
+
+
 @extend_schema(tags=["Photos - Faces"])
 class FaceCropView(CacheControlMixin, APIView):
     """The square WebP of a face.
@@ -377,13 +389,7 @@ class FaceCropView(CacheControlMixin, APIView):
             .values_list("crop", flat=True)
             .first()
         )
-        if not crop:
-            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
-        try:
-            handle = default_storage.open(crop, "rb")
-        except FileNotFoundError:
-            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
-        return FileResponse(handle, content_type="image/webp")
+        return stored_webp_response(crop)
 
 
 @extend_schema(tags=["Photos - Faces"])

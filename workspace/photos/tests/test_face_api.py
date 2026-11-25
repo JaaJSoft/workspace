@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.files.storage import default_storage
 from django.test import TestCase, override_settings
 
 from workspace.files.services import trash
@@ -348,6 +349,14 @@ class FaceCorrectionTests(FaceApiTestCase):
         self.assertEqual(response["Content-Type"], "image/webp")
         self.assertIn("private", response["Cache-Control"])
         self.assertTrue(b"".join(response.streaming_content).startswith(b"RIFF"))
+
+    def test_a_crop_whose_blob_vanished_is_missing(self):
+        face = self.face("bob.png")
+        default_storage.delete(face.crop)
+
+        response = self.client.get(f"{self.url(face)}/crop")
+
+        self.assertEqual(response.status_code, 404)
 
     def test_someone_elses_crop_is_missing(self):
         other = User.objects.create_user(username="bob", password="p")

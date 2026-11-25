@@ -8,6 +8,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
+from django.core.files.storage import default_storage
 from django.test import TestCase, override_settings
 
 from workspace.core.module_registry import SearchScope
@@ -274,6 +275,13 @@ class VideoFrameViewTests(RankedViewTestCase):
         self.assertEqual(response["Content-Type"], "image/webp")
         self.assertIn("private", response["Cache-Control"])
         b"".join(response.streaming_content)
+
+    def test_404_when_the_picture_vanished(self):
+        default_storage.delete(self.frame.frame)
+
+        response = self.client.get(f"/api/v1/photos/frames/{self.frame.pk}")
+
+        self.assertEqual(response.status_code, 404)
 
     def test_404_to_whoever_cannot_open_the_video(self):
         User.objects.create_user(username="bob", password="p")

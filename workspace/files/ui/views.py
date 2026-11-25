@@ -28,6 +28,7 @@ from workspace.files.queries import (
     owned_files_qs,
     reads_full_path,
     restorable_files_qs,
+    shared_files_qs,
     trash_permission,
     user_files_qs,
     user_group_files_qs,
@@ -64,6 +65,7 @@ from workspace.files.services.storage_analysis import (
 from workspace.files.services.tags import viewer_file_tags
 from workspace.files.user_settings import VIEW_MODES
 from workspace.files.views.share_links import _record_access
+from workspace.files.webdav import namespace as webdav_namespace
 from workspace.users.services.settings import get_module_settings
 
 from ..models import (
@@ -213,14 +215,7 @@ def _listing_nodes(user, active_tag, active_special, current_folder):
     if active_tag is not None:
         return user_files_qs(user).filter(file_tags__tag=active_tag).folders_first()
     if active_special == "shared":
-        shared_file_ids = FileShare.objects.reaching(user).values_list(
-            "file_id", flat=True
-        )
-        return File.objects.filter(
-            pk__in=shared_file_ids,
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-        ).name_ordered()
+        return shared_files_qs(user).name_ordered()
     if active_special == "trash":
         return (
             restorable_files_qs(user)
@@ -539,6 +534,11 @@ def _build_context(request, folder=None, is_trash_view=False):
         "table_controls": table_controls,
         "group_folders": group_folders,
         "available_groups": available_groups,
+        "webdav_folders": {
+            "personal": webdav_namespace.PERSONAL,
+            "groups": webdav_namespace.GROUPS,
+            "shared": webdav_namespace.SHARED,
+        },
     }
 
 

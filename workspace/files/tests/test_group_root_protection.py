@@ -18,9 +18,11 @@ from workspace.files.models import File
 from workspace.files.services import trash, tree
 from workspace.files.tests import test_webdav
 from workspace.files.tests.operations import outcome_of, run_operation
+from workspace.files.tests.test_webdav import DAV, DAV_HOME
+from workspace.files.webdav.namespace import GROUPS
 
 User = get_user_model()
-DAV = "http://testserver/dav"
+TEAM_ROOT = f"/{GROUPS}/TeamRoot"
 
 
 class _GroupRootFixture:
@@ -132,21 +134,21 @@ class GroupRootWebDAVTests(_GroupRootFixture, TestCase):
 
     def test_a_member_cannot_move_the_group_root(self):
         code, _, _ = self._request(
-            "MOVE", "/TeamRoot", headers={"Destination": f"{DAV}/Mine/TeamRoot"}
+            "MOVE", TEAM_ROOT, headers={"Destination": f"{DAV_HOME}/Mine/TeamRoot"}
         )
 
         self.assertEqual(code, 403)
         self._assert_untouched()
 
     def test_a_member_cannot_delete_the_group_root(self):
-        code, _, _ = self._request("DELETE", "/TeamRoot")
+        code, _, _ = self._request("DELETE", TEAM_ROOT)
 
         self.assertEqual(code, 403)
         self._assert_untouched()
 
     def test_a_member_cannot_rename_the_group_root(self):
         code, _, _ = self._request(
-            "MOVE", "/TeamRoot", headers={"Destination": f"{DAV}/Renamed"}
+            "MOVE", TEAM_ROOT, headers={"Destination": f"{DAV}/{GROUPS}/Renamed"}
         )
 
         self.assertEqual(code, 403)

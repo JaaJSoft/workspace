@@ -110,7 +110,13 @@ class ImportFolderApiTests(ImportFolderTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {"uuid": None, "name": "Pictures", "path": "Pictures", "group": None},
+            {
+                "uuid": None,
+                "name": "Pictures",
+                "path": "Pictures",
+                "group": None,
+                "dav_path": "/My Files/Pictures",
+            },
         )
         self.assertFalse(self._root_pictures_folders().exists())
 
@@ -131,6 +137,7 @@ class ImportFolderApiTests(ImportFolderTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["path"], "Camera/Roll")
+        self.assertEqual(response.json()["dav_path"], "/My Files/Camera/Roll")
         self.assertEqual(self.client.post(API).json()["uuid"], str(roll.pk))
         self.assertFalse(self._root_pictures_folders().exists())
 
@@ -145,6 +152,7 @@ class ImportFolderApiTests(ImportFolderTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["group"], "Family")
+        self.assertIsNone(response.json()["dav_path"])
 
     def test_put_refuses_a_folder_the_user_cannot_add_files_to(self):
         others = tree.create_folder(self.bob, "Private")

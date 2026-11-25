@@ -21,6 +21,7 @@ from workspace.common.dav.auth import clear_auth_cache
 from workspace.common.tests.wsgi import served_in_test
 from workspace.files.models import File, FileShareLink
 from workspace.files.services import tree
+from workspace.files.webdav.namespace import PERSONAL
 
 User = get_user_model()
 
@@ -254,7 +255,7 @@ class WebDAVActiveTypesTests(TestCase):
         self._create("page.html", "text/html")
         for method in ("GET", "HEAD"):
             with self.subTest(method=method):
-                code, headers = self._get("/page.html", method)
+                code, headers = self._get(f"/{PERSONAL}/page.html", method)
                 self.assertEqual(code, 200)
                 self.assertEqual(
                     headers.get("content-disposition", "").split(";", 1)[0],
@@ -265,13 +266,13 @@ class WebDAVActiveTypesTests(TestCase):
 
     def test_an_image_is_not_forced_to_download(self):
         self._create("photo.png", "image/png", b"png")
-        code, headers = self._get("/photo.png")
+        code, headers = self._get(f"/{PERSONAL}/photo.png")
         self.assertEqual(code, 200)
         self.assertNotIn("content-disposition", headers)
         self._assert_sandboxed(headers)
 
     def test_a_folder_listing_is_left_alone(self):
         tree.create_folder(self.user, "Docs")
-        code, headers = self._get("/Docs/", "PROPFIND", HTTP_DEPTH="1")
+        code, headers = self._get(f"/{PERSONAL}/Docs/", "PROPFIND", HTTP_DEPTH="1")
         self.assertEqual(code, 207)
         self.assertNotIn("content-security-policy", headers)

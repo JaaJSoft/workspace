@@ -6,6 +6,7 @@ import io
 import logging
 import time
 from contextlib import contextmanager
+from urllib.parse import quote
 
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
@@ -23,10 +24,10 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 from workspace.common.logging import scrub
 from workspace.files.models import (
     File,
+    canonical_name,
     files_storage,
-    name_forms,
 )
-from workspace.files.queries import FilePermission, accessible_files_q, get_permission
+from workspace.files.queries import FilePermission, can_create_in, get_permission
 from workspace.files.services import quota, tree
 from workspace.files.services.content_hash import new_hasher
 from workspace.files.services.content_writes import replace_content_storage
@@ -46,92 +47,9 @@ from workspace.files.services.transfers import (
 from workspace.files.services.trash import trash_item
 from workspace.files.storage_layout import live_path
 
+from . import namespace
+
 logger = logging.getLogger(__name__)
-
-
-def dav_nodes(*args, **kwargs):
-    """Live nodes WebDAV serves, filtered by *args* and *kwargs*.
-
-    Shortcuts are left out: a client would take one for an empty file, and
-    every byte it wrote into it would land on a node that holds none.
-    """
-    return File.objects.filter(*args, deleted_at__isnull=True, **kwargs).exclude(
-        node_type=File.NodeType.SHORTCUT
-    )
-
-
-def resolve_path(user, parts, **filters):
-    """The node *user* reaches at DAV path *parts*, or None.
-
-    A DAV path names a node by walking the tree from the user's root, the
-    way a listing shows it: only through folders the user can open. Matching
-    ``File.path`` alone is not enough, because every tree stores its own
-    paths - another user's "Docs/a.txt" shared with *user* carries the same
-    path as the user's own. One lookup by path covers the common case; a
-    candidate reached only through a share counts when its folders are
-    reachable too, and the user's own node wins a name collision so a write
-    never lands in somebody else's tree by accident.
-    """
-    if not parts:
-        return None
-    accessible = accessible_files_q(user)
-    group_ids = set(user.groups.values_list("pk", flat=True))
-    candidates = dav_nodes(
-        accessible, path__in=name_forms("/".join(parts)), **filters
-    ).distinct()
-    for node in sorted(candidates, key=lambda n: _ownership_rank(user, n, group_ids)):
-        if _ownership_rank(user, node, group_ids) < _SHARED or _reachable(
-            accessible, node
-        ):
-            return node
-    # A path stored with its segments in mixed normalization forms.
-    node = None
-    for depth, part in enumerate(parts):
-        last = depth == len(parts) - 1
-        node = _preferred(
-            user,
-            dav_nodes(
-                accessible,
-                parent=node,
-                name__in=name_forms(part),
-                **(filters if last else {"node_type": File.NodeType.FOLDER}),
-            ).distinct(),
-            group_ids,
-        )
-        if node is None:
-            return None
-    return node
-
-
-_OWN, _GROUP, _SHARED = range(3)
-
-
-def _ownership_rank(user, node, group_ids):
-    if node.group_id is None and node.owner_id == user.pk:
-        return _OWN
-    if node.group_id in group_ids:
-        return _GROUP
-    return _SHARED
-
-
-def _preferred(user, nodes, group_ids):
-    """Of nodes sharing one name in one folder, the one closest to *user*."""
-    return min(nodes, key=lambda n: _ownership_rank(user, n, group_ids), default=None)
-
-
-def _reachable(accessible, node):
-    """Whether every folder above *node* is one the user can open.
-
-    Only asked of a node reached through a share: the folders above a
-    personal or group node belong to the same owner or group.
-    """
-    parent_id = node.parent_id
-    while parent_id is not None:
-        parent = dav_nodes(accessible, pk=parent_id).values("parent_id").first()
-        if parent is None:
-            return False
-        parent_id = parent["parent_id"]
-    return True
 
 
 def _require_permission(user, file_obj, level, verb):
@@ -139,7 +57,7 @@ def _require_permission(user, file_obj, level, verb):
 
     The levels are the REST API's: replacing a file's content needs WRITE (a
     read-write share), creating, renaming, moving or deleting needs EDIT.
-    ``None`` stands for the user's own root.
+    ``None`` stands for the root of the user's personal tree.
     """
     if file_obj is None:
         return
@@ -275,10 +193,17 @@ class _StreamingWriteBuffer:
         self._writer.abort()
 
 
-class _Collection(DAVCollection):
-    """A folder of the tree, or the user's root when ``_file`` is None."""
+class _LockKeyed:
+    """Files the resource's locks under a key of its own (``namespace.lock_key``),
+    not under an address it shares with every other user's resource."""
 
-    _file = None
+    def get_ref_url(self):
+        return quote(namespace.lock_key(self._user, self.get_preferred_path()))
+
+
+class _Collection(_LockKeyed, DAVCollection):
+    """What every collection does with its members; a subclass says which
+    they are, as ``(name, resource)`` pairs."""
 
     def __init__(self, path, environ):
         super().__init__(path, environ)
@@ -287,34 +212,49 @@ class _Collection(DAVCollection):
     def get_display_info(self):
         return {"type": "Directory"}
 
+    def _entries(self):
+        raise NotImplementedError
+
+    def _listing(self):
+        if not hasattr(self, "_listing_cache"):
+            self._listing_cache = list(self._entries())
+        return self._listing_cache
+
+    def _child_path(self, name):
+        return self.path.rstrip("/") + "/" + name
+
     def get_member_names(self):
-        return [f.name for f in self._members()]
+        return [name for name, _ in self._listing()]
 
     def get_member(self, name):
-        forms = name_forms(name)
-        group_ids = set(self._user.groups.values_list("pk", flat=True))
-        member = _preferred(
-            self._user, (f for f in self._members() if f.name in forms), group_ids
+        asked = canonical_name(name)
+        return next(
+            (
+                resource
+                for listed, resource in self._listing()
+                if canonical_name(listed) == asked
+            ),
+            None,
         )
-        return None if member is None else self._wrap(member)
 
     def get_member_list(self):
-        return [self._wrap(f) for f in self._members()]
+        return [resource for _, resource in self._listing()]
 
-    def _members(self):
-        if not hasattr(self, "_members_cache"):
-            # The access filter joins the shares: a node comes back once per
-            # share it has.
-            self._members_cache = list(
-                dav_nodes(
-                    accessible_files_q(self._user),
-                    parent=self._file,
-                ).distinct()
-            )
-        return self._members_cache
+
+class _TreeFolder:
+    """The members of a folder of a tree, and what is created in it.
+
+    ``_file`` is the folder, None for the root of the user's personal tree.
+    """
+
+    _file = None
+
+    def _entries(self):
+        for node in namespace.members(self._user, self._file):
+            yield node.name, self._wrap(node)
 
     def _wrap(self, file_obj):
-        child_path = self.path.rstrip("/") + "/" + file_obj.name
+        child_path = self._child_path(file_obj.name)
         if file_obj.is_folder():
             return FolderResource(child_path, self.environ, file_obj)
         return FileResource(child_path, self.environ, file_obj)
@@ -322,26 +262,36 @@ class _Collection(DAVCollection):
     @_refuse_overlong_names
     def create_empty_resource(self, name):
         # Reuse an existing file to avoid duplicates from concurrent PUTs
-        # (e.g. Windows retries while a slow upload is still in progress).
-        # Through accessible_files_q, so a file another member created in a
-        # group folder is found too, not just those self._user owns.
-        file_obj = File.objects.filter(
-            accessible_files_q(self._user),
-            name__in=name_forms(name),
-            parent=self._file,
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-        ).first()
-        if file_obj is None:
+        # (e.g. Windows retries while a slow upload is still in progress):
+        # the one any member created, in a group folder.
+        file_obj = namespace.named(namespace.members(self._user, self._file), name)
+        if file_obj is None or not file_obj.is_file():
             _require_permission(self._user, self._file, FilePermission.EDIT, "PUT")
+            self._refuse_new_member_under_a_lock()
             file_obj = tree.create_file(
                 self._user,
                 name,
                 parent=self._file,
                 acting_user=self._user,
             )
-        child_path = self.path.rstrip("/") + "/" + name
-        return FileResource(child_path, self.environ, file_obj)
+        return FileResource(self._child_path(name), self.environ, file_obj)
+
+    def _refuse_new_member_under_a_lock(self):
+        """Raise 423 when a lock on this folder, or above it, covers a new member.
+
+        wsgidav asks before a PUT. A LOCK on a name nothing holds creates the
+        file first and asks for the lock after: refused, the file would stay
+        in the folder the refusal was protecting.
+        """
+        lock_manager = getattr(self.provider, "lock_manager", None)
+        if lock_manager is None:
+            return
+        lock_manager.check_write_permission(
+            url=self.get_ref_url(),
+            depth="0",
+            token_list=self.environ.get("wsgidav.ifLockTokenList", []),
+            principal=self.environ.get("wsgidav.user_name"),
+        )
 
     @_refuse_overlong_names
     def create_collection(self, name):
@@ -364,8 +314,16 @@ class _Collection(DAVCollection):
         return _advertised_space(self.environ, self._user, self._group_id())[1]
 
 
-class RootCollection(_Collection):
-    """Virtual root representing the user's top-level files/folders."""
+class _LayoutCollection(_Collection):
+    """A folder of the layout itself: the root and the three it lists.
+
+    It is listed and entered. Nothing deletes, moves or copies it, whatever
+    it holds, and nothing is created in it unless a subclass says where that
+    would go.
+    """
+
+    def _refuse(self, verb):
+        raise DAVError(HTTP_FORBIDDEN, f"{verb} is not allowed here")
 
     def get_creation_date(self):
         # davfs2 marks the directory cache invalid when the parent
@@ -377,14 +335,93 @@ class RootCollection(_Collection):
     def get_last_modified(self):
         return self._user.date_joined.timestamp()
 
+    def create_empty_resource(self, name):
+        self._refuse("PUT")
+
+    def create_collection(self, name):
+        self._refuse("MKCOL")
+
+    def handle_delete(self):
+        # Before wsgidav walks the members: left to it, a DELETE here would
+        # trash every one of them and only then fail on the folder itself.
+        self._refuse("DELETE")
+
+    def delete(self):
+        # A MOVE or COPY that names this folder as the destination to replace.
+        self._refuse("DELETE")
+
+    def handle_move(self, dest_path):
+        self._refuse("MOVE")
+
+    def handle_copy(self, dest_path, *, depth_infinity):
+        self._refuse("COPY")
+
+    def get_used_bytes(self):
+        return None
+
+    def get_available_bytes(self):
+        # A client that gets no figure makes up its own (see
+        # ``_advertised_space``); a write that does land here replaces a
+        # shared file, in its owner's bucket.
+        return _disk_free_bytes()
+
+
+class RootCollection(_LayoutCollection):
+    """The root of the mount: the three trees, and nothing else."""
+
+    def _entries(self):
+        for name, collection in _TOP_LEVEL.items():
+            yield name, collection(self._child_path(name), self.environ)
+
     def get_display_name(self):
         # WsgiDAV defaults to the URL basename, which is empty for the
         # root collection — Windows Mini-Redirector then shows a blank
         # entry in Explorer.  A static label avoids that.
         return "workspace"
 
+    # What Windows reports as the mounted drive's free space.
+    def get_used_bytes(self):
+        return _advertised_space(self.environ, self._user, None)[0]
 
-class FolderResource(_Collection):
+    def get_available_bytes(self):
+        return _advertised_space(self.environ, self._user, None)[1]
+
+
+class PersonalCollection(_TreeFolder, _LayoutCollection):
+    """``/My Files``: the root of the user's personal tree."""
+
+
+class GroupsCollection(_LayoutCollection):
+    """``/Groups``: the root folders of the groups the user is in."""
+
+    def _entries(self):
+        for folder in namespace.group_roots(self._user):
+            path = self._child_path(folder.name)
+            yield folder.name, FolderResource(path, self.environ, folder)
+
+
+class SharedCollection(_LayoutCollection):
+    """``/Shared``: the files shared with the user, in one flat folder."""
+
+    def _entries(self):
+        for name, file_obj in namespace.shared_listing(self._user).items():
+            yield name, FileResource(self._child_path(name), self.environ, file_obj)
+
+
+_TOP_LEVEL = {
+    namespace.PERSONAL: PersonalCollection,
+    namespace.GROUPS: GroupsCollection,
+    namespace.SHARED: SharedCollection,
+}
+
+
+def top_level_collection(name, path, environ):
+    """The collection ``/<name>`` is, or None."""
+    collection = _TOP_LEVEL.get(name)
+    return collection(path, environ) if collection is not None else None
+
+
+class FolderResource(_TreeFolder, _Collection):
     """Wraps a ``File(node_type=FOLDER)`` instance."""
 
     def __init__(self, path, environ, file_obj):
@@ -408,7 +445,7 @@ class FolderResource(_Collection):
         if _inside_copied_tree(self.environ, dest_path):
             return
         dest_parts = _dest_parts(dest_path)
-        dest_parent = _resolve_parent(self._user, dest_parts[:-1])
+        dest_parent = _dest_parent(self._user, dest_parts[:-1], "COPY")
         if self.environ.get("HTTP_DEPTH") == "0":
             # The collection without its members: an empty folder.
             _require_permission(self._user, dest_parent, FilePermission.EDIT, "COPY")
@@ -434,7 +471,7 @@ class FolderResource(_Collection):
         return True
 
 
-class FileResource(DAVNonCollection):
+class FileResource(_LockKeyed, DAVNonCollection):
     """Wraps a ``File(node_type=FILE)`` instance."""
 
     def __init__(self, path, environ, file_obj):
@@ -604,6 +641,7 @@ class FileResource(DAVNonCollection):
                 try:
                     self._file.refresh_from_db()
                 except File.DoesNotExist:
+                    parent = self._folder_to_recreate_in()
                     logger.warning(
                         "File record deleted during upload for %s by %s, recreating",
                         scrub(self.path),
@@ -612,7 +650,7 @@ class FileResource(DAVNonCollection):
                     self._file = tree.create_file(
                         self._user,
                         self._file.name,
-                        parent=self._file.parent,
+                        parent=parent,
                         acting_user=self._user,
                     )
                 # The bytes are staged under the path the file had when the PUT
@@ -656,6 +694,22 @@ class FileResource(DAVNonCollection):
             buf.size,
             time.monotonic() - self._write_started_at,
         )
+
+    def _folder_to_recreate_in(self):
+        """The folder the vanished row sat in, None for the user's own root.
+
+        Recreating is creating, which a share never allowed: it opened the
+        file, not the folder around it. Raises ``Relocated`` where the user
+        may not create, or where the folder went with the file.
+        """
+        if self._file.parent_id is None:
+            if self._file.owner_id != self._user.id:
+                raise Relocated()
+            return None
+        parent = File.objects.filter(pk=self._file.parent_id).first()
+        if parent is None or not can_create_in(self._user, parent):
+            raise Relocated()
+        return parent
 
     def _refusal_error(self, exc, username):
         """Raise the DAV answer a refused content write owes the client."""
@@ -771,11 +825,9 @@ def _advertised_space(environ, user, group_id):
     gets no {DAV:}quota-available-bytes makes up a figure of its own (the
     Windows redirector reports the local system drive) and refuses copies on
     it. A new file is charged to its folder's group, else to whoever writes
-    it - a folder someone shared with *user* included - so no other user's
-    usage is ever disclosed. A group's figures stay with its members: someone
-    reaching a group folder through a share only learns the free disk space.
-    ``available`` is capped by the disk: a quota the volume cannot hold is no
-    promise.
+    it, so no other user's usage is ever disclosed. A group's figures stay
+    with its members. ``available`` is capped by the disk: a quota the volume
+    cannot hold is no promise.
 
     wsgidav asks both questions for every collection of a listing, twice on
     an allprop PROPFIND, so each bucket is resolved once per request.
@@ -807,7 +859,7 @@ def _move_to(file_obj, user, dest_path):
     asked to overwrite it, so a name still taken is refused.
     """
     dest_parts = _dest_parts(dest_path)
-    dest_parent = _resolve_parent(user, dest_parts[:-1])
+    dest_parent = _dest_parent(user, dest_parts[:-1], "MOVE")
     with _dav_refusals("MOVE"):
         move_item(user, file_obj, dest_parent, OnConflict.ERROR, name=dest_parts[-1])
 
@@ -815,7 +867,7 @@ def _move_to(file_obj, user, dest_path):
 def _copy_to(file_obj, user, dest_path):
     """Copy *file_obj*, with what it holds, to *dest_path* (COPY handlers)."""
     dest_parts = _dest_parts(dest_path)
-    dest_parent = _resolve_parent(user, dest_parts[:-1])
+    dest_parent = _dest_parent(user, dest_parts[:-1], "COPY")
     with _dav_refusals("COPY"):
         copy_item(user, file_obj, dest_parent, OnConflict.ERROR, name=dest_parts[-1])
 
@@ -829,6 +881,19 @@ def _inside_copied_tree(environ, dest_path):
     )
 
 
-def _resolve_parent(user, path_parts):
-    """The folder at *path_parts*, None for the user's root or no such folder."""
-    return resolve_path(user, path_parts, node_type=File.NodeType.FOLDER)
+def _dest_parent(user, parent_parts, verb):
+    """The folder a MOVE or COPY destination sits in.
+
+    None is the root of the user's personal tree. Nothing is put in the
+    other folders of the layout (403), and a destination needs a folder to
+    sit in (409): resolving neither to None would land the node in the
+    user's personal root.
+    """
+    if parent_parts == [namespace.PERSONAL]:
+        return None
+    if len(parent_parts) < 2:
+        raise DAVError(HTTP_FORBIDDEN, f"{verb} is not allowed here")
+    parent = namespace.tree_node(user, parent_parts)
+    if parent is None or not parent.is_folder():
+        raise DAVError(HTTP_CONFLICT, "The destination folder does not exist.")
+    return parent

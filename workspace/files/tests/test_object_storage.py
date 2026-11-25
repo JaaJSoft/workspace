@@ -31,6 +31,7 @@ from workspace.files.models import File
 from workspace.files.services import disk_sync, trash, tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.hard_delete import hard_delete_tree
+from workspace.files.webdav.namespace import PERSONAL
 from workspace.files.webdav.resources import FileResource, FolderResource
 
 User = get_user_model()
@@ -360,21 +361,21 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
         return captured["status"], payload
 
     def test_put_then_get(self):
-        status, _ = self.dav("PUT", "/notes.txt", b"through webdav")
+        status, _ = self.dav("PUT", f"/{PERSONAL}/notes.txt", b"through webdav")
         self.assertEqual(status, 201)
 
-        status, body = self.dav("GET", "/notes.txt")
+        status, body = self.dav("GET", f"/{PERSONAL}/notes.txt")
         self.assertEqual(status, 200)
         self.assertEqual(body, b"through webdav")
         self.assertEqual(self.keys(), ["files/users/davs3/notes.txt"])
 
     def test_an_overwrite_replaces_the_blob(self):
-        self.dav("PUT", "/notes.txt", b"first")
+        self.dav("PUT", f"/{PERSONAL}/notes.txt", b"first")
 
-        status, _ = self.dav("PUT", "/notes.txt", b"second version")
+        status, _ = self.dav("PUT", f"/{PERSONAL}/notes.txt", b"second version")
         self.assertIn(status, (200, 204))
 
-        _, body = self.dav("GET", "/notes.txt")
+        _, body = self.dav("GET", f"/{PERSONAL}/notes.txt")
         self.assertEqual(body, b"second version")
         self.assertEqual(self.keys(), ["files/users/davs3/notes.txt"])
         self.assertEqual(
@@ -451,7 +452,7 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
     def test_an_overwrite_the_store_fails_to_complete_keeps_nothing_open(self):
         """wsgidav calls end_write once: an upload the store refused to
         complete would stay open in the bucket, holding its parts."""
-        self.dav("PUT", "/notes.txt", b"first")
+        self.dav("PUT", f"/{PERSONAL}/notes.txt", b"first")
         refused = ClientError(
             {
                 "Error": {"Code": "InternalError"},
@@ -465,11 +466,13 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
             "complete_multipart_upload",
             side_effect=refused,
         ):
-            status, _ = self.dav("PUT", "/notes.txt", b"x" * (MIN_PART_SIZE + 1))
+            status, _ = self.dav(
+                "PUT", f"/{PERSONAL}/notes.txt", b"x" * (MIN_PART_SIZE + 1)
+            )
 
         self.assertEqual(status, 500)
         self.assertEqual(
             self.s3.list_multipart_uploads(Bucket=self.bucket).get("Uploads", []), []
         )
-        _, body = self.dav("GET", "/notes.txt")
+        _, body = self.dav("GET", f"/{PERSONAL}/notes.txt")
         self.assertEqual(body, b"first")

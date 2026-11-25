@@ -47,6 +47,8 @@ from workspace.files.services.sharing import (
 )
 from workspace.files.tests import test_webdav
 from workspace.files.tests.operations import outcome_of, run_operation
+from workspace.files.tests.test_webdav import HOME
+from workspace.files.webdav.namespace import GROUPS
 from workspace.notifications.models import Notification
 from workspace.projects.services.projects import create_project
 
@@ -260,9 +262,20 @@ class FormerMemberWebDAVTests(_DepartureFixture, TestCase):
         self.auth = test_webdav._basic_auth_header("alice", "pass123")
 
     def test_cannot_reach_their_former_folder(self):
-        code, _, _ = self._request("GET", "/TeamRoot/AliceSub/secret.txt")
+        for tree_root in (f"/{GROUPS}", HOME):
+            with self.subTest(tree_root=tree_root):
+                code, _, _ = self._request(
+                    "GET", f"{tree_root}/TeamRoot/AliceSub/secret.txt"
+                )
+                self.assertEqual(code, 404)
 
-        self.assertEqual(code, 404)
+    def test_their_former_folder_was_reachable_while_they_were_a_member(self):
+        """What the test above denies is the path a member is served."""
+        self.alice.groups.add(self.team)
+
+        code, _, _ = self._request("GET", f"/{GROUPS}/TeamRoot/AliceSub/secret.txt")
+
+        self.assertEqual(code, 200)
 
 
 class PublicLinkRevocationTests(_DepartureFixture, APITestCase):

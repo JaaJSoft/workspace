@@ -8,6 +8,7 @@ import posixpath
 from datetime import timedelta
 from unittest import mock
 from unittest.mock import patch
+from urllib.parse import quote
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -20,6 +21,8 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from knox.models import AuthToken
 from wsgidav.dav_error import (
+    HTTP_CONFLICT,
+    HTTP_FORBIDDEN,
     HTTP_LOCKED,
     HTTP_PRECONDITION_FAILED,
     DAVError,
@@ -40,16 +43,24 @@ from workspace.files.models import (
 from workspace.files.services import quota, trash, tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.webdav.dc import DjangoBasicDomainController
+from workspace.files.webdav.namespace import GROUPS, PERSONAL, SHARED
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import (
     FileResource,
     FolderResource,
+    PersonalCollection,
     RootCollection,
-    _resolve_parent,
+    _dest_parent,
     _StreamingWriteBuffer,
 )
 
 User = get_user_model()
+
+# The user's personal tree: as wsgidav hands a path over, and as a client
+# writes it in a Destination header.
+HOME = f"/{PERSONAL}"
+DAV = "http://testserver/dav"
+DAV_HOME = DAV + quote(HOME)
 
 _LOCK_BODY = (
     b'<?xml version="1.0" encoding="utf-8"?>'
@@ -166,29 +177,29 @@ class ProviderTests(TestCase):
         self.assertIsInstance(res, RootCollection)
 
     def test_nonexistent_path_returns_none(self):
-        res = self.provider.get_resource_inst("/no/such/path", self.environ)
+        res = self.provider.get_resource_inst(f"{HOME}/no/such/path", self.environ)
         self.assertIsNone(res)
 
     def test_file_path_returns_file_resource(self):
         tree.create_file(self.user, "doc.txt", mime_type="text/plain")
-        res = self.provider.get_resource_inst("/doc.txt", self.environ)
+        res = self.provider.get_resource_inst(f"{HOME}/doc.txt", self.environ)
         self.assertIsInstance(res, FileResource)
 
     def test_folder_path_returns_folder_resource(self):
         tree.create_folder(self.user, "Photos")
-        res = self.provider.get_resource_inst("/Photos", self.environ)
+        res = self.provider.get_resource_inst(f"{HOME}/Photos", self.environ)
         self.assertIsInstance(res, FolderResource)
 
     def test_nested_path_resolved(self):
         folder = tree.create_folder(self.user, "A")
         tree.create_file(self.user, "b.txt", parent=folder, mime_type="text/plain")
-        res = self.provider.get_resource_inst("/A/b.txt", self.environ)
+        res = self.provider.get_resource_inst(f"{HOME}/A/b.txt", self.environ)
         self.assertIsInstance(res, FileResource)
 
     def test_soft_deleted_file_not_resolved(self):
         f = tree.create_file(self.user, "gone.txt", mime_type="text/plain")
         trash.trash_subtree(f)
-        res = self.provider.get_resource_inst("/gone.txt", self.environ)
+        res = self.provider.get_resource_inst(f"{HOME}/gone.txt", self.environ)
         self.assertIsNone(res)
 
     def test_no_user_returns_none(self):
@@ -198,7 +209,7 @@ class ProviderTests(TestCase):
 
     def test_trailing_slash_stripped(self):
         tree.create_folder(self.user, "Stuff")
-        res = self.provider.get_resource_inst("/Stuff/", self.environ)
+        res = self.provider.get_resource_inst(f"{HOME}/Stuff/", self.environ)
         self.assertIsInstance(res, FolderResource)
 
     def test_user_isolation(self):
@@ -207,22 +218,22 @@ class ProviderTests(TestCase):
             username="other", email="o@test.com", password="p"
         )
         tree.create_file(other, "secret.txt", mime_type="text/plain")
-        res = self.provider.get_resource_inst("/secret.txt", self.environ)
+        res = self.provider.get_resource_inst(f"{HOME}/secret.txt", self.environ)
         self.assertIsNone(res)
 
 
-# ── RootCollection ────────────────────────────────────────────────────
+# ── PersonalCollection ────────────────────────────────────────────────
 
 
-class RootCollectionTests(TestCase):
-    """Tests for the virtual root resource."""
+class PersonalCollectionTests(TestCase):
+    """Tests for the root of the user's personal tree."""
 
     def setUp(self):
         self.user = User.objects.create_user(
             username="davroot", email="root@test.com", password="pass"
         )
         self.environ = _make_environ(user=self.user)
-        self.root = RootCollection("/", self.environ)
+        self.root = PersonalCollection(HOME, self.environ)
 
     def test_member_names_empty(self):
         self.assertEqual(self.root.get_member_names(), [])
@@ -241,7 +252,6 @@ class RootCollectionTests(TestCase):
         self.assertEqual(self.root.get_member_names(), [])
 
     def test_a_file_shared_with_several_people_is_listed_once(self):
-        """The access filter joins the shares, one row per share of a file."""
         shared = tree.create_file(self.user, "shared.txt")
         for name in ("bob", "carol"):
             recipient = User.objects.create_user(username=name, password="pass")
@@ -312,7 +322,7 @@ class FolderResourceTests(TestCase):
         )
         self.environ = _make_environ(user=self.user)
         self.folder = tree.create_folder(self.user, "Docs")
-        self.res = FolderResource("/Docs", self.environ, self.folder)
+        self.res = FolderResource(f"{HOME}/Docs", self.environ, self.folder)
 
     def test_a_file_shared_with_several_people_is_listed_once(self):
         shared = tree.create_file(self.user, "shared.txt", parent=self.folder)
@@ -395,7 +405,7 @@ class FolderResourceTests(TestCase):
             group=group,
         )
 
-        group_res = FolderResource("/Shared", self.environ, group_folder)
+        group_res = FolderResource(f"/{GROUPS}/Shared", self.environ, group_folder)
         res = group_res.create_empty_resource("report.txt")
         self.assertEqual(res._file.pk, existing.pk)
         self.assertEqual(
@@ -424,14 +434,14 @@ class FolderResourceTests(TestCase):
         self.assertIsNotNone(self.folder.deleted_at)
 
     def test_support_recursive_move(self):
-        self.assertTrue(self.res.support_recursive_move("/somewhere"))
+        self.assertTrue(self.res.support_recursive_move(f"{HOME}/somewhere"))
 
     def test_support_recursive_delete(self):
         self.assertTrue(self.res.support_recursive_delete())
 
     def test_move_recursive(self):
         target = tree.create_folder(self.user, "Target")
-        self.res.move_recursive("/Target/Renamed")
+        self.res.move_recursive(f"{HOME}/Target/Renamed")
         self.folder.refresh_from_db()
         self.assertEqual(self.folder.name, "Renamed")
         self.assertEqual(self.folder.parent, target)
@@ -439,7 +449,7 @@ class FolderResourceTests(TestCase):
     def test_move_recursive_rename_in_place(self):
         """move_recursive with same parent only renames (no parent change)."""
         original_parent = self.folder.parent
-        self.res.move_recursive("/Renamed")
+        self.res.move_recursive(f"{HOME}/Renamed")
         self.folder.refresh_from_db()
         self.assertEqual(self.folder.name, "Renamed")
         self.assertEqual(self.folder.parent, original_parent)
@@ -447,7 +457,7 @@ class FolderResourceTests(TestCase):
     def test_copy_move_single_copies(self):
         """copy_move_single always copies (used by WsgiDAV's copy flow)."""
         target = tree.create_folder(self.user, "Dest")
-        self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
+        self.res.copy_move_single(f"{HOME}/Dest/DocsCopy", is_move=False)
         self.assertTrue(
             File.objects.filter(
                 owner=self.user,
@@ -470,9 +480,9 @@ class FolderResourceTests(TestCase):
         )
         target = tree.create_folder(self.user, "Dest")
 
-        self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
+        self.res.copy_move_single(f"{HOME}/Dest/DocsCopy", is_move=False)
         child_res = FileResource(f"{self.res.path}/child.txt", self.res.environ, child)
-        child_res.copy_move_single("/Dest/DocsCopy/child.txt", is_move=False)
+        child_res.copy_move_single(f"{HOME}/Dest/DocsCopy/child.txt", is_move=False)
 
         copy = File.objects.get(
             owner=self.user,
@@ -493,7 +503,7 @@ class FolderResourceTests(TestCase):
         target = tree.create_folder(self.user, "Dest")
         self.res.environ["HTTP_DEPTH"] = "0"
 
-        self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
+        self.res.copy_move_single(f"{HOME}/Dest/DocsCopy", is_move=False)
 
         copy = File.objects.get(name="DocsCopy", parent=target)
         self.assertFalse(File.objects.filter(parent=copy).exists())
@@ -528,9 +538,9 @@ class FolderResourceMoveStorageTests(TestCase):
         old_name = note.content.name
         self.assertTrue(default_storage.is_file(old_name))
 
-        res = FolderResource("/Src", self.environ, src)
+        res = FolderResource(f"{HOME}/Src", self.environ, src)
         with self.captureOnCommitCallbacks(execute=True):
-            res.move_recursive("/Dest/Src")
+            res.move_recursive(f"{HOME}/Dest/Src")
 
         note.refresh_from_db()
         new_content_name = note.content.name.replace("\\", "/")
@@ -557,9 +567,9 @@ class FolderResourceMoveStorageTests(TestCase):
             content=ContentFile(b"payload", name="note.txt"),
         )
 
-        res = FolderResource("/A/Sub", self.environ, sub)
+        res = FolderResource(f"{HOME}/A/Sub", self.environ, sub)
         with self.captureOnCommitCallbacks(execute=True):
-            res.move_recursive("/B/Target")
+            res.move_recursive(f"{HOME}/B/Target")
 
         sub.refresh_from_db()
         self.assertEqual(sub.name, "Target")
@@ -590,9 +600,9 @@ class FolderResourceMoveStorageTests(TestCase):
             content=ContentFile(b"ydata", name="y.txt"),
         )
 
-        res = FileResource("/A/x.txt", self.environ, x)
+        res = FileResource(f"{HOME}/A/x.txt", self.environ, x)
         with self.captureOnCommitCallbacks(execute=True):
-            res.copy_move_single("/B/y.txt", is_move=True)
+            res.copy_move_single(f"{HOME}/B/y.txt", is_move=True)
 
         x.refresh_from_db()
         self.assertEqual(x.name, "y.txt")
@@ -625,7 +635,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         self.file = tree.create_file(
             self.user, "test.txt", content=content, mime_type="text/plain"
         )
-        self.res = FileResource("/test.txt", self.environ, self.file)
+        self.res = FileResource(f"{HOME}/test.txt", self.environ, self.file)
 
     def test_content_length(self):
         self.assertEqual(self.res.get_content_length(), 11)
@@ -645,7 +655,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
 
     def test_get_content_empty_file(self):
         empty = tree.create_file(self.user, "empty.txt", mime_type="text/plain")
-        res = FileResource("/empty.txt", self.environ, empty)
+        res = FileResource(f"{HOME}/empty.txt", self.environ, empty)
         stream = res.get_content()
         self.assertEqual(stream.read(), b"")
 
@@ -723,7 +733,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         promise hold for the whole transfer.
         """
         res = FileResource(
-            "/test.txt",
+            f"{HOME}/test.txt",
             _make_environ(user=self.user, HTTP_IF_MATCH=f'"{self.res.get_etag()}"'),
             File.objects.get(pk=self.file.pk),
         )
@@ -762,7 +772,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
 
     def test_end_write_with_errors_on_new_file(self):
         new = tree.create_file(self.user, "fail.txt", mime_type="text/plain")
-        res = FileResource("/fail.txt", self.environ, new)
+        res = FileResource(f"{HOME}/fail.txt", self.environ, new)
         buf = res.begin_write()
         buf.write(b"data")
         buf.close()
@@ -784,7 +794,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         new = tree.create_file(self.user, "partial.txt", mime_type="text/plain")
         # Simulate Content-Length = 1000 but only 100 bytes received
         env = _make_environ(user=self.user, CONTENT_LENGTH="1000")
-        res = FileResource("/partial.txt", env, new)
+        res = FileResource(f"{HOME}/partial.txt", env, new)
         buf = res.begin_write()
         buf.write(b"x" * 100)
         buf.close()
@@ -799,7 +809,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         The empty segment must not break parent resolution (the copy would
         silently land at the root)."""
         target = tree.create_folder(self.user, "Dest")
-        self.res.copy_move_single("/Dest//copy.txt", is_move=False)
+        self.res.copy_move_single(f"{HOME}/Dest//copy.txt", is_move=False)
         copy = File.objects.get(
             owner=self.user, name="copy.txt", deleted_at__isnull=True
         )
@@ -831,7 +841,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         from wsgidav.dav_error import DAVError
 
         env = _make_environ(user=self.user, CONTENT_LENGTH="100")
-        res = FileResource("/test.txt", env, self.file)
+        res = FileResource(f"{HOME}/test.txt", env, self.file)
         buf = res.begin_write()
         buf.write(b"x" * 10)
         buf.close()
@@ -848,7 +858,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         f = tree.create_file(
             self.user, "a.txt", parent=docs, content=ContentFile(b"old", name="a.txt")
         )
-        res = FileResource("/Docs/a.txt", self.environ, f)
+        res = FileResource(f"{HOME}/Docs/a.txt", self.environ, f)
         buf = res.begin_write()
         buf.write(b"new")
         buf.close()
@@ -941,7 +951,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
     def test_end_write_accepts_complete_upload(self):
         """Complete transfer (size == Content-Length) must save."""
         env = _make_environ(user=self.user, CONTENT_LENGTH="5")
-        res = FileResource("/test.txt", env, self.file)
+        res = FileResource(f"{HOME}/test.txt", env, self.file)
         buf = res.begin_write()
         buf.write(b"hello")
         buf.close()
@@ -957,14 +967,14 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
     def test_delete_noop_after_move(self):
         """After copy_move_single(is_move=True), delete() is a no-op."""
         tree.create_folder(self.user, "Dest")
-        self.res.copy_move_single("/Dest/test.txt", is_move=True)
+        self.res.copy_move_single(f"{HOME}/Dest/test.txt", is_move=True)
         self.res.delete()  # should be a no-op
         self.file.refresh_from_db()
         self.assertIsNone(self.file.deleted_at)
 
     def test_copy_move_single_move(self):
         folder = tree.create_folder(self.user, "Target")
-        self.res.copy_move_single("/Target/moved.txt", is_move=True)
+        self.res.copy_move_single(f"{HOME}/Target/moved.txt", is_move=True)
         self.file.refresh_from_db()
         self.assertEqual(self.file.name, "moved.txt")
         self.assertEqual(self.file.parent, folder)
@@ -972,7 +982,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
     def test_copy_move_single_move_rename_in_place(self):
         """copy_move_single(is_move=True) with same parent only renames."""
         original_parent = self.file.parent
-        self.res.copy_move_single("/renamed.txt", is_move=True)
+        self.res.copy_move_single(f"{HOME}/renamed.txt", is_move=True)
         self.file.refresh_from_db()
         self.assertEqual(self.file.name, "renamed.txt")
         self.assertEqual(self.file.parent, original_parent)
@@ -991,7 +1001,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         self.assertTrue(default_storage.is_file(old_name))
 
         with self.captureOnCommitCallbacks(execute=True):
-            self.res.copy_move_single("/Target/moved.txt", is_move=True)
+            self.res.copy_move_single(f"{HOME}/Target/moved.txt", is_move=True)
         self.file.refresh_from_db()
 
         # New content.name must reflect the new parent.
@@ -1003,7 +1013,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
 
     def test_copy_move_single_copy(self):
         folder = tree.create_folder(self.user, "CopyDest")
-        self.res.copy_move_single("/CopyDest/copy.txt", is_move=False)
+        self.res.copy_move_single(f"{HOME}/CopyDest/copy.txt", is_move=False)
         copy = File.objects.get(
             owner=self.user,
             name="copy.txt",
@@ -1023,7 +1033,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         self.assertIn(str(self.file.uuid), etag)
 
     def test_support_recursive_move_false(self):
-        self.assertFalse(self.res.support_recursive_move("/x"))
+        self.assertFalse(self.res.support_recursive_move(f"{HOME}/x"))
 
     def test_support_content_length(self):
         self.assertTrue(self.res.support_content_length())
@@ -1047,7 +1057,7 @@ class WebDavQuarantineTests(TestCase):
             signature="Unit.Test",
             scanned_at="2026-08-30T12:00:00Z",
         )
-        self.res = FileResource("/test.txt", self.environ, self.file)
+        self.res = FileResource(f"{HOME}/test.txt", self.environ, self.file)
 
     @override_settings(
         FILES_MALWARE_SCAN_ENABLED=True, FILES_MALWARE_ON_DETECTION="block"
@@ -1071,37 +1081,54 @@ class WebDavQuarantineTests(TestCase):
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
-class ResolveParentTests(TestCase):
-    """Tests for _resolve_parent helper."""
+class DestParentTests(TestCase):
+    """Where a MOVE or COPY destination is allowed to sit."""
 
     def setUp(self):
         self.user = User.objects.create_user(
             username="davrp", email="rp@test.com", password="pass"
         )
 
-    def test_empty_parts_returns_none(self):
-        self.assertIsNone(_resolve_parent(self.user, []))
+    def _refused(self, parts):
+        with self.assertRaises(DAVError) as raised:
+            _dest_parent(self.user, parts, "MOVE")
+        return raised.exception.value
+
+    def test_the_personal_root_is_no_folder_row(self):
+        self.assertIsNone(_dest_parent(self.user, [PERSONAL], "MOVE"))
 
     def test_single_folder(self):
         folder = tree.create_folder(self.user, "A")
-        self.assertEqual(_resolve_parent(self.user, ["A"]), folder)
+        self.assertEqual(_dest_parent(self.user, [PERSONAL, "A"], "MOVE"), folder)
 
     def test_nested_folders(self):
         a = tree.create_folder(self.user, "A")
         b = tree.create_folder(self.user, "B", parent=a)
-        self.assertEqual(_resolve_parent(self.user, ["A", "B"]), b)
+        self.assertEqual(_dest_parent(self.user, [PERSONAL, "A", "B"], "MOVE"), b)
 
-    def test_nonexistent_returns_none(self):
-        self.assertIsNone(_resolve_parent(self.user, ["X"]))
+    def test_a_group_folder(self):
+        team = Group.objects.create(name="Team")
+        self.user.groups.add(team)
+        root = tree.create_folder(self.user, "Team", group=team)
+        self.assertEqual(_dest_parent(self.user, [GROUPS, "Team"], "MOVE"), root)
+
+    def test_nothing_is_put_in_the_folders_of_the_layout(self):
+        for parts in ([], [GROUPS], [SHARED], ["Elsewhere"]):
+            with self.subTest(parts=parts):
+                self.assertEqual(self._refused(parts), HTTP_FORBIDDEN)
+
+    def test_a_missing_folder_is_a_conflict_not_the_personal_root(self):
+        self.assertEqual(self._refused([PERSONAL, "X"]), HTTP_CONFLICT)
+        self.assertEqual(self._refused([SHARED, "X"]), HTTP_CONFLICT)
 
     def test_file_not_treated_as_folder(self):
         tree.create_file(self.user, "f.txt", mime_type="text/plain")
-        self.assertIsNone(_resolve_parent(self.user, ["f.txt"]))
+        self.assertEqual(self._refused([PERSONAL, "f.txt"]), HTTP_CONFLICT)
 
     def test_deleted_folder_not_resolved(self):
         folder = tree.create_folder(self.user, "Del")
         trash.trash_subtree(folder)
-        self.assertIsNone(_resolve_parent(self.user, ["Del"]))
+        self.assertEqual(self._refused([PERSONAL, "Del"]), HTTP_CONFLICT)
 
 
 class StreamingWriteBufferTests(TestCase):
@@ -1381,10 +1408,10 @@ class WebDAVIntegrationTests(TestCase):
         code, _, _ = self._request("PROPFIND", "/", headers={"Depth": "infinity"})
         self.assertEqual(code, 401)
 
-    def test_propfind_root_lists_members(self):
+    def test_propfind_personal_root_lists_members(self):
         tree.create_folder(self.user, "F1")
         tree.create_file(self.user, "a.txt", mime_type="text/plain")
-        code, _, body = self._request("PROPFIND", "/", headers={"Depth": "1"})
+        code, _, body = self._request("PROPFIND", HOME, headers={"Depth": "1"})
         self.assertEqual(code, 207)
         body_str = body.decode("utf-8", errors="replace")
         self.assertIn("F1", body_str)
@@ -1393,7 +1420,7 @@ class WebDAVIntegrationTests(TestCase):
     def test_propfind_excludes_deleted(self):
         f = tree.create_file(self.user, "gone.txt", mime_type="text/plain")
         trash.trash_subtree(f)
-        code, _, body = self._request("PROPFIND", "/", headers={"Depth": "1"})
+        code, _, body = self._request("PROPFIND", HOME, headers={"Depth": "1"})
         self.assertEqual(code, 207)
         self.assertNotIn(b"gone.txt", body)
 
@@ -1471,7 +1498,7 @@ class WebDAVIntegrationTests(TestCase):
         """
         code, headers, _ = self._request(
             "LOCK",
-            "/locked.txt",
+            f"{HOME}/locked.txt",
             body=_LOCK_BODY,
             headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
         )
@@ -1494,7 +1521,7 @@ class WebDAVIntegrationTests(TestCase):
         the wire side so a regression in either layer surfaces.
         """
         tree.create_file(self.user, "tagged.txt", mime_type="text/plain")
-        code, headers, _ = self._request("HEAD", "/tagged.txt")
+        code, headers, _ = self._request("HEAD", f"{HOME}/tagged.txt")
         self.assertEqual(code, 200)
         etag = headers.get("ETag") or headers.get("Etag") or headers.get("etag")
         self.assertIsNotNone(etag, f"no ETag header in {headers!r}")
@@ -1506,7 +1533,7 @@ class WebDAVIntegrationTests(TestCase):
     # ── MKCOL ──
 
     def test_mkcol_creates_folder(self):
-        code, _, _ = self._request("MKCOL", "/NewFolder/")
+        code, _, _ = self._request("MKCOL", f"{HOME}/NewFolder/")
         self.assertEqual(code, 201)
         self.assertTrue(
             File.objects.filter(
@@ -1518,7 +1545,7 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_mkcol_nested(self):
         tree.create_folder(self.user, "Parent")
-        code, _, _ = self._request("MKCOL", "/Parent/Child/")
+        code, _, _ = self._request("MKCOL", f"{HOME}/Parent/Child/")
         self.assertEqual(code, 201)
         parent = File.objects.get(owner=self.user, name="Parent")
         self.assertTrue(
@@ -1534,7 +1561,7 @@ class WebDAVIntegrationTests(TestCase):
     def test_put_creates_file(self):
         code, _, _ = self._request(
             "PUT",
-            "/hello.txt",
+            f"{HOME}/hello.txt",
             body=b"Hello!",
             headers={"Content-Type": "text/plain"},
         )
@@ -1545,21 +1572,21 @@ class WebDAVIntegrationTests(TestCase):
     def test_get_returns_content(self):
         content = ContentFile(b"file data here", name="data.txt")
         tree.create_file(self.user, "data.txt", content=content, mime_type="text/plain")
-        code, hdrs, body = self._request("GET", "/data.txt")
+        code, hdrs, body = self._request("GET", f"{HOME}/data.txt")
         self.assertEqual(code, 200)
         self.assertEqual(body, b"file data here")
 
     def test_put_overwrite(self):
         content = ContentFile(b"old", name="ow.txt")
         tree.create_file(self.user, "ow.txt", content=content, mime_type="text/plain")
-        code, _, _ = self._request("PUT", "/ow.txt", body=b"new content")
+        code, _, _ = self._request("PUT", f"{HOME}/ow.txt", body=b"new content")
         self.assertEqual(code, 204)
         f = File.objects.get(owner=self.user, name="ow.txt", deleted_at__isnull=True)
         self.assertEqual(f.size, 11)
 
     def test_put_in_subfolder(self):
         tree.create_folder(self.user, "Sub")
-        code, _, _ = self._request("PUT", "/Sub/note.txt", body=b"note")
+        code, _, _ = self._request("PUT", f"{HOME}/Sub/note.txt", body=b"note")
         self.assertEqual(code, 201)
         parent = File.objects.get(owner=self.user, name="Sub")
         self.assertTrue(
@@ -1574,7 +1601,7 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_delete_file(self):
         tree.create_file(self.user, "del.txt", mime_type="text/plain")
-        code, _, _ = self._request("DELETE", "/del.txt")
+        code, _, _ = self._request("DELETE", f"{HOME}/del.txt")
         self.assertEqual(code, 204)
         f = File.objects.get(owner=self.user, name="del.txt")
         self.assertIsNotNone(f.deleted_at)
@@ -1582,13 +1609,13 @@ class WebDAVIntegrationTests(TestCase):
     def test_delete_folder(self):
         folder = tree.create_folder(self.user, "RmDir")
         tree.create_file(self.user, "inside.txt", parent=folder, mime_type="text/plain")
-        code, _, _ = self._request("DELETE", "/RmDir/")
+        code, _, _ = self._request("DELETE", f"{HOME}/RmDir/")
         self.assertEqual(code, 204)
         folder.refresh_from_db()
         self.assertIsNotNone(folder.deleted_at)
 
     def test_delete_nonexistent_returns_404(self):
-        code, _, _ = self._request("DELETE", "/nope.txt")
+        code, _, _ = self._request("DELETE", f"{HOME}/nope.txt")
         self.assertEqual(code, 404)
 
     # ── MOVE ──
@@ -1600,8 +1627,8 @@ class WebDAVIntegrationTests(TestCase):
 
         code, _, _ = self._request(
             "MOVE",
-            "/src.txt",
-            headers={"Destination": "http://testserver/dav/Dest/src.txt"},
+            f"{HOME}/src.txt",
+            headers={"Destination": f"{DAV_HOME}/Dest/src.txt"},
         )
         self.assertIn(code, (201, 204))
 
@@ -1636,8 +1663,8 @@ class WebDAVIntegrationTests(TestCase):
 
         code, _, _ = self._request(
             "MOVE",
-            "/ToMove/",
-            headers={"Destination": "http://testserver/dav/Into/ToMove/"},
+            f"{HOME}/ToMove/",
+            headers={"Destination": f"{DAV_HOME}/Into/ToMove/"},
         )
         self.assertIn(code, (201, 204))
         into = File.objects.get(owner=self.user, name="Into")
@@ -1660,8 +1687,8 @@ class WebDAVIntegrationTests(TestCase):
         tree.create_file(self.user, "old.txt", content=content, mime_type="text/plain")
         code, _, _ = self._request(
             "MOVE",
-            "/old.txt",
-            headers={"Destination": "http://testserver/dav/new.txt"},
+            f"{HOME}/old.txt",
+            headers={"Destination": f"{DAV_HOME}/new.txt"},
         )
         self.assertIn(code, (201, 204))
         self.assertFalse(
@@ -1683,8 +1710,8 @@ class WebDAVIntegrationTests(TestCase):
         tree.create_folder(self.user, "Old")
         code, _, _ = self._request(
             "MOVE",
-            "/Old/",
-            headers={"Destination": "http://testserver/dav/New/"},
+            f"{HOME}/Old/",
+            headers={"Destination": f"{DAV_HOME}/New/"},
         )
         self.assertIn(code, (201, 204))
         self.assertFalse(
@@ -1715,8 +1742,8 @@ class WebDAVIntegrationTests(TestCase):
         )
         code, _, _ = self._request(
             "MOVE",
-            "/Sub/x.txt",
-            headers={"Destination": "http://testserver/dav/x.txt"},
+            f"{HOME}/Sub/x.txt",
+            headers={"Destination": f"{DAV_HOME}/x.txt"},
         )
         self.assertIn(code, (201, 204))
         moved = File.objects.get(
@@ -1747,8 +1774,8 @@ class WebDAVIntegrationTests(TestCase):
         )
         code, _, _ = self._request(
             "MOVE",
-            "/A/doc.txt",
-            headers={"Destination": "http://testserver/dav/B/doc.txt"},
+            f"{HOME}/A/doc.txt",
+            headers={"Destination": f"{DAV_HOME}/B/doc.txt"},
         )
         self.assertIn(code, (201, 204))
         moved = File.objects.get(
@@ -1779,8 +1806,8 @@ class WebDAVIntegrationTests(TestCase):
         )
         code, _, _ = self._request(
             "MOVE",
-            "/A/old.txt",
-            headers={"Destination": "http://testserver/dav/B/new.txt"},
+            f"{HOME}/A/old.txt",
+            headers={"Destination": f"{DAV_HOME}/B/new.txt"},
         )
         self.assertIn(code, (201, 204))
         moved = File.objects.get(
@@ -1815,8 +1842,8 @@ class WebDAVIntegrationTests(TestCase):
         )
         code, _, _ = self._request(
             "MOVE",
-            "/src.txt",
-            headers={"Destination": "http://testserver/dav/dest.txt"},
+            f"{HOME}/src.txt",
+            headers={"Destination": f"{DAV_HOME}/dest.txt"},
         )
         self.assertIn(code, (201, 204))
         # Source is gone, only one dest.txt remains and it has the new bytes.
@@ -1850,9 +1877,9 @@ class WebDAVIntegrationTests(TestCase):
         )
         code, _, _ = self._request(
             "MOVE",
-            "/src.txt",
+            f"{HOME}/src.txt",
             headers={
-                "Destination": "http://testserver/dav/dest.txt",
+                "Destination": f"{DAV_HOME}/dest.txt",
                 "Overwrite": "F",
             },
         )
@@ -1880,8 +1907,8 @@ class WebDAVIntegrationTests(TestCase):
         tree.create_file(self.user, "orig.txt", content=content, mime_type="text/plain")
         code, _, _ = self._request(
             "COPY",
-            "/orig.txt",
-            headers={"Destination": "http://testserver/dav/dup.txt"},
+            f"{HOME}/orig.txt",
+            headers={"Destination": f"{DAV_HOME}/dup.txt"},
         )
         self.assertIn(code, (201, 204))
         # Both should exist
@@ -1906,15 +1933,15 @@ class WebDAVIntegrationTests(TestCase):
         nowhere else. WsgiDAV calls copy_move_single on the collection AND
         on each descendant (with a '/dst//child' destination), which used
         to leave stray copies of every child at the root."""
-        self._request("MKCOL", "/src")
-        self._request("PUT", "/src/a.txt", body=b"alpha")
-        self._request("PUT", "/src/b.txt", body=b"beta")
+        self._request("MKCOL", f"{HOME}/src")
+        self._request("PUT", f"{HOME}/src/a.txt", body=b"alpha")
+        self._request("PUT", f"{HOME}/src/b.txt", body=b"beta")
 
         code, _, _ = self._request(
             "COPY",
-            "/src",
+            f"{HOME}/src",
             headers={
-                "Destination": "http://testserver/dav/dst",
+                "Destination": f"{DAV_HOME}/dst",
                 "Depth": "infinity",
             },
         )
@@ -1929,29 +1956,29 @@ class WebDAVIntegrationTests(TestCase):
             paths,
             ["dst", "dst/a.txt", "dst/b.txt", "src", "src/a.txt", "src/b.txt"],
         )
-        code, _, body = self._request("GET", "/dst/a.txt")
+        code, _, body = self._request("GET", f"{HOME}/dst/a.txt")
         self.assertEqual(code, 200)
         self.assertEqual(body, b"alpha")
 
     def test_interrupted_overwrite_put_preserves_content(self):
         """A PUT that dies mid-transfer (fewer bytes than Content-Length)
         must be rejected AND leave the previous content readable."""
-        code, _, _ = self._request("PUT", "/doc.txt", body=b"original payload")
+        code, _, _ = self._request("PUT", f"{HOME}/doc.txt", body=b"original payload")
         self.assertIn(code, (201, 204))
 
         code, _, _ = self._request(
-            "PUT", "/doc.txt", body=b"x" * 10, content_length="100"
+            "PUT", f"{HOME}/doc.txt", body=b"x" * 10, content_length="100"
         )
         self.assertEqual(code, 400)
 
-        code, _, body = self._request("GET", "/doc.txt")
+        code, _, body = self._request("GET", f"{HOME}/doc.txt")
         self.assertEqual(code, 200)
         self.assertEqual(body, b"original payload")
 
     # ── GET nonexistent ──
 
     def test_get_nonexistent_returns_404(self):
-        code, _, _ = self._request("GET", "/nope.txt")
+        code, _, _ = self._request("GET", f"{HOME}/nope.txt")
         self.assertEqual(code, 404)
 
     # ── user isolation ──
@@ -1961,9 +1988,13 @@ class WebDAVIntegrationTests(TestCase):
             username="other2", email="o2@test.com", password="p"
         )
         tree.create_file(other, "secret.txt", mime_type="text/plain")
-        code, _, body = self._request("PROPFIND", "/", headers={"Depth": "1"})
-        self.assertEqual(code, 207)
-        self.assertNotIn(b"secret.txt", body)
+        for folder in (HOME, f"/{GROUPS}", f"/{SHARED}"):
+            with self.subTest(folder=folder):
+                code, _, body = self._request(
+                    "PROPFIND", folder, headers={"Depth": "1"}
+                )
+                self.assertEqual(code, 207)
+                self.assertNotIn(b"secret.txt", body)
 
     # ── app lock ──
 
@@ -2000,9 +2031,9 @@ class WebDAVIntegrationTests(TestCase):
     def test_put_refused_while_another_user_holds_the_app_lock(self):
         """The whole point: a mounted client must not overwrite an open note."""
         file_obj = self._locked_by_someone_else()
-        code, _, _ = self._request("PUT", "/held.txt", body=b"clobbered")
+        code, _, _ = self._request("PUT", f"{HOME}/held.txt", body=b"clobbered")
         self.assertEqual(code, 423)
-        code, _, body = self._request("GET", "/held.txt")
+        code, _, body = self._request("GET", f"{HOME}/held.txt")
         self.assertEqual(body, b"editor buffer")
         file_obj.refresh_from_db()
         self.assertEqual(file_obj.size, len(b"editor buffer"))
@@ -2015,9 +2046,9 @@ class WebDAVIntegrationTests(TestCase):
         file_obj.refresh_from_db()
         self.assertIsNotNone(file_obj.locked_by_id)
 
-        code, _, _ = self._request("PUT", "/stale.txt", body=b"fresh")
+        code, _, _ = self._request("PUT", f"{HOME}/stale.txt", body=b"fresh")
         self.assertIn(code, (201, 204))
-        code, _, body = self._request("GET", "/stale.txt")
+        code, _, body = self._request("GET", f"{HOME}/stale.txt")
         self.assertEqual(body, b"fresh")
 
     def test_put_allowed_for_the_lock_holder(self):
@@ -2028,12 +2059,12 @@ class WebDAVIntegrationTests(TestCase):
             mime_type="text/plain",
         )
         self._hold_lock(file_obj, self.user)
-        code, _, _ = self._request("PUT", "/mine.txt", body=b"new")
+        code, _, _ = self._request("PUT", f"{HOME}/mine.txt", body=b"new")
         self.assertIn(code, (201, 204))
 
     def test_delete_refused_while_another_user_holds_the_app_lock(self):
         file_obj = self._locked_by_someone_else(name="keep.txt")
-        code, _, _ = self._request("DELETE", "/keep.txt")
+        code, _, _ = self._request("DELETE", f"{HOME}/keep.txt")
         self.assertEqual(code, 423)
         file_obj.refresh_from_db()
         self.assertIsNone(file_obj.deleted_at)
@@ -2042,8 +2073,8 @@ class WebDAVIntegrationTests(TestCase):
         file_obj = self._locked_by_someone_else(name="pinned.txt")
         code, _, _ = self._request(
             "MOVE",
-            "/pinned.txt",
-            headers={"Destination": "http://testserver/dav/moved.txt"},
+            f"{HOME}/pinned.txt",
+            headers={"Destination": f"{DAV_HOME}/moved.txt"},
         )
         self.assertEqual(code, 423)
         file_obj.refresh_from_db()
@@ -2053,7 +2084,7 @@ class WebDAVIntegrationTests(TestCase):
         self._locked_by_someone_else(name="taken.txt")
         code, _, _ = self._request(
             "LOCK",
-            "/taken.txt",
+            f"{HOME}/taken.txt",
             body=_LOCK_BODY,
             headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
         )
@@ -2064,7 +2095,7 @@ class WebDAVIntegrationTests(TestCase):
         file_obj = tree.create_file(self.user, "word.docx", mime_type="text/plain")
         code, headers, _ = self._request(
             "LOCK",
-            "/word.docx",
+            f"{HOME}/word.docx",
             body=_LOCK_BODY,
             headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
         )
@@ -2080,7 +2111,7 @@ class WebDAVIntegrationTests(TestCase):
         file_obj = tree.create_file(self.user, "word2.docx", mime_type="text/plain")
         _, headers, _ = self._request(
             "LOCK",
-            "/word2.docx",
+            f"{HOME}/word2.docx",
             body=_LOCK_BODY,
             headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
         )
@@ -2088,7 +2119,9 @@ class WebDAVIntegrationTests(TestCase):
         self.assertTrue(file_obj.is_locked())
 
         code, _, _ = self._request(
-            "UNLOCK", "/word2.docx", headers={"Lock-Token": headers["Lock-Token"]}
+            "UNLOCK",
+            f"{HOME}/word2.docx",
+            headers={"Lock-Token": headers["Lock-Token"]},
         )
         self.assertEqual(code, 204)
         file_obj.refresh_from_db()
@@ -2102,11 +2135,11 @@ class WebDAVIntegrationTests(TestCase):
         """Save *name* the way davfs2, gedit and LibreOffice do: write a temp
         file next to it, then MOVE it over the original."""
         temp_name = temp_name or f".{name}.tmp"
-        self._request("PUT", f"/{temp_name}", body=body)
+        self._request("PUT", f"{HOME}/{temp_name}", body=body)
         return self._request(
             "MOVE",
-            f"/{temp_name}",
-            headers={"Destination": f"http://testserver/dav/{name}", "Overwrite": "T"},
+            f"{HOME}/{temp_name}",
+            headers={"Destination": f"{DAV_HOME}/{name}", "Overwrite": "T"},
         )
 
     def _advertised_used_bytes(self):
@@ -2147,7 +2180,7 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_saves_by_rename_do_not_grow_the_quota(self):
         body = b"x" * 1000
-        self._request("PUT", "/report.odt", body=body)
+        self._request("PUT", f"{HOME}/report.odt", body=body)
         for _ in range(5):
             self._save_by_rename("report.odt", body)
 
@@ -2172,20 +2205,20 @@ class WebDAVIntegrationTests(TestCase):
         group = Group.objects.create(name="Design")
         self.user.groups.add(group)
         tree.create_folder(self.user, "Design", group=group)
-        self._request("PUT", "/Design/logo.svg", body=b"tiny")
+        self._request("PUT", f"/{GROUPS}/Design/logo.svg", body=b"tiny")
         GroupStorageQuota.objects.create(group=group, quota_bytes=10)
-        self._request("PUT", "/logo.svg", body=b"far too big for the group")
+        self._request("PUT", f"{HOME}/logo.svg", body=b"far too big for the group")
 
         code, _, _ = self._request(
             "MOVE",
-            "/logo.svg",
-            headers={"Destination": "http://testserver/dav/Design/logo.svg"},
+            f"{HOME}/logo.svg",
+            headers={"Destination": f"{DAV}/{GROUPS}/Design/logo.svg"},
         )
 
         self.assertEqual(code, 507)
-        code, _, body = self._request("GET", "/Design/logo.svg")
+        code, _, body = self._request("GET", f"/{GROUPS}/Design/logo.svg")
         self.assertEqual(body, b"tiny")
-        code, _, body = self._request("GET", "/logo.svg")
+        code, _, body = self._request("GET", f"{HOME}/logo.svg")
         self.assertEqual(body, b"far too big for the group")
 
     def _shared_with_me(self, name, body):
@@ -2206,12 +2239,12 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_moving_someone_elses_file_over_mine_never_destroys_it(self):
         shared = self._shared_with_me("theirs.txt", b"theirs")
-        self._request("PUT", "/mine.txt", body=b"mine")
+        self._request("PUT", f"{HOME}/mine.txt", body=b"mine")
 
         self._request(
             "MOVE",
-            "/theirs.txt",
-            headers={"Destination": "http://testserver/dav/mine.txt"},
+            f"/{SHARED}/theirs.txt",
+            headers={"Destination": f"{DAV_HOME}/mine.txt"},
         )
 
         self.assertTrue(File.objects.filter(pk=shared.pk).exists())
@@ -2219,8 +2252,8 @@ class WebDAVIntegrationTests(TestCase):
     def test_an_unlimited_user_gets_a_free_space_figure_in_every_folder(self):
         """Without one the Windows redirector reports the local system drive."""
         UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
-        self._request("MKCOL", "/Docs/")
-        for path in ("/", "/Docs/"):
+        self._request("MKCOL", f"{HOME}/Docs/")
+        for path in ("/", HOME, f"/{GROUPS}", f"/{SHARED}", f"{HOME}/Docs/"):
             _, _, body = self._request(
                 "PROPFIND",
                 path,
@@ -2233,8 +2266,8 @@ class WebDAVIntegrationTests(TestCase):
             self.assertRegex(body, rb"quota-available-bytes>\d+<", path)
 
     def test_a_failed_save_by_rename_leaves_both_files_as_they_were(self):
-        self._request("PUT", "/report.odt", body=b"old")
-        self._request("PUT", "/.report.odt.tmp", body=b"new version")
+        self._request("PUT", f"{HOME}/report.odt", body=b"old")
+        self._request("PUT", f"{HOME}/.report.odt.tmp", body=b"new version")
         dest = File.objects.get(owner=self.user, name="report.odt")
         temp = File.objects.get(owner=self.user, name=".report.odt.tmp")
 
@@ -2244,8 +2277,8 @@ class WebDAVIntegrationTests(TestCase):
         ):
             code, _, _ = self._request(
                 "MOVE",
-                "/.report.odt.tmp",
-                headers={"Destination": "http://testserver/dav/report.odt"},
+                f"{HOME}/.report.odt.tmp",
+                headers={"Destination": f"{DAV_HOME}/report.odt"},
             )
 
         self.assertGreaterEqual(code, 400)

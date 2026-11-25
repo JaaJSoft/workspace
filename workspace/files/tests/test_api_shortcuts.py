@@ -24,9 +24,9 @@ from workspace.files.services.sharing import create_share_link, share_file
 from workspace.files.services.shortcuts import create_shortcut
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.webdav.provider import WorkspaceDAVProvider
-from workspace.files.webdav.resources import FolderResource, RootCollection
+from workspace.files.webdav.resources import FolderResource
 
-from .test_webdav import _make_environ
+from .test_webdav import HOME, _make_environ
 
 User = get_user_model()
 
@@ -469,10 +469,14 @@ class ShortcutOutsideTheApiTests(ShortcutApiFixtures, TestCase):
         environ = _make_environ(user=self.alice)
         provider = WorkspaceDAVProvider()
 
-        self.assertIsNone(provider.get_resource_inst("/top link", environ))
-        self.assertIsNone(provider.get_resource_inst("/Docs/inner link", environ))
-        self.assertNotIn("top link", RootCollection("/", environ).get_member_names())
-        docs = provider.get_resource_inst("/Docs", environ)
+        self.assertIsNone(provider.get_resource_inst(f"{HOME}/top link", environ))
+        self.assertIsNone(
+            provider.get_resource_inst(f"{HOME}/Docs/inner link", environ)
+        )
+        home = provider.get_resource_inst(HOME, environ)
+        self.assertIn("Docs", home.get_member_names())
+        self.assertNotIn("top link", home.get_member_names())
+        docs = provider.get_resource_inst(f"{HOME}/Docs", environ)
         self.assertIsInstance(docs, FolderResource)
         self.assertEqual(docs.get_member_names(), [])
 

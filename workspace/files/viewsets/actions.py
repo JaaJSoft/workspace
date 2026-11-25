@@ -19,10 +19,11 @@ from workspace.common.uuids import (
     UuidBatchError,
     parse_uuid_batch,
 )
-from workspace.files.models import File, FileFavorite, FileShare, PinnedFolder
+from workspace.files.models import File, FileFavorite, PinnedFolder
 from workspace.files.queries import (
     accessible_files_q,
     annotate_for_serializer,
+    shared_files_qs,
     trash_permissions_bulk,
 )
 from workspace.files.sensitivity import with_sensitivity
@@ -174,15 +175,9 @@ class ActionsMixin:
     @action(detail=False, methods=["get"], url_path="shared-with-me")
     def shared_with_me(self, request):
         """List files shared with the current user."""
-        shared_file_ids = FileShare.objects.reaching(request.user).values_list(
-            "file_id", flat=True
-        )
-        queryset = File.objects.filter(
-            pk__in=shared_file_ids,
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-        )
-        queryset = annotate_for_serializer(queryset, request.user).name_ordered()
+        queryset = annotate_for_serializer(
+            shared_files_qs(request.user), request.user
+        ).name_ordered()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 

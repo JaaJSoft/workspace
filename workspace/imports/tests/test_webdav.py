@@ -319,9 +319,10 @@ class ResponseStreamTests(SimpleTestCase):
 
 @override_settings(IMPORTS_HTTP_TIMEOUT=5)
 class AgainstOurOwnServerTests(TestCase):
-    """End to end: import from another user's WebDAV space served by our own
+    """End to end: import from another user's personal tree served by our own
     WSGI entry point (Django + WsgiDAV dispatch on /dav), through httpx2's WSGI
-    transport - no network involved."""
+    transport - no network involved. The address of that tree has a space in
+    it, written the way a browser or a file manager hands it over."""
 
     def setUp(self):
         from workspace.wsgi import application
@@ -342,7 +343,7 @@ class AgainstOurOwnServerTests(TestCase):
             owner=self.remote_user,
             provider="webdav",
             label="bob",
-            base_url="http://testserver/dav",
+            base_url="http://testserver/dav/My%20Files",
             username="bob",
         )
         self.conn.set_secret("bobpw")

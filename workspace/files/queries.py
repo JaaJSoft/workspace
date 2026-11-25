@@ -158,6 +158,19 @@ def user_group_files_qs(user):
     )
 
 
+def shared_files_qs(user):
+    """The live files shared with *user*: what "Shared with me" lists.
+
+    Shared with them directly, with a group they are in or with a project
+    they can open. Files only: a folder is never shared with someone.
+    """
+    return File.objects.filter(
+        pk__in=FileShare.objects.reaching(user).values_list("file_id", flat=True),
+        node_type=File.NodeType.FILE,
+        deleted_at__isnull=True,
+    )
+
+
 def reads_full_path(permission):
     """Whether a viewer at *permission* may read a node's full path.
 

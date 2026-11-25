@@ -1,0 +1,31 @@
+{% comment %}
+  The actions of a person's header: open the contact in People when there is
+  one, and the person's menu. Reads cluster from the view.
+{% endcomment %}
+{% load i18n %}
+{% if cluster.person %}
+  <a
+    href="{{ cluster.person.url }}"
+    class="btn btn-ghost btn-sm gap-1 self-center"
+    title="{% blocktranslate trimmed with name=cluster.person.name %}Open {{ name }} in People{% endblocktranslate %}"
+  >
+    <i data-lucide="contact" class="w-4 h-4"></i>
+    <span class="max-sm:hidden">{% translate "Open in People" %}</span>
+  </a>
+{% endif %}
+<div class="dropdown dropdown-end self-center">
+  <button
+    type="button"
+    tabindex="0"
+    class="btn btn-ghost btn-sm btn-square"
+    aria-label="{% translate 'Person options' %}"
+  >
+    <i data-lucide="more-vertical" class="w-4 h-4"></i>
+  </button>
+  <ul
+    tabindex="0"
+    class="dropdown-content z-50 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-56 p-1"
+  >
+    {% include "photos/ui/partials/cluster_menu_rows.html" with cluster_expr="currentCluster()" %}
+  </ul>
+</div>

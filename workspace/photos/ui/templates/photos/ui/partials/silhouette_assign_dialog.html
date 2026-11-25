@@ -36,33 +36,7 @@
       class="menu menu-sm p-0 mt-3 max-h-64 flex-nowrap overflow-y-auto w-full"
     >
       <template x-for="option in silhouetteAssignOptions()" :key="option.uuid">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded-sm"
-            @click="assignSilhouettes(option)"
-          >
-            <template x-if="option.cover_url">
-              <img
-                :src="option.cover_url"
-                alt=""
-                class="w-8 h-8 rounded-full object-cover"
-              />
-            </template>
-            <template x-if="!option.cover_url">
-              <span
-                class="flex w-8 h-8 items-center justify-center rounded-full bg-base-200 text-base-content/50"
-              >
-                <i data-lucide="contact" class="w-4 h-4"></i>
-              </span>
-            </template>
-            <span class="flex-1 truncate" x-text="option.name"></span>
-            <span
-              class="text-xs text-base-content/60 tabular-nums"
-              x-text="photosCountLabels.photos(option.photo_count)"
-            ></span>
-          </button>
-        </li>
+        {% include "photos/ui/partials/contact_option.html" with person_expr="option" click_expr="assignSilhouettes(option)" %}
       </template>
       <li
         x-show="!silhouetteAssignOptions().length"

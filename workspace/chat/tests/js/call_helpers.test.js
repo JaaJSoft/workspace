@@ -131,3 +131,18 @@ test('scheduleIceRestart: a repeated disconnected keeps the existing timer (debo
   assert.deepStrictEqual(cleared, []);
   assert.equal(m._peers[2].iceRestartTimer, firstId);
 });
+
+test('the leave beacon carries the CSRF token the page holds', () => {
+  const sent = [];
+  const callCtx = loadScript('workspace/chat/ui/static/chat/ui/js/call.js', {
+    getCSRFToken: () => 'csrf-token',
+    fetch: (url, options) => { sent.push({ url, options }); },
+  });
+  const m = callCtx.chatCallMixin();
+  m.callSession = { conversation_id: 'conv-9' };
+  m._leaveBeacon();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, '/api/v1/chat/conversations/conv-9/call/leave');
+  assert.equal(sent[0].options.headers['X-CSRFToken'], 'csrf-token');
+  assert.equal(sent[0].options.keepalive, true);
+});

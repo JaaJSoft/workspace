@@ -20,7 +20,7 @@ import tempfile
 from io import BytesIO
 
 from django.core.cache import cache
-from django.core.files.base import ContentFile
+from django.core.files.base import ContentFile, File
 from django.core.files.storage import default_storage
 
 from workspace.common.logging import scrub
@@ -102,7 +102,7 @@ def _photo(file_obj):
     return ContentFile(out.getvalue())
 
 
-def _video(file_obj, extension, muxer):
+def _store_video(file_obj, path, extension, muxer):
     if ffmpeg.FFMPEG is None:
         raise RenditionUnavailable("ffmpeg is not installed")
     with ffmpeg.local_path(file_obj.content) as source:
@@ -138,7 +138,7 @@ def _video(file_obj, extension, muxer):
                 command, check=True, capture_output=True, timeout=REMUX_TIMEOUT
             )
             with open(target, "rb") as remuxed:
-                return ContentFile(remuxed.read())
+                _store(file_obj, path, File(remuxed))
 
 
 def rendition(file_obj):
@@ -166,10 +166,9 @@ def rendition(file_obj):
         raise RenditionBusy(path)
     try:
         if muxer is not None:
-            content = _video(file_obj, extension, muxer)
+            _store_video(file_obj, path, extension, muxer)
         else:
-            content = _photo(file_obj)
-        _store(file_obj, path, content)
+            _store(file_obj, path, _photo(file_obj))
     except (
         OSError,
         ValueError,

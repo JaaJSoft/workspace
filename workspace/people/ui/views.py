@@ -44,6 +44,19 @@ ENTRY_KINDS = [
 ]
 
 
+# What person_row.html reads: a column missing here costs a query per row.
+ROW_FIELDS = (
+    "uuid",
+    "display_name",
+    "organization",
+    "emails",
+    "has_avatar",
+    "updated_at",
+    "group__name",
+    "linked_user__username",
+)
+
+
 def _letter(person):
     """The bucket a person falls in: an accent-folded initial, or ``#``."""
     first = unicodedata.normalize("NFKD", person.display_name[:1])[:1].upper()
@@ -66,7 +79,11 @@ def _filtered_persons(request):
     and the caller echoes back only what survived - otherwise the page would
     reopen with a filter its own listing does not honour.
     """
-    qs = user_persons(request.user).select_related("linked_user", "group")
+    qs = (
+        user_persons(request.user)
+        .select_related("linked_user", "group")
+        .only(*ROW_FIELDS)
+    )
     query = request.GET.get("q", "").strip()
     if query:
         qs = qs.filter(search_text__contains=fold_text(query))

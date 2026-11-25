@@ -30,7 +30,6 @@
        input.css, module-hues.js). Replaces the Tailwind Play
        CDN which shipped a 140KB JIT compiler that re-ran on every page. -->
     <link href="{% static 'css/app.css' %}" rel="stylesheet" />
-    <link href="{% static 'ui/css/mentions.css' %}" rel="stylesheet" />
 
     <!-- Alpine.js + plugins - locally built (see scripts/frontend/). Alpine holds
        personal entries in its reactive state, so it must not come from
@@ -119,10 +118,8 @@
     {% endif %}
 
     <!-- Shared components -->
-    <script src="{% static 'ui/js/download.js' %}"></script>
     <script src="{% static 'ui/js/dispatch_action.js' %}"></script>
     <script src="{% static 'users/ui/js/avatar.js' %}"></script>
-    <script src="{% static 'ui/js/card_popover.js' %}"></script>
     <script src="{% static 'files/ui/js/note_card.js' %}"></script>
     {# The image viewer's rotation and crop geometry: any page may open the viewer. #}
     <script src="{% static 'files/ui/js/image_edit.js' %}"></script>

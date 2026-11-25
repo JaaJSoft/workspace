@@ -32,12 +32,16 @@ logger = logging.getLogger(__name__)
 
 
 def flag_operations():
-    """``{name: (imap_call, field, value)}`` for every flag a message carries.
+    """``{name: (imap_call, imap_flag, field, value)}`` for each message flag.
 
-    Exposed so the bulk path can drive its own loop off the same table
-    instead of restating which IMAP call goes with which column.
+    `value` is also whether the IMAP flag is added or removed. Exposed so the
+    bulk path can drive its own loop off the same table instead of
+    restating which IMAP flag goes with which column.
     """
     from .imap_messages import (
+        ANSWERED,
+        FLAGGED,
+        SEEN,
         mark_answered,
         mark_read,
         mark_unread,
@@ -46,11 +50,11 @@ def flag_operations():
     )
 
     return {
-        "read": (mark_read, "is_read", True),
-        "unread": (mark_unread, "is_read", False),
-        "starred": (star_message, "is_starred", True),
-        "unstarred": (unstar_message, "is_starred", False),
-        "answered": (mark_answered, "is_answered", True),
+        "read": (mark_read, SEEN, "is_read", True),
+        "unread": (mark_unread, SEEN, "is_read", False),
+        "starred": (star_message, FLAGGED, "is_starred", True),
+        "unstarred": (unstar_message, FLAGGED, "is_starred", False),
+        "answered": (mark_answered, ANSWERED, "is_answered", True),
     }
 
 
@@ -64,7 +68,7 @@ def set_flag(message, flag):
     """
     from .imap_sync import forget_remote_state
 
-    remote, field, value = flag_operations()[flag]
+    remote, _imap_flag, field, value = flag_operations()[flag]
     synced = True
     setattr(message, field, value)
     try:

@@ -155,6 +155,12 @@ jobs:
               - 'workspace/files/tests/test_search_scope.py'
               - 'workspace/projects/services/file_links.py'
               - 'workspace/projects/tests/test_file_links.py'
+              - 'workspace/files/services/hard_delete.py'
+              - 'workspace/files/services/extract.py'
+              - 'workspace/files/services/trash.py'
+              - 'workspace/files/services/tree.py'
+              - 'workspace/files/models.py'
+              - 'workspace/files/tests/test_cleanup_races.py'
               - 'workspace/settings/**'
               - 'pyproject.toml'
               - 'uv.lock'
@@ -856,3 +862,13 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.projects.tests.test_file_links -v 2
+
+      # Two connections race a cleanup between its statements: a restore
+      # against the trash purge, a member's upload against an extraction
+      # taking back its folders. SQLite's writer lock makes both impossible.
+      - name: Run the cleanup race tests on PostgreSQL
+        env:
+          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.files.tests.test_cleanup_races -v 2

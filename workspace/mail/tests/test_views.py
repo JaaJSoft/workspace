@@ -3,12 +3,21 @@ from unittest.mock import patch
 import orjson
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.models import (
+    MailAccount,
+    MailAttachment,
+    MailFolder,
+    MailLabel,
+    MailMessage,
+    MailMessageLabel,
+)
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -193,6 +202,96 @@ class MergedFolderMessageListTests(APITestCase):
             "/api/v1/mail/messages", {"folder": str(self.corbeille.uuid)}
         )
         self.assertEqual(resp.data["count"], 2)
+
+
+class MessageListPayloadTests(APITestCase):
+    """The list sends envelopes, so it reads neither bodies nor attachments."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="listpayload", password="x")
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email="user@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="user@example.com",
+        )
+        self.inbox = MailFolder.objects.create(
+            account=self.account, name="INBOX", folder_type="inbox"
+        )
+        self.label = MailLabel.objects.create(
+            account=self.account, name="Work", color="blue"
+        )
+        self.next_uid = 1
+        self.client.force_authenticate(self.user)
+
+    def _add_messages(self, count):
+        for _ in range(count):
+            message = MailMessage.objects.create(
+                account=self.account,
+                folder=self.inbox,
+                imap_uid=self.next_uid,
+                subject=f"Subject {self.next_uid}",
+                from_name="Alice",
+                from_email="alice@example.com",
+                snippet="Hello",
+                body_text="Hello " * 1000,
+                body_html="<p>Hello</p>" * 1000,
+                has_attachments=True,
+            )
+            MailMessageLabel.objects.create(message=message, label=self.label)
+            MailAttachment.objects.create(message=message, filename="a.pdf")
+            self.next_uid += 1
+
+    def _list(self):
+        with CaptureQueriesContext(connection) as queries:
+            resp = self.client.get("/api/v1/mail/messages", {"inbox": "all"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return resp.data, [query["sql"] for query in queries.captured_queries]
+
+    def test_serializes_the_envelope_of_each_message(self):
+        self._add_messages(1)
+
+        data, _ = self._list()
+
+        (row,) = data["results"]
+        self.assertEqual(row["subject"], "Subject 1")
+        self.assertEqual(
+            row["from_address"], {"name": "Alice", "email": "alice@example.com"}
+        )
+        self.assertEqual(row["snippet"], "Hello")
+        self.assertTrue(row["has_attachments"])
+        self.assertEqual(
+            row["labels"],
+            [{"uuid": str(self.label.uuid), "name": "Work", "color": "blue"}],
+        )
+
+    def test_query_count_does_not_grow_with_the_page(self):
+        self._add_messages(1)
+        self._list()  # warms the per-process caches the first request fills
+        _, one = self._list()
+        self._add_messages(4)
+        _, five = self._list()
+
+        self.assertEqual(len(one), len(five))
+
+    def test_reads_neither_bodies_nor_attachments(self):
+        self._add_messages(2)
+
+        _, queries = self._list()
+
+        message_table = MailMessage._meta.db_table
+        page_query = next(
+            sql
+            for sql in queries
+            if sql.startswith("SELECT")
+            and f'FROM "{message_table}"' in sql
+            and "LIMIT" in sql
+        )
+        for field in ("body_text", "body_html"):
+            column = MailMessage._meta.get_field(field).column
+            self.assertNotIn(f'"{column}"', page_query)
+        self.assertNotIn(MailAttachment._meta.db_table, page_query)
 
 
 class MergedFolderMarkReadTests(APITestCase):

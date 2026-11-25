@@ -168,6 +168,13 @@ class StaleRowsTests(TestCase):
         with self.assertNumQueries(len(small)):
             self.assertEqual(len(census.stale_rows(self.user)), 4)
 
+    def test_the_reachable_vaults_are_read_once(self):
+        self._entry(name_format=1)
+        with CaptureQueriesContext(connection) as queries:
+            census.stale_rows(self.user)
+        unions = [q for q in queries.captured_queries if " UNION " in q["sql"]]
+        self.assertEqual(len(unions), 1)
+
     def test_an_empty_description_is_not_counted(self):
         self.assertEqual(self.vault.encrypted_description, "")
         self.assertEqual(census.stale_rows(self.user), [])

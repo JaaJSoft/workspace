@@ -209,6 +209,34 @@ class VideoRenditionTests(RenditionTestCase):
         self.assertTrue(path.endswith(".webm"))
         self.assertEqual(content_type, "video/webm")
 
+    def test_the_remux_is_stored_in_chunks_not_read_whole(self):
+        video = make_video(self.owner, "clip.webm", _at(15))
+        video = File.objects.select_related("media_item").get(pk=video.pk)
+        sizes = []
+
+        class RecordingReader(io.BufferedReader):
+            def read(self, size=-1):
+                sizes.append(size)
+                return super().read(size)
+
+        def recording_open(path, mode="r", *args, **kwargs):
+            if mode == "rb":
+                return RecordingReader(io.FileIO(path, "rb"))
+            return open(path, mode, *args, **kwargs)
+
+        with patch(
+            "workspace.photos.services.album_renditions.open",
+            recording_open,
+            create=True,
+        ):
+            path, _ = rendition(video)
+
+        self.assertTrue(sizes)
+        self.assertNotIn(-1, sizes)
+        self.assertNotIn(None, sizes)
+        with default_storage.open(path, "rb") as handle:
+            self.assertTrue(handle.read())
+
     def test_without_ffmpeg_a_video_has_none(self):
         video = make_video(self.owner, "clip.webm", _at(15))
         video = File.objects.select_related("media_item").get(pk=video.pk)

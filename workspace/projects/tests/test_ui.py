@@ -224,6 +224,15 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         ids = [m["id"] for m in response.context["members_data"]]
         self.assertIn(str(grouper.pk), ids)
 
+    def test_content_swap_skips_the_page_only_pickers_data(self):
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/board", HTTP_X_ALPINE_REQUEST="1"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("members_data", response.context)
+        self.assertNotIn("statuses_data", response.context)
+
     def test_outsider_gets_404(self):
         self.client.force_login(self.outsider)
         response = self.client.get(f"/projects/{self.project.uuid}/board")

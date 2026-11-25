@@ -144,6 +144,62 @@ class IndexTests(PhotosViewTestCase):
         self.assertEqual(self._tiles(self.client.get("/photos")), [])
 
 
+class PendingTests(PhotosViewTestCase):
+    """New uploads waiting for their capture date are counted in the header."""
+
+    def test_the_timeline_counts_what_is_being_analyzed(self):
+        make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
+        upload(self.user, "new.jpg")
+
+        response = self.client.get("/photos")
+
+        self.assertContains(response, "data-photos-pending", count=1)
+        self.assertContains(response, "1 being analyzed")
+
+    def test_nothing_pending_shows_no_badge(self):
+        make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
+
+        response = self.client.get("/photos")
+
+        self.assertNotContains(response, "data-photos-pending")
+
+    def test_the_poll_gets_the_badge_alone(self):
+        make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
+        upload(self.user, "new.jpg")
+        upload(self.user, "newer.jpg")
+
+        response = self.client.get(
+            "/photos/pending", {"scope": "all"}, HTTP_X_ALPINE_REQUEST="true"
+        )
+
+        self.assertContains(response, 'id="photos-pending"', count=1)
+        self.assertContains(response, "2 being analyzed")
+        self.assertNotContains(response, 'id="photos-content"')
+        self.assertEqual(self._tiles(response), [])
+
+    def test_once_analyzed_the_poll_gets_an_empty_badge(self):
+        response = self.client.get("/photos/pending")
+
+        self.assertContains(response, 'id="photos-pending"', count=1)
+        self.assertNotContains(response, "data-photos-pending")
+
+    def test_a_group_the_user_is_not_in_is_not_found(self):
+        stranger = User.objects.create_user(username="bob", password="p")
+        group = Group.objects.create(name="Family")
+        stranger.groups.add(group)
+
+        response = self.client.get("/photos/pending", {"scope": f"group:{group.pk}"})
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_login_required(self):
+        self.client.logout()
+
+        response = self.client.get("/photos/pending")
+
+        self.assertEqual(response.status_code, 302)
+
+
 class TrashTests(PhotosViewTestCase):
     def test_trashing_hides_and_restoring_brings_back_without_a_write(self):
         f = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))

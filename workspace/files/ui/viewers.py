@@ -12,6 +12,7 @@ from django.conf import settings
 from django.utils.html import escape
 
 from workspace.files.services.ebooks import EBOOK_LABELS
+from workspace.users.services.settings import get_setting
 
 # Default id the viewer panel hosts (files inline viewer, chat attachment
 # viewer modal, notes editor pane) target with alpine-ajax. The client keeps an
@@ -360,6 +361,14 @@ def _render_too_large(viewer, request) -> str:
     )
 
 
+def _editor_prefs(request):
+    """The viewer's editor options, None for a visitor of a public share."""
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return None
+    return get_setting(user, "files", "editor")
+
+
 class TextViewer(BaseViewer):
     """Viewer for text and code files with Monaco Editor."""
 
@@ -391,6 +400,7 @@ class TextViewer(BaseViewer):
             {
                 "language": self._detect_language(),
                 "content": content,
+                "editor_prefs": _editor_prefs(request),
             }
         )
 

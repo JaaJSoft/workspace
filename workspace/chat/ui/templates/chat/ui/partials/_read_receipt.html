@@ -2,6 +2,7 @@
   {# slot="footer": the <chat-message-group> shell moves this into the footer line #}
   <span
     slot="footer"
+    {% if not all_read %}data-read-pending{% endif %}
     class="inline-flex items-center gap-0.5 cursor-pointer relative"
     x-data="{ open: false, loaded: false, loading: false, above: true }"
     @click.stop="

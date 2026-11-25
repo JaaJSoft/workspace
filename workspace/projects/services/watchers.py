@@ -37,16 +37,30 @@ def clear_watch_state(task, user):
 
 
 def auto_watch(task, users):
-    """Subscribe *users* who opted into auto-watch (on comment/assignment).
+    """Subscribe *users* who opted into auto-watch (on comment/assignment)."""
+    auto_watch_tasks({task: users})
 
-    ``get_or_create`` keeps an existing muted row muted: auto-watch may
-    never override an explicit opt-out.
+
+def auto_watch_tasks(users_by_task):
+    """``auto_watch`` over {task: users} in one insert.
+
+    An existing row is left as it is: a muted one stays muted, since
+    auto-watch may never override an explicit opt-out.
     """
     from workspace.users.services.settings import get_setting
 
-    for user in users:
-        if get_setting(user, "projects", "auto_watch", default=True):
-            TaskWatcher.objects.get_or_create(task=task, user=user)
+    opted_in = {}
+    rows = []
+    for task, users in users_by_task.items():
+        for user in users:
+            if user.pk not in opted_in:
+                opted_in[user.pk] = get_setting(
+                    user, "projects", "auto_watch", default=True
+                )
+            if opted_in[user.pk]:
+                rows.append(TaskWatcher(task=task, user=user))
+    if rows:
+        TaskWatcher.objects.bulk_create(rows, ignore_conflicts=True)
 
 
 def watch_states(tasks):

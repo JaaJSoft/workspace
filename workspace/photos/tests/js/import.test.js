@@ -181,3 +181,38 @@ test('a report on its way is not sent twice', async () => {
 
   assert.equal(requests.length, 1);
 });
+
+test('after an import, the poll fetches the analysis badge alone until nothing is pending', async () => {
+  let pending = 3;
+  const timers = [];
+  const refreshes = [];
+  const swaps = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/import.js', {
+    document: {
+      getElementById: () => null,
+      querySelector: (selector) => (selector === '[data-photos-pending]' && pending > 0 ? {} : null),
+    },
+    location: { href: 'https://cloud.example.org/photos?scope=all', search: '?scope=all' },
+    setTimeout: (fn) => timers.push(fn),
+    clearTimeout: () => {},
+  });
+  const mixin = ctx.photosImportMixin();
+  mixin._refresh = async (targets) => refreshes.push(Array.from(targets));
+  mixin.$ajax = async (url, options) => {
+    swaps.push({ url, target: options.target });
+    pending -= 1;
+  };
+
+  await mixin._showImported();
+  while (timers.length) await timers.shift()();
+
+  assert.deepEqual(refreshes, [
+    ['photos-nav', 'photos-content'],
+    ['photos-nav', 'photos-content'],
+  ]);
+  assert.deepEqual(swaps, [
+    { url: '/photos/pending?scope=all', target: 'photos-pending' },
+    { url: '/photos/pending?scope=all', target: 'photos-pending' },
+    { url: '/photos/pending?scope=all', target: 'photos-pending' },
+  ]);
+});

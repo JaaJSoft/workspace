@@ -163,7 +163,6 @@ class FromAddressSerializerShapeTests(MailFixtureMixin, TestCase):
     """from_address is an API contract: always a {name, email} dict."""
 
     def _list_data(self, msg):
-        msg.attachments_count = 0  # normally provided by the view annotation
         return MailMessageListSerializer(msg).data
 
     def test_list_serializer_emits_name_email_shape(self):

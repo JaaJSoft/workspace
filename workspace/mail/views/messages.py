@@ -2,7 +2,7 @@ import logging
 import re
 
 from django.db import transaction
-from django.db.models import Count, Prefetch
+from django.db.models import Prefetch
 from django.http import HttpResponse
 from django.utils.http import content_disposition_header
 from django.utils.translation import gettext as _
@@ -156,7 +156,7 @@ class MailMessageListView(CacheControlMixin, APIView):
         total = qs.count()
         order_fields = ("-search_rank", "-date") if search else ("-date",)
         messages = list(
-            qs.annotate(attachments_count=Count("attachments"))
+            qs.defer("body_text", "body_html")
             .prefetch_related(
                 Prefetch(
                     "message_labels",
@@ -285,6 +285,7 @@ class MailBatchActionView(APIView):
         ).select_related("account", "folder")
 
         from ..services.imap_connection import shared_connections
+        from ..services.imap_messages import set_uids_flag
         from ..services.imap_sync import forget_remote_state
         from ..services.triage import (
             TRASHED,
@@ -338,6 +339,8 @@ class MailBatchActionView(APIView):
         affected_folders = set()
         to_bulk_update = []
         bulk_update_fields = set()
+        # A flag goes out as one STORE per mailbox, not one per message.
+        uids_by_mailbox = {}
         # One connection per account for the whole batch, opened by the first
         # message that needs it.
         with shared_connections():
@@ -397,21 +400,13 @@ class MailBatchActionView(APIView):
                         # again when it was retired instead.
                         affected_folders.add(msg.folder_id)
                     elif action in action_map:
-                        imap_fn, field, value = action_map[action]
+                        _imap_fn, _imap_flag, field, value = action_map[action]
                         setattr(msg, field, value)
                         bulk_update_fields.add(field)
                         to_bulk_update.append(msg)
-                        try:
-                            imap_fn(msg.account, msg)
-                        except Exception as e:
-                            synced = False
-                            refused_folders.add(msg.folder_id)
-                            logger.warning(
-                                "IMAP %s failed for message %s: %s",
-                                scrub(action),
-                                msg.uuid,
-                                scrub(e),
-                            )
+                        uids_by_mailbox.setdefault(
+                            (msg.account, msg.folder), []
+                        ).append(msg.imap_uid)
                     processed += 1
                 except Exception:
                     logger.warning(
@@ -419,6 +414,21 @@ class MailBatchActionView(APIView):
                         scrub(action),
                         msg.uuid,
                     )
+
+            if uids_by_mailbox:
+                _imap_fn, imap_flag, _field, value = action_map[action]
+                for (account, folder), uids in uids_by_mailbox.items():
+                    try:
+                        set_uids_flag(account, folder, uids, imap_flag, value)
+                    except Exception as e:
+                        synced = False
+                        refused_folders.add(folder.pk)
+                        logger.warning(
+                            "IMAP %s failed for folder %s: %s",
+                            scrub(action),
+                            scrub(folder.name),
+                            scrub(e),
+                        )
 
         from ..services.counts import refresh_folders_counts_bulk
         from ..services.label_counts import refresh_labels_for_messages

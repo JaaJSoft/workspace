@@ -458,7 +458,7 @@ class AddressBookView(_CardDavView):
         else:
             changes = list(changes_since(owner_id, group_id, revision))
             changed = {change.object_uuid for change in changes}
-            present = {card.pk: card for card in book_cards(book) if card.pk in changed}
+            present = {card.pk: card for card in book_cards(book, changed)}
             cards = [
                 present[c.object_uuid] for c in changes if c.object_uuid in present
             ]

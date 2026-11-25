@@ -7,6 +7,7 @@ app_name = "photos_ui"
 urlpatterns = [
     path("", views.index, name="index"),
     path("/timeline", views.timeline, name="timeline"),
+    path("/pending", views.pending, name="pending"),
     path("/map", views.library_map, name="map"),
     path("/map/photos", views.library_map_photos, name="map_photos"),
     path("/albums/<uuid:uuid>", views.album, name="album"),

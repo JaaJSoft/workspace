@@ -9,6 +9,9 @@ window.chatSseMixin = function chatSseMixin() {
     // Conversation that received messages while it was open but nobody was
     // looking at the page. Marked read by catchUpUnreadOnReturn.
     unreadWhileAway: null,
+    _sseRefreshTimer: null,
+    _sseRefreshPins: false,
+    _sseRefreshConv: null,
 
     // An open tab is not someone reading: marking a message read clears its
     // notification, and the push task drops read notifications, so a tab left
@@ -132,18 +135,36 @@ window.chatSseMixin = function chatSseMixin() {
       if (wasAtBottom) this.$nextTick(() => this.scrollToBottom());
     },
 
-    handleSSEMessageDeleted(detail) {
-      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        // Re-fetch to get proper grouping after deletion
+    _isOpenConversation(detail) {
+      return !!this.activeConversation && detail.conversation_id === this.activeConversation.uuid;
+    },
+
+    // One SSE poll can carry a burst of reactions, pins, deletions and reads:
+    // they share one refetch instead of one each.
+    _scheduleSseRefresh({ pins = false } = {}) {
+      this._sseRefreshConv = this.activeConversation.uuid;
+      this._sseRefreshPins ||= pins;
+      if (this._sseRefreshTimer) return;
+      this._sseRefreshTimer = setTimeout(() => {
+        const refreshPins = this._sseRefreshPins;
+        this._sseRefreshTimer = null;
+        this._sseRefreshPins = false;
+        // A conversation opened since then was loaded fresh.
+        if (this.activeConversation?.uuid !== this._sseRefreshConv) return;
+        if (refreshPins) this.loadPinnedMessages(this._sseRefreshConv);
         this._refreshMessagesPreservingScroll();
-        this.loadPinnedMessages(this.activeConversation.uuid);
+      }, 300);
+    },
+
+    handleSSEMessageDeleted(detail) {
+      if (this._isOpenConversation(detail)) {
+        // Re-fetch to get proper grouping after deletion
+        this._scheduleSseRefresh({ pins: true });
       }
     },
 
-    async handleSSEReaction(detail) {
-      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        await this._refreshMessagesPreservingScroll();
-      }
+    handleSSEReaction(detail) {
+      if (this._isOpenConversation(detail)) this._scheduleSseRefresh();
     },
 
     handleSSEUnread(detail) {
@@ -166,22 +187,25 @@ window.chatSseMixin = function chatSseMixin() {
     },
 
     handleSSELinkPreview(detail) {
-      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        this._refreshMessagesPreservingScroll();
-      }
+      if (this._isOpenConversation(detail)) this._scheduleSseRefresh();
     },
 
     handleSSEMessagePinned(detail) {
-      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        this.loadPinnedMessages(this.activeConversation.uuid);
-        this._refreshMessagesPreservingScroll();
-      }
+      if (this._isOpenConversation(detail)) this._scheduleSseRefresh({ pins: true });
     },
 
-    handleSSERead(detail) {
-      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        this._refreshMessagesPreservingScroll();
+    // A read only changes a receipt on the user's own messages that is still
+    // waiting on readers (_read_receipt.html marks it). A refresh in flight
+    // was answered before this read, so the receipts are judged once it has
+    // landed, and the refresh they call for is a request of its own.
+    async handleSSERead(detail) {
+      if (!this._isOpenConversation(detail)) return;
+      if (this._messagesRefreshing) {
+        await this._messagesIdle();
+        if (!this._isOpenConversation(detail)) return;
       }
+      if (!document.querySelector('[data-read-pending]')) return;
+      this._scheduleSseRefresh();
     },
 
     // A conversation's title changed server-side (AI regeneration, rename by

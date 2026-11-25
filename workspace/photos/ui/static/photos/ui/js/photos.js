@@ -263,6 +263,7 @@ window.photosApp = function photosApp() {
     albumUuid: null,
     albumActions: [],
     _albumGeneration: 0,
+    _albumActionsRead: null,
     albumMenu: { open: false, x: 0, y: 0, actions: null },
     picker: { open: false, loading: false, busy: false, albums: [], files: [] },
     _pickerGeneration: 0,
@@ -1371,12 +1372,27 @@ window.photosApp = function photosApp() {
       const generation = ++this._albumGeneration;
       this.albumUuid = album ? album.uuid : null;
       this.albumActions = [];
+      this._albumActionsRead = null;
       if (!album) return Promise.resolve();
-      return this._fetchAlbumActions(album.uuid).then((actions) => {
+      const read = { uuid: album.uuid, request: this._fetchAlbumActions(album.uuid) };
+      this._albumActionsRead = read;
+      return read.request.then((actions) => {
         if (generation === this._albumGeneration) {
           this.albumActions = actions.map((a) => a.id);
         }
-      }).catch(() => {});
+      }).catch(() => {
+        // Not `=== read`: Alpine hands back a proxy of the stored object.
+        if (generation === this._albumGeneration) this._albumActionsRead = null;
+      });
+    },
+
+    // The album menu's first opening takes what syncAlbum asked for the album
+    // on screen; later ones ask again, so permissions changed since show.
+    _albumActionsFor(uuid) {
+      const read = this._albumActionsRead;
+      if (!read || read.uuid !== uuid) return this._fetchAlbumActions(uuid);
+      this._albumActionsRead = null;
+      return read.request;
     },
 
     _fetchAlbumActions(uuid) {
@@ -1539,7 +1555,7 @@ window.photosApp = function photosApp() {
       const x = Math.max(4, Math.min(rect.left, window.innerWidth - PHOTOS_MENU_WIDTH - 4));
       const generation = ++this._ctxGeneration;
       this.albumMenu = { open: true, x, y: rect.bottom + 4, actions: null };
-      this._fetchAlbumActions(album.uuid).then((actions) => {
+      this._albumActionsFor(album.uuid).then((actions) => {
         if (generation !== this._ctxGeneration) return;
         this.albumMenu.actions = actions.filter((a) => ALBUM_MENU_ACTIONS.includes(a.id));
       }).catch(() => {

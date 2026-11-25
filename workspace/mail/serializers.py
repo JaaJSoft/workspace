@@ -247,7 +247,6 @@ class ComposePrefillSerializer(serializers.Serializer):
 
 
 class MailMessageListSerializer(serializers.ModelSerializer):
-    attachments_count = serializers.IntegerField(read_only=True)
     labels = serializers.SerializerMethodField()
     # The {name, email} shape is an API contract (mail UI JS reads it),
     # not a stored field - the model only has from_name/from_email.
@@ -274,7 +273,6 @@ class MailMessageListSerializer(serializers.ModelSerializer):
             "is_draft",
             "has_attachments",
             "has_calendar_event",
-            "attachments_count",
             "labels",
         ]
 

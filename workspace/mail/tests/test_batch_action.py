@@ -40,8 +40,8 @@ class BatchActionLargeSelectionTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-    @patch("workspace.mail.services.imap_messages.mark_read")
-    def test_marks_the_whole_selection_read(self, _mark_read):
+    @patch("workspace.mail.services.imap_messages.set_uids_flag")
+    def test_marks_the_whole_selection_read(self, _set_uids_flag):
         with sqlite_parameter_limit(PARAMETER_LIMIT):
             resp = self.client.post(
                 "/api/v1/mail/messages/batch-action",
@@ -94,16 +94,16 @@ class TwoMessageBatchMixin:
 class BatchActionSyncOutcomeTests(TwoMessageBatchMixin, TestCase):
     """A flag the server refused is still applied locally, and the answer says so."""
 
-    @patch("workspace.mail.services.imap_messages.star_message")
-    def test_reports_synced_when_the_server_took_every_flag(self, _star):
+    @patch("workspace.mail.services.imap_messages.set_uids_flag")
+    def test_reports_synced_when_the_server_took_every_flag(self, _set_uids_flag):
         resp = self._post("star")
 
         self.assertEqual(resp.status_code, 200)
         self.assertIs(resp.data["synced"], True)
 
-    @patch("workspace.mail.services.imap_messages.mark_read")
-    def test_one_refusal_reports_unsynced_and_keeps_the_local_flag(self, mark_read):
-        mark_read.side_effect = [None, OSError("connection reset")]
+    @patch("workspace.mail.services.imap_messages.set_uids_flag")
+    def test_a_refusal_reports_unsynced_and_keeps_the_local_flag(self, store):
+        store.side_effect = OSError("connection reset")
 
         resp = self._post("mark_read")
 
@@ -126,6 +126,43 @@ class BatchActionOnTheServerTests(TwoMessageBatchMixin, TestCase):
 
     def _server_flags(self):
         return [self.server.flags("INBOX", m.imap_uid) for m in self.messages]
+
+    def test_one_store_per_mailbox_whatever_the_selection_size(self):
+        archive = MailFolder.objects.create(
+            account=self.account, name="Archive", folder_type="archive"
+        )
+        for uid in (1, 2):
+            self.server.deliver("Archive", uid=uid)
+            self.messages.append(
+                MailMessage.objects.create(
+                    account=self.account, folder=archive, imap_uid=uid
+                )
+            )
+
+        resp = self._post("star")
+
+        self.assertIs(resp.data["synced"], True)
+        self.assertEqual(resp.data["processed"], 4)
+        self.assertEqual(
+            sorted(self.server.named("add_flags")),
+            [("add_flags", [1, 2], [r"\Flagged"])] * 2,
+        )
+        self.assertEqual(len(self.server.named("select")), 2)
+        for mailbox in ("INBOX", "Archive"):
+            for uid in (1, 2):
+                self.assertEqual(self.server.flags(mailbox, uid), {r"\Flagged"})
+
+    def test_unflagging_removes_the_flag_in_one_store(self):
+        for message in self.messages:
+            self.server.set_flags("INBOX", message.imap_uid, r"\Seen")
+
+        resp = self._post("mark_unread")
+
+        self.assertIs(resp.data["synced"], True)
+        self.assertEqual(
+            self.server.named("remove_flags"), [("remove_flags", [1, 2], [r"\Seen"])]
+        )
+        self.assertEqual(self._server_flags(), [set(), set()])
 
     def test_the_flags_reach_the_mailbox_over_one_connection(self):
         resp = self._post("mark_read")
@@ -173,13 +210,22 @@ class BatchActionOnTheServerTests(TwoMessageBatchMixin, TestCase):
         self.inbox.refresh_from_db()
         self.assertEqual(self.inbox.remote_state, state)
 
-    def test_one_store_answered_no_reports_unsynced(self):
+    def test_one_mailbox_answering_no_reports_unsynced(self):
+        archive = MailFolder.objects.create(
+            account=self.account, name="Archive", folder_type="archive"
+        )
+        self.server.deliver("Archive", uid=1)
+        self.messages.append(
+            MailMessage.objects.create(account=self.account, folder=archive, imap_uid=1)
+        )
         self.server.fail("add_flags", times=1)
 
         resp = self._post("mark_read")
 
         self.assertIs(resp.data["synced"], False)
-        self.assertEqual(sorted(map(len, self._server_flags())), [0, 1])
-        self.assertFalse(
-            MailMessage.objects.filter(folder=self.inbox, is_read=False).exists()
-        )
+        flagged = [
+            self.server.flags(mailbox, 1) == {r"\Seen"}
+            for mailbox in ("INBOX", "Archive")
+        ]
+        self.assertEqual(sorted(flagged), [False, True])
+        self.assertFalse(MailMessage.objects.filter(is_read=False).exists())

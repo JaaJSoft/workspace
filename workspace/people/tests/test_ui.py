@@ -5,7 +5,9 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.html import escapejs
 
@@ -123,6 +125,48 @@ class PeopleIndexTests(TestCase):
         self.assertEqual(scopes["Family"], "mine")
         self.assertEqual(scopes["Clients"], f"group:{self.team.id}")
         self.assertEqual(group_list.group, self.team)
+
+    def _swap_rows(self):
+        response = self.client.get("/people", HTTP_X_ALPINE_REQUEST="true")
+        persons = [
+            p for _, group in response.context["groups_of_persons"] for p in group
+        ]
+        return response, persons
+
+    def _add_rich_persons(self, count, prefix="rich"):
+        for i in range(count):
+            linked = User.objects.create_user(
+                username=f"{prefix}-user{i}", password="x"
+            )
+            create_person(
+                group=self.team,
+                display_name=f"{prefix} {i}",
+                emails=[{"type": "work", "value": f"{prefix}{i}@example.com"}],
+                notes="long notes " * 50,
+                linked_user=linked,
+                has_avatar=True,
+            )
+
+    def test_list_swap_leaves_the_columns_rows_do_not_render(self):
+        self._add_rich_persons(1)
+        response, persons = self._swap_rows()
+        self.assertContains(response, "rich0@example.com")
+        self.assertContains(response, 'username="rich-user0"')
+        self.assertContains(response, 'title="team"')
+        for person in persons:
+            self.assertLessEqual(
+                {"notes", "extra_properties", "phones", "addresses", "search_text"},
+                person.get_deferred_fields(),
+            )
+
+    def test_list_rows_render_without_a_query_per_person(self):
+        self._add_rich_persons(2)
+        with CaptureQueriesContext(connection) as few:
+            self._swap_rows()
+        self._add_rich_persons(4, prefix="more")
+        with CaptureQueriesContext(connection) as many:
+            self._swap_rows()
+        self.assertEqual(len(few.captured_queries), len(many.captured_queries))
 
     def test_unreachable_list_is_ignored(self):
         stranger = User.objects.create_user(username="mallory", password="x")

@@ -303,25 +303,24 @@ class File(models.Model):
             models.Index(fields=["owner", "deleted_at"], name="file_owner_del_idx"),
             models.Index(fields=["group", "deleted_at"], name="file_group_del_idx"),
             models.Index(fields=["locked_by", "lock_expires_at"], name="file_lock_idx"),
+            # `size` is a key column of the three indexes below, not INCLUDE
+            # (which SQLite ignores): SUM(size) reads the index alone on both.
             models.Index(
-                fields=["owner", "deleted_at", "node_type"],
-                include=["size"],
+                fields=["owner", "deleted_at", "node_type", "size"],
                 name="file_owner_del_type_size",
             ),
             # Serves quota.personal_usage: SUM(size) over one owner's live and
             # trashed personal files. Partial on `group IS NULL` because the
-            # bucket excludes group files, and covering on `size` so the sum
-            # never touches the heap (PostgreSQL; SQLite ignores INCLUDE).
+            # bucket excludes group files; `group`, always NULL here, is in
+            # the key because SQLite only reads columns an index holds.
             models.Index(
-                fields=["owner", "node_type"],
-                include=["size"],
+                fields=["owner", "node_type", "size", "group"],
                 condition=Q(group__isnull=True),
                 name="file_personal_usage",
             ),
             # Same, for quota.group_usage.
             models.Index(
-                fields=["group", "node_type"],
-                include=["size"],
+                fields=["group", "node_type", "size"],
                 condition=Q(group__isnull=False),
                 name="file_group_usage",
             ),
@@ -493,6 +492,21 @@ class File(models.Model):
         if self.name in (".", ".."):
             raise ValueError("File and folder names must not be '.' or '..'.")
 
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            # Read twice below: an iterator would arrive empty the second time.
+            update_fields = set(update_fields)
+            kwargs["update_fields"] = update_fields
+        if (
+            update_fields is not None
+            and self.path
+            # The blob key of a content write is built from the path.
+            and not {"name", "parent", "parent_id", "content"} & update_fields
+        ):
+            # The path derives from the name and the parent alone.
+            super().save(*args, **kwargs)
+            return
+
         old_data = None
         if self.pk:
             old_data = (
@@ -509,7 +523,6 @@ class File(models.Model):
         new_path = self._build_path_for(self.name, self.parent_id)
         self.path = new_path
 
-        update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             update_fields = set(update_fields) | {"path"}
             if "name" in update_fields:

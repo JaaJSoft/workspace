@@ -812,6 +812,64 @@ test('the album on screen and what its registry allows there', async () => {
   assert.equal(app.albumAllows('set_cover'), false);
 });
 
+test('the album menu takes the actions the page asked for once, then asks again', async () => {
+  const requests = [];
+  const page = grid(['a'], { uuid: 'al1', title: 'Summer' });
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch({ 'POST /api/v1/photos/albums/actions': { al1: [{ id: 'rename' }, { id: 'reorder' }] } }, requests),
+  }).ctx.photosApp();
+  await app.syncAlbum();
+  const anchor = { getBoundingClientRect: () => ({ left: 10, bottom: 40 }) };
+
+  app.openAlbumMenu(anchor);
+  await flush();
+  assert.equal(requests.length, 1);
+  app.openAlbumMenu(anchor);
+  await flush();
+
+  assert.equal(requests.length, 2);
+  assert.deepEqual(Array.from(app.albumMenu.actions, (a) => a.id), ['rename']);
+});
+
+// Alpine hands a component's methods a reactive proxy: an object read back
+// from its state is a proxy of what was stored, never the same reference.
+function alpineReactive(target) {
+  const proxies = new WeakMap();
+  const wrap = (value) => {
+    if (Object.prototype.toString.call(value) !== '[object Object]') return value;
+    if (!proxies.has(value)) {
+      proxies.set(value, new Proxy(value, { get: (t, key, receiver) => wrap(Reflect.get(t, key, receiver)) }));
+    }
+    return proxies.get(value);
+  };
+  return wrap(target);
+}
+
+test('a failed read of the album actions is asked again when the menu opens', async () => {
+  const requests = [];
+  let fail = true;
+  const page = grid(['a'], { uuid: 'al1', title: 'Summer' });
+  const app = alpineReactive(load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: (url, opts) => {
+      requests.push(url);
+      if (fail) return Promise.reject(new Error('offline'));
+      return jsonFetch({ 'POST /api/v1/photos/albums/actions': { al1: [{ id: 'rename' }] } })(url, opts);
+    },
+  }).ctx.photosApp());
+  await app.syncAlbum();
+  fail = false;
+
+  app.openAlbumMenu({ getBoundingClientRect: () => ({ left: 10, bottom: 40 }) });
+  await flush();
+
+  assert.equal(requests.length, 2);
+  assert.deepEqual(Array.from(app.albumMenu.actions, (a) => a.id), ['rename']);
+});
+
 test('outside an album nothing is allowed and nothing is asked', async () => {
   const requests = [];
   const app = load({ fetch: jsonFetch({}, requests) }).ctx.photosApp();

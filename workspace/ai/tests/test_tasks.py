@@ -4,7 +4,9 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from pydantic_ai.messages import ModelResponse
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.usage import RequestUsage
@@ -85,6 +87,43 @@ class GenerateChatResponseTests(TestCase):
         bot_msg = Message.objects.filter(author=self.bot_user).first()
         self.assertIsNotNone(bot_msg)
         self.assertEqual(bot_msg.body, "Hello human!")
+
+    def test_an_untitled_conversation_gets_a_title_after_the_reply(self):
+        from workspace.ai.tasks.chat import generate_chat_response
+
+        with (
+            scripted(reply("Hello human!")),
+            patch("workspace.ai.tasks.chat.generate_conversation_title.delay") as title,
+        ):
+            generate_chat_response(
+                queue_chat_task(self.conversation, self.message, self.bot_user)
+            )
+
+        title.assert_called_once_with(str(self.conversation.pk))
+
+    def test_a_titled_conversation_does_not_count_its_messages(self):
+        from workspace.ai.tasks.chat import generate_chat_response
+
+        self.conversation.title = "Already named"
+        self.conversation.save(update_fields=["title"])
+        with (
+            scripted(reply("Hello human!")),
+            patch("workspace.ai.tasks.chat.generate_conversation_title.delay") as title,
+            # The summary trigger counts on its own account; this is about the title.
+            patch("workspace.ai.tasks.chat.maybe_dispatch_summary_update"),
+            CaptureQueriesContext(connection) as queries,
+        ):
+            generate_chat_response(
+                queue_chat_task(self.conversation, self.message, self.bot_user)
+            )
+
+        title.assert_not_called()
+        message_counts = [
+            q["sql"]
+            for q in queries.captured_queries
+            if "COUNT(" in q["sql"] and '"chat_message"' in q["sql"]
+        ]
+        self.assertEqual(message_counts, [])
 
     def test_handles_api_error(self):
         from workspace.ai.tasks.chat import generate_chat_response

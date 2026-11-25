@@ -14,11 +14,12 @@ from collections import defaultdict
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import Task, TaskEvent
+from ..models import Task, TaskEvent, TaskFileLink
 from .assignments import notify_bulk_assigned
-from .events import record_task_event
-from .tasks import delete_task, settle_moved_due_dates
-from .watchers import auto_watch
+from .events import task_event
+from .file_links import unlink_file
+from .tasks import settle_moved_due_dates
+from .watchers import auto_watch_tasks
 
 # Distinguishes "leave due_date alone" from "clear it" (None is a value).
 UNSET = object()
@@ -159,11 +160,17 @@ def bulk_update_tasks(
             Task.objects.bulk_update(
                 rows_to_write, ["priority", "due_date", "updated_at"]
             )
-        for task, users in added_assignees.items():
-            record_task_event(task, type=TaskEvent.Type.ASSIGNED, actor=actor)
-            auto_watch(task, users)
-        for task in plain_updates:
-            record_task_event(task, type=TaskEvent.Type.UPDATED, actor=actor)
+        TaskEvent.objects.bulk_create(
+            [
+                task_event(task, type=TaskEvent.Type.ASSIGNED, actor=actor)
+                for task in added_assignees
+            ]
+            + [
+                task_event(task, type=TaskEvent.Type.UPDATED, actor=actor)
+                for task in plain_updates
+            ]
+        )
+        auto_watch_tasks(added_assignees)
 
     settle_moved_due_dates(due_changed)
     tasks_by_user = defaultdict(list)
@@ -178,12 +185,24 @@ def bulk_update_tasks(
 def delete_tasks(project, task_uuids, *, actor=None):
     """Delete the listed tasks of *project*, one DELETED event each.
 
-    Unknown UUIDs and tasks of other projects are skipped. Each task goes
-    through ``delete_task`` so its file links are revoked or handed over
-    rather than orphaned. Returns the number of deleted tasks.
+    Unknown UUIDs and tasks of other projects are skipped. File links are
+    unlinked first, as ``delete_task`` does, so the shares they created are
+    revoked or handed over rather than orphaned. Returns the number of
+    deleted tasks.
     """
     with transaction.atomic():
         tasks = _lock_tasks(project, task_uuids)
-        for task in tasks:
-            delete_task(task, actor=actor)
+        links = TaskFileLink.objects.filter(task__in=tasks).select_related(
+            "task__project", "share"
+        )
+        for link in links:
+            unlink_file(link, actor=actor)
+        # Written before the delete, which nulls their task FK (SET_NULL).
+        TaskEvent.objects.bulk_create(
+            [
+                task_event(task, type=TaskEvent.Type.DELETED, actor=actor)
+                for task in tasks
+            ]
+        )
+        Task.objects.filter(pk__in=[task.pk for task in tasks]).delete()
     return len(tasks)

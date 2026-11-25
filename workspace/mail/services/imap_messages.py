@@ -62,24 +62,25 @@ def _set_flag(account, message, flag, add):
     nothing would believe the flag reached the server. One that keeps the
     flag on its row all the same owes the sync a `forget_remote_state`.
     """
-    with imap_session(account) as client:
-        client.select_folder(message.folder.name)
-        if add:
-            client.add_flags([message.imap_uid], [flag], silent=True)
-        else:
-            client.remove_flags([message.imap_uid], [flag], silent=True)
+    set_uids_flag(account, message.folder, [message.imap_uid], flag, add)
 
 
-def mark_uids_read(account, folder, uids):
-    """Set ``\\Seen`` on the messages of `folder` carrying these IMAP UIDs.
+def set_uids_flag(account, folder, uids, flag, add):
+    """Add or remove `flag` on the messages of `folder` carrying these IMAP UIDs.
 
-    Raises when the server refuses the SELECT or a STORE, with the same
-    debt to the sync as `_set_flag`.
+    One SELECT, then one STORE per `UID_BATCH_SIZE` UIDs. Raises when the
+    server refuses either, with the same debt to the sync as `_set_flag`.
     """
     with imap_session(account) as client:
         client.select_folder(folder.name)
+        store = client.add_flags if add else client.remove_flags
         for batch in batched(sorted(uids), UID_BATCH_SIZE, strict=False):
-            client.add_flags(batch, [SEEN], silent=True)
+            store(batch, [flag], silent=True)
+
+
+def mark_uids_read(account, folder, uids):
+    """Set ``\\Seen`` on the messages of `folder` carrying these IMAP UIDs."""
+    set_uids_flag(account, folder, uids, SEEN, True)
 
 
 def fetch_original(account, message, headers_only=False):

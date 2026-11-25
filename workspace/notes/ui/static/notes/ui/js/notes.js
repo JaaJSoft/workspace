@@ -25,6 +25,20 @@ window._notesPrefsDefaults = {
     window._notesPrefsCache = { ...window._notesPrefsDefaults, ...initial };
 })();
 
+// The page holds two preference panels (popover and dialog): a folder's label is fetched once for both.
+const notesFolderLabels = new Map();
+function notesFolderLabel(uuid) {
+    if (!notesFolderLabels.has(uuid)) {
+        const label = fetch('/api/v1/files/' + uuid)
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(f) { return f ? (f.path || f.name) : null; })
+            .catch(function() { return null; });
+        notesFolderLabels.set(uuid, label);
+        label.then(function(value) { if (value === null) notesFolderLabels.delete(uuid); });
+    }
+    return notesFolderLabels.get(uuid);
+}
+
 window.notesPreferences = function notesPreferences() {
     const API_URL = '/api/v1/settings/notes/preferences';
     let _saveTimer = null;
@@ -62,10 +76,8 @@ window.notesPreferences = function notesPreferences() {
             this.prefs.defaultFolderUuid = folder.uuid;
             this.defaultFolderName = folder.name || gettext('Root');
             if (folder.uuid) {
-                try {
-                    const r = await fetch('/api/v1/files/' + folder.uuid);
-                    if (r.ok) { const f = await r.json(); this.defaultFolderName = f.path || f.name; }
-                } catch(e) {}
+                const label = await notesFolderLabel(folder.uuid);
+                if (label) this.defaultFolderName = label;
             }
             this._saveRemote();
             this._broadcast();
@@ -84,35 +96,20 @@ window.notesPreferences = function notesPreferences() {
             this.prefs.journalFolderUuid = folder.uuid;
             this.journalFolderName = folder.name || gettext('Root');
             if (folder.uuid) {
-                try {
-                    const r2 = await fetch('/api/v1/files/' + folder.uuid);
-                    if (r2.ok) { const f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
-                } catch(e) {}
+                const label = await notesFolderLabel(folder.uuid);
+                if (label) this.journalFolderName = label;
             }
             this._saveRemote();
             this._broadcast();
         },
 
         async _loadFolderNames() {
-            if (this.prefs.defaultFolderUuid) {
-                try {
-                    const r = await fetch('/api/v1/files/' + this.prefs.defaultFolderUuid);
-                    if (r.ok) { const f = await r.json(); this.defaultFolderName = f.path || f.name; }
-                    else this.defaultFolderName = gettext('Not set');
-                } catch(e) { this.defaultFolderName = gettext('Not set'); }
-            } else {
-                this.defaultFolderName = gettext('Not set');
-            }
-
-            if (this.prefs.journalFolderUuid) {
-                try {
-                    const r2 = await fetch('/api/v1/files/' + this.prefs.journalFolderUuid);
-                    if (r2.ok) { const f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
-                    else this.journalFolderName = gettext('Not set');
-                } catch(e) { this.journalFolderName = gettext('Not set'); }
-            } else {
-                this.journalFolderName = gettext('Not set');
-            }
+            const [defaultLabel, journalLabel] = await Promise.all([
+                this.prefs.defaultFolderUuid ? notesFolderLabel(this.prefs.defaultFolderUuid) : null,
+                this.prefs.journalFolderUuid ? notesFolderLabel(this.prefs.journalFolderUuid) : null,
+            ]);
+            this.defaultFolderName = defaultLabel || gettext('Not set');
+            this.journalFolderName = journalLabel || gettext('Not set');
         },
 
         _broadcast() {
@@ -184,6 +181,7 @@ window.notesApp = function notesApp(config) {
         // Bumped by every fresh load; an in-flight page whose generation no
         // longer matches belongs to a view the user has already left.
         _notesGeneration: 0,
+        _journalRun: 0,
         togglingFavorite: false,
 
         // Filters
@@ -666,6 +664,7 @@ window.notesApp = function notesApp(config) {
         // creating today's would write the history it is replaying.
         async openJournal(options) {
             const restoring = !!(options && options.restoring);
+            if (this.activeView !== 'journal') this._resetFilters();
             this.activeView = 'journal';
             this.activeId = null;
             this.viewTitle = gettext('Journal');
@@ -674,9 +673,14 @@ window.notesApp = function notesApp(config) {
             const journalUuid = this.notePrefs.journalFolderUuid;
             if (!journalUuid) return;
 
+            const run = ++this._journalRun;
+            // Another view, or a later journal open, took the screen meanwhile.
+            const left = () => run !== this._journalRun
+                || this.activeView !== 'journal' || this.activeId !== journalUuid;
+
             this.activeId = journalUuid;
-            await this.loadNotes('/api/v1/files?type=markdown&parent=' + journalUuid + '&ordering=-name');
-            if (restoring) return;
+            await this.loadNotes(this._buildNotesUrl(0));
+            if (restoring || left()) return;
 
             // Create today's note if needed ("today" in the user's timezone)
             const today = window.userTzDayKey
@@ -686,7 +690,17 @@ window.notesApp = function notesApp(config) {
             let todayNote = this.notes.find(function(n) { return n.name === todayName; });
 
             if (!todayNote) {
+                // Not on the page shown, which filters and stops after one
+                // page: only the folder itself can tell that the note is missing.
+                const lookup = await this._fetchNotesPage('/api/v1/files?type=markdown&parent='
+                    + journalUuid + '&name=' + encodeURIComponent(todayName));
+                if (!lookup || left()) return;
+                todayNote = lookup.notes[0];
+            }
+
+            if (!todayNote) {
                 todayNote = await this._createMdFile(todayName, journalUuid);
+                if (left()) return;
                 if (todayNote) {
                     this.notes.unshift(todayNote);
                 }
@@ -694,6 +708,7 @@ window.notesApp = function notesApp(config) {
 
             if (todayNote) {
                 await this.selectNote(todayNote, { history: 'replace' });
+                if (left()) return;
             }
 
             this.updateUrl();
@@ -775,6 +790,9 @@ window.notesApp = function notesApp(config) {
         async onRestore(event) {
             if (event.detail.stale) event.preventDefault();
             const gen = ++this._restoreGen;
+            // A journal open still on its way would select a note and write
+            // an address over the entry being restored, the same journal included.
+            this._journalRun++;
             const p = new URLSearchParams(window.location.search);
             // An address without a view shows the default one, as on a reload.
             const view = p.get('view') || window._notesPrefsCache.defaultView || 'all';

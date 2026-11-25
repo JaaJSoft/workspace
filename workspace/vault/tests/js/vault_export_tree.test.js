@@ -1,8 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScript, loadScripts } = require('../../../common/tests/js/loader');
 
 const SCRIPT = 'workspace/vault/ui/static/vault/ui/js/vault_export_tree.js';
+const READER = 'workspace/vault/ui/static/vault/ui/js/vault_reader.js';
 
 // One vault, one folder, one tag, two entries - one of them trashed.
 function fixtures() {
@@ -37,7 +38,8 @@ function load(overrides = {}) {
   const f = fixtures();
   const readerCounts = overrides.readerCounts || { entries: 0, folders: 0, tags: 0 };
   const unsupportedCounts = overrides.unsupportedCounts || { entries: 0, folders: 0, tags: 0 };
-  return loadScript(SCRIPT, {
+  // The real readContents, over these per-kind readers.
+  const ctx = loadScripts([READER, SCRIPT], {
     TextEncoder: globalThis.TextEncoder,
     TextDecoder: globalThis.TextDecoder,
     vaultApi: {
@@ -45,53 +47,6 @@ function load(overrides = {}) {
       listFolders: async () => f.folders,
       listTags: async () => f.tags,
       listEntries: async (uuid, options) => (options && options.trashed ? f.trashed : f.live),
-    },
-    vaultReader: {
-      readVault: async (s, row) => Object.assign(
-        {}, row, { name: 'Perso', description: 'D' },
-        overrides.vaultUnsupported ? { unsupported: true, name: '', description: '' } : {},
-      ),
-      readEntries: async (s, v, rows) => {
-        if (overrides.readerThrowsLocked) {
-          const error = new Error('locked');
-          error.reason = 'locked';
-          throw error;
-        }
-        return { rows: rows, tamperedCount: readerCounts.entries, unsupportedCount: unsupportedCounts.entries };
-      },
-      readFolders: async (s, v, rows) => ({
-        rows: rows.map((r) => Object.assign({}, r, { name: 'Banque' })),
-        tamperedCount: readerCounts.folders,
-        unsupportedCount: unsupportedCounts.folders,
-      }),
-      // Every ciphertext in the fixtures is its own plaintext, uppercased.
-      openField: async (s, v, row, fieldId) => {
-        if (overrides.lockedField === fieldId) {
-          const error = new Error('locked');
-          error.reason = 'locked';
-          throw error;
-        }
-        const column = { name: row.encrypted_name, notes: row.encrypted_notes };
-        const field = (row.entry_fields || []).find((candidate) => candidate.field_id === fieldId);
-        const ciphertext = fieldId in column ? column[fieldId] : field && field.encrypted_value;
-        if (!ciphertext) return '';
-        if (overrides.unsupportedField === fieldId) {
-          const err = new Error('field suite 9');
-          err.name = 'UnsupportedAlgorithmError';
-          throw err;
-        }
-        if (overrides.unopenableField === fieldId) {
-          // What a real AEAD rejection looks like from here: bare, and
-          // carrying no reason of its own.
-          throw new Error('tag mismatch');
-        }
-        return String(ciphertext).toLowerCase();
-      },
-      readTags: async (s, v, rows) => ({
-        rows: rows.map((r) => Object.assign({}, r, { name: 'perso' })),
-        tamperedCount: readerCounts.tags,
-        unsupportedCount: unsupportedCounts.tags,
-      }),
     },
     vaultCrypto: {
       fromBase64Url: (s) => s,
@@ -107,6 +62,54 @@ function load(overrides = {}) {
       },
     },
   });
+  Object.assign(ctx.vaultReader, {
+    readVault: async (s, row) => Object.assign(
+      {}, row, { name: 'Perso', description: 'D' },
+      overrides.vaultUnsupported ? { unsupported: true, name: '', description: '' } : {},
+    ),
+    readEntries: async (s, v, rows) => {
+      if (overrides.readerThrowsLocked) {
+        const error = new Error('locked');
+        error.reason = 'locked';
+        throw error;
+      }
+      return { rows: rows, tamperedCount: readerCounts.entries, unsupportedCount: unsupportedCounts.entries };
+    },
+    readFolders: async (s, v, rows) => ({
+      rows: rows.map((r) => Object.assign({}, r, { name: 'Banque' })),
+      tamperedCount: readerCounts.folders,
+      unsupportedCount: unsupportedCounts.folders,
+    }),
+    // Every ciphertext in the fixtures is its own plaintext, uppercased.
+    openField: async (s, v, row, fieldId) => {
+      if (overrides.lockedField === fieldId) {
+        const error = new Error('locked');
+        error.reason = 'locked';
+        throw error;
+      }
+      const column = { name: row.encrypted_name, notes: row.encrypted_notes };
+      const field = (row.entry_fields || []).find((candidate) => candidate.field_id === fieldId);
+      const ciphertext = fieldId in column ? column[fieldId] : field && field.encrypted_value;
+      if (!ciphertext) return '';
+      if (overrides.unsupportedField === fieldId) {
+        const err = new Error('field suite 9');
+        err.name = 'UnsupportedAlgorithmError';
+        throw err;
+      }
+      if (overrides.unopenableField === fieldId) {
+        // What a real AEAD rejection looks like from here: bare, and
+        // carrying no reason of its own.
+        throw new Error('tag mismatch');
+      }
+      return String(ciphertext).toLowerCase();
+    },
+    readTags: async (s, v, rows) => ({
+      rows: rows.map((r) => Object.assign({}, r, { name: 'perso' })),
+      tamperedCount: readerCounts.tags,
+      unsupportedCount: unsupportedCounts.tags,
+    }),
+  });
+  return ctx;
 }
 
 const session = {

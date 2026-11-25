@@ -83,7 +83,6 @@ window.vaultExportTree = (function () {
   }
 
   async function buildVault(session, vaultRow, { onProgress, stillCurrent }) {
-    const api = window.vaultApi;
     const reader = window.vaultReader;
     const vault = await reader.readVault(session, vaultRow);
     if (vault.unsupported) {
@@ -92,16 +91,7 @@ window.vaultExportTree = (function () {
     if (vault.tampered || vault.unopenable || vault.unreadable) {
       throw VaultExportError('a vault could not be verified or opened', 'unreadable');
     }
-    const [folderRows, tagRows, liveRows, trashedRows] = await Promise.all([
-      api.listFolders(vaultRow.uuid),
-      api.listTags(vaultRow.uuid),
-      api.listEntries(vaultRow.uuid),
-      api.listEntries(vaultRow.uuid, { trashed: true }),
-    ]);
-    const rows = liveRows.concat(trashedRows);
-    const folders = await reader.readFolders(session, vaultRow, folderRows);
-    const tags = await reader.readTags(session, vaultRow, tagRows);
-    const entries = await reader.readEntries(session, vaultRow, rows);
+    const { rows, folders, tags, entries } = await reader.readContents(session, vaultRow);
     refuseIfUnreadable(folders, tags, entries);
 
     // Local ids, scoped to the vault: nothing in the file correlates to

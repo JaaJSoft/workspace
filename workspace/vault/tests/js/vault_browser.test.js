@@ -3453,3 +3453,22 @@ test('favouriting an entry signed under a broken algorithm writes nothing and sa
     'An entry could not be verified. It was left untouched, and so were the ones after it.',
   );
 });
+
+test('storage the browser refuses costs the device preferences, never the page', async () => {
+  const { component, ctx } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), favouriteRow()],
+  });
+  // What private browsing and a blocked-storage setting do to every call.
+  const refuse = () => { throw new Error('SecurityError'); };
+  Object.assign(ctx.localStorage, { getItem: refuse, setItem: refuse, removeItem: refuse });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault && component.openVault.uuid, FAV_UUID);
+  assert.equal(component.viewMode, 'list');
+  assert.equal(component.tileSize, 3);
+  component.setViewMode('mosaic');
+  component.setTileSize(5);
+  assert.equal(component.viewMode, 'mosaic');
+  assert.equal(component.tileSize, 5);
+});

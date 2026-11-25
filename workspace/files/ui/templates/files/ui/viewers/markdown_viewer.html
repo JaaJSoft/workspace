@@ -199,13 +199,6 @@
     let _noteLinkOver = null;
     let _noteLinkOut = null;
 
-    function getCSRFToken() {
-      const match = document.cookie.split('; ').find(function(row) {
-        return row.startsWith('csrftoken=');
-      });
-      return match ? match.split('=')[1] : '';
-    }
-
     async function _searchNotes(query) {
       const base = '/api/v1/files?type=markdown';
       const url = query ?

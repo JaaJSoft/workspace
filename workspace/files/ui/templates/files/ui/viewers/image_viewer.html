@@ -493,13 +493,6 @@
       }
     }
 
-    function getCSRFToken() {
-      const match = document.cookie.split('; ').find(function(row) {
-        return row.startsWith('csrftoken=');
-      });
-      return match ? match.split('=')[1] : '';
-    }
-
     function editedName(originalName) {
       const dot = originalName.lastIndexOf('.');
       if (dot > 0) {

@@ -1,15 +1,11 @@
 {% load i18n %}
 <!-- Generic Dialogs Partial: include once (e.g., in base.html) -->
+{# dialogs.js fills each header at runtime: the title by id, and the icon square, which it hides when given no icon. #}
 <!-- Confirm dialog -->
 <dialog id="app-dialog-confirm" class="modal">
   <div class="modal-box">
-    <div class="flex items-center gap-3">
-      <div
-        id="app-dialog-confirm-icon"
-        class="hidden shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
-      ></div>
-      <h3 id="app-dialog-confirm-title" class="font-bold text-lg">{% translate "Confirm" %}</h3>
-    </div>
+    {% translate "Confirm" as default_title %}
+    {% include "ui/partials/dialog_header.html" with icon_id="app-dialog-confirm-icon" title=default_title title_id="app-dialog-confirm-title" class="mb-0" only %}
     <p
       id="app-dialog-confirm-message"
       class="py-2 mt-2 wrap-break-word"
@@ -41,13 +37,8 @@
 <!-- Prompt dialog -->
 <dialog id="app-dialog-prompt" class="modal">
   <div class="modal-box">
-    <div class="flex items-center gap-3">
-      <div
-        id="app-dialog-prompt-icon"
-        class="hidden shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
-      ></div>
-      <h3 id="app-dialog-prompt-title" class="font-bold text-lg">{% translate "Input" %}</h3>
-    </div>
+    {% translate "Input" as default_title %}
+    {% include "ui/partials/dialog_header.html" with icon_id="app-dialog-prompt-icon" title=default_title title_id="app-dialog-prompt-title" class="mb-0" only %}
     <p id="app-dialog-prompt-message" class="text-sm text-base-content/70"></p>
     <input
       id="app-dialog-prompt-input"
@@ -88,13 +79,8 @@
 <!-- Select dialog -->
 <dialog id="app-dialog-select" class="modal">
   <div class="modal-box">
-    <div class="flex items-center gap-3">
-      <div
-        id="app-dialog-select-icon"
-        class="hidden shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
-      ></div>
-      <h3 id="app-dialog-select-title" class="font-bold text-lg">{% translate "Select" %}</h3>
-    </div>
+    {% translate "Select" as default_title %}
+    {% include "ui/partials/dialog_header.html" with icon_id="app-dialog-select-icon" title=default_title title_id="app-dialog-select-title" class="mb-0" only %}
     <p id="app-dialog-select-message" class="text-sm text-base-content/70"></p>
     <select id="app-dialog-select-input" class="select w-full mt-4"></select>
     <label
@@ -135,13 +121,8 @@
 <!-- Message/Error dialog -->
 <dialog id="app-dialog-message" class="modal">
   <div class="modal-box">
-    <div class="flex items-center gap-3">
-      <div
-        id="app-dialog-message-icon"
-        class="hidden shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
-      ></div>
-      <h3 id="app-dialog-message-title" class="font-bold text-lg">{% translate "Message" %}</h3>
-    </div>
+    {% translate "Message" as default_title %}
+    {% include "ui/partials/dialog_header.html" with icon_id="app-dialog-message-icon" title=default_title title_id="app-dialog-message-title" class="mb-0" only %}
     <div
       id="app-dialog-message-message"
       class="py-2 mt-2 wrap-break-word whitespace-pre-line"

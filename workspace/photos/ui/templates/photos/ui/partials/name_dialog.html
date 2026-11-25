@@ -9,34 +9,12 @@
 {% translate "Add “%(name)s” to People" as add_to_people_label %}
 <dialog id="name-person-dialog" class="modal">
   <div class="modal-box max-w-md">
-    {% comment %}
-      Hand-written dialog_header: the square shows the face being named, which
-      the shared partial cannot hold, and falls back to its icon without one.
-    {% endcomment %}
-    <div class="flex items-start justify-between gap-3 mb-4">
-      <div class="flex items-center gap-3 min-w-0">
-        <div
-          class="shrink-0 w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-module/15 text-module"
-        >
-          <img
-            :src="nameDialog.target?.cover_url"
-            x-show="nameDialog.target?.cover_url"
-            alt=""
-            class="w-full h-full object-cover"
-          />
-          <span x-show="!nameDialog.target?.cover_url">
-            <i data-lucide="user-round-pen" class="w-5 h-5"></i>
-          </span>
-        </div>
-        <div class="min-w-0">
-          <h3
-            class="font-bold text-lg leading-tight"
-            x-text="nameDialog.target?.person ? '{{ change_name_label|escapejs }}' : '{{ who_label|escapejs }}'"
-          ></h3>
-          <p class="text-sm text-base-content/60 mt-0.5">{% translate "Pick a contact, or type a new name to add one to People." %}</p>
-        </div>
-      </div>
-    </div>
+    {% translate "Pick a contact, or type a new name to add one to People." as pick_hint %}
+    {% with change_js=change_name_label|escapejs who_js=who_label|escapejs %}
+      {% with title_js="nameDialog.target?.person ? '"|add:change_js|add:"' : '"|add:who_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon="user-round-pen" image_expr="nameDialog.target?.cover_url" title_expr=title_js subtitle=pick_hint only %}
+      {% endwith %}
+    {% endwith %}
 
     <form @submit.prevent="canCreateName() ? createName() : null">
       <label class="input input-sm flex items-center gap-2 w-full">

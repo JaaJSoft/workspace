@@ -53,6 +53,7 @@ from ..serializers import (
 )
 from ..services import face_batches, face_corrections, face_people
 from ..services.face_preferences import faces_available, faces_enabled
+from ..services.undo_tokens import UndoExpired
 
 
 def _require_faces():
@@ -616,7 +617,7 @@ class FaceUndoView(APIView):
             restored = face_batches.undo(
                 request.user, serializer.validated_data["token"]
             )
-        except face_batches.UndoExpired:
+        except UndoExpired:
             return Response(
                 {"detail": _("Too late to undo.")}, status=status.HTTP_410_GONE
             )

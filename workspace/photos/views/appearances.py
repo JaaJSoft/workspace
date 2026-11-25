@@ -13,6 +13,7 @@ from workspace.common.mixins import CacheControlMixin
 from ..queries import user_appearances
 from ..serializers import AppearanceBatchSerializer, FaceUndoSerializer
 from ..services import appearance_review
+from ..services.undo_tokens import UndoExpired
 from .faces import _person, _require_faces
 
 
@@ -126,7 +127,7 @@ class AppearanceUndoView(APIView):
             restored = appearance_review.undo(
                 request.user, serializer.validated_data["token"]
             )
-        except appearance_review.UndoExpired:
+        except UndoExpired:
             return Response(
                 {"detail": _("Too late to undo.")}, status=status.HTTP_410_GONE
             )

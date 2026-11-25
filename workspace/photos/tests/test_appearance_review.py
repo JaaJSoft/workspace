@@ -16,6 +16,7 @@ from workspace.photos.services.appearance_review import (
     NO_SUGGESTION,
     outfit_suggestions,
 )
+from workspace.photos.services.undo_tokens import UndoExpired
 
 from .appearances import RED, appearances_on, contact, named_face, photo_at, seen
 from .faces import FacesTestMixin, opt_in
@@ -268,7 +269,7 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         self.assertIsNone(self.row.person_id)
         self.assertEqual(self.row.suggested_person_id, self.lea.pk)
         self.assertAlmostEqual(self.row.suggestion_distance, 0.01)
-        with self.assertRaises(appearance_review.UndoExpired):
+        with self.assertRaises(UndoExpired):
             appearance_review.undo(self.user, result.undo)
 
     def test_an_undo_is_the_users_own(self):
@@ -277,7 +278,7 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         )
         bob = User.objects.create_user(username="bob", password="p")
 
-        with self.assertRaises(appearance_review.UndoExpired):
+        with self.assertRaises(UndoExpired):
             appearance_review.undo(bob, result.undo)
 
 

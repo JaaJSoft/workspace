@@ -950,25 +950,28 @@ function faceBatchActions(undoTokens) {
   return undoTokens.length ? [{ label: gettext('Undo'), onClick: () => undoFaceBatch(undoTokens) }] : [];
 }
 
-// The photosApp() root reloads the page once it hears the event: an undo can
-// put faces back anywhere, and the board that asked may be gone by then.
-// Several tokens are undone last first, each batch having saved the faces as
-// the one before left them.
-async function undoFaceBatch(tokens) {
+// Several tokens are undone last first, each batch having saved its rows as
+// the one before left them. The photosApp() root reloads the page once it
+// hears the event: an undo can put faces back anywhere, and the board that
+// asked may be gone by then. `restoredMessage(count)` words the toast.
+async function undoBatches(endpoint, tokens, restoredMessage) {
   try {
     let restored = 0;
     for (const token of tokens.slice().reverse()) {
-      const result = await facesRequest(`${FACES_API}/faces/undo`, { method: 'POST', body: { token } });
+      const result = await facesRequest(endpoint, { method: 'POST', body: { token } });
       restored += result.restored;
     }
-    window.AppAlert.success(
-      interpolate(ngettext('%(count)s face put back', '%(count)s faces put back', restored), { count: restored }, true),
-      { duration: 2500 },
-    );
+    window.AppAlert.success(restoredMessage(restored), { duration: 2500 });
   } catch (err) {
     window.AppAlert.error(err.message || gettext('Could not undo'));
   }
   window.dispatchEvent(new CustomEvent('photos-faces-changed'));
+}
+
+function undoFaceBatch(tokens) {
+  return undoBatches(`${FACES_API}/faces/undo`, tokens, (count) =>
+    interpolate(ngettext('%(count)s face put back', '%(count)s faces put back', count), { count }, true),
+  );
 }
 
 // Undoes a review card's answer about an unnamed cluster: the cluster goes
@@ -1525,23 +1528,11 @@ function silhouetteSubtitle(card) {
   return interpolate(text, values, true);
 }
 
-// Puts an outfit card's answer back; the photosApp() root reloads the page
-// on the event, as for faces. Last batch first.
-async function undoOutfitAnswer(tokens) {
-  try {
-    let restored = 0;
-    for (const token of tokens.slice().reverse()) {
-      const result = await facesRequest(`${FACES_API}/appearances/undo`, { method: 'POST', body: { token } });
-      restored += result.restored;
-    }
-    window.AppAlert.success(
-      interpolate(ngettext('%(count)s person put back', '%(count)s people put back', restored), { count: restored }, true),
-      { duration: 2500 },
-    );
-  } catch (err) {
-    window.AppAlert.error(err.message || gettext('Could not undo'));
-  }
-  window.dispatchEvent(new CustomEvent('photos-faces-changed'));
+// Puts an outfit card's answer back.
+function undoOutfitAnswer(tokens) {
+  return undoBatches(`${FACES_API}/appearances/undo`, tokens, (count) =>
+    interpolate(ngettext('%(count)s person put back', '%(count)s people put back', count), { count }, true),
+  );
 }
 
 // The review page: every group of faces waiting for an answer, one card each

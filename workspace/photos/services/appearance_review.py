@@ -3,11 +3,9 @@ their clothes suggest they are, one review card per suggested person, and
 the answers to those cards, which can be undone for a few minutes.
 """
 
-import secrets
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from django.core.cache import cache
 from django.db import transaction
 
 from workspace.people.models import Person
@@ -18,6 +16,7 @@ from .appearance_suggestions import known_by_faces
 from .face_people import person_cards
 from .face_review import ReviewReads
 from .face_tracking import _iou
+from .undo_tokens import drop_state, save_state, take_state
 
 # People found by their body shown per suggested person at once, the nearest
 # first; the rest come once these are answered.
@@ -35,8 +34,7 @@ ALREADY_IN_PHOTO = "already_in_photo"
 # The contact has no face in the library, so no page for their photos.
 NO_FACE = "no_face"
 
-UNDO_TTL = 10 * 60
-_UNDO_KEY = "photos:appearances:undo:{}:{}"
+_UNDO_KIND = "appearances"
 _SAVED_FIELDS = (
     "person_id",
     "suggested_person_id",
@@ -44,10 +42,6 @@ _SAVED_FIELDS = (
     "rejected_person_id",
     "hidden",
 )
-
-
-class UndoExpired(Exception):
-    """The token names nothing: too old, already used, or someone else's."""
 
 
 @dataclass(frozen=True)
@@ -160,7 +154,7 @@ def apply(user, action, appearances, person=None):
             result.skipped.append((row.pk, reason))
     changed = any(reason in (None, ALREADY_IN_PHOTO) for reason in reasons.values())
     if not changed:
-        cache.delete(_UNDO_KEY.format(user.pk, result.undo))
+        drop_state(_UNDO_KIND, user, result.undo)
         result.undo = None
     return result
 
@@ -282,9 +276,7 @@ def _save_undo(user, appearances):
         }
         for row in appearances
     ]
-    token = secrets.token_urlsafe(16)
-    cache.set(_UNDO_KEY.format(user.pk, token), state, UNDO_TTL)
-    return token
+    return save_state(_UNDO_KIND, user, state)
 
 
 def _plain(value):
@@ -298,11 +290,7 @@ def _plain(value):
 def undo(user, token):
     """Put the people of the batch *token* names back as they were; return
     how many went back."""
-    key = _UNDO_KEY.format(user.pk, token)
-    state = cache.get(key)
-    if state is None:
-        raise UndoExpired
-    cache.delete(key)
+    state = take_state(_UNDO_KIND, user, token)
     saved = {row["uuid"]: row for row in state}
     # A contact deleted since cannot be pointed at again.
     mentioned = {

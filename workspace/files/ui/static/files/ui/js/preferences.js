@@ -63,7 +63,7 @@ window.filePreferences = function filePreferences() {
         clearTimeout(this._saveTimer);
         this._saveNow().then((saved) => {
           if (saved) {
-            this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+            window.folderNav.refreshListing(this.$ajax);
             return;
           }
           this._set(key, previous);

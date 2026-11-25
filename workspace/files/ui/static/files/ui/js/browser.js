@@ -1108,7 +1108,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     refreshFolderBrowser() {
-      this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+      window.folderNav.refreshListing(this.$ajax);
     },
 
     // --- Tag navigation (the contract the shared tag partials call) ---

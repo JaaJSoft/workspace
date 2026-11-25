@@ -17,6 +17,7 @@ function loadPage({ reply = { ok: true } } = {}) {
   const ctx = loadScripts(
     [
       'workspace/core/static/core/js/user_settings.js',
+      'workspace/files/ui/static/files/ui/js/folder_nav.js',
       'workspace/files/ui/static/files/ui/js/preferences.js',
       'workspace/files/ui/static/files/ui/js/table.js',
     ],

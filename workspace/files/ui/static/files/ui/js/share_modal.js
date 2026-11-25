@@ -269,8 +269,9 @@ window.shareModal = function shareModal() {
       this.pendingPermissionChanges = new Map();
       await this.loadShares();
       window.dispatchEvent(new CustomEvent('shares-changed'));
-      // Refresh the folder browser so the shared badge updates
-      this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+      // Refresh the folder browser so the shared badge updates. Photos
+      // opens this modal on a page with no listing and no folder_nav.js.
+      if (window.folderNav) window.folderNav.refreshListing(this.$ajax);
       this.closeModal();
     },
 

@@ -2,12 +2,16 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 // mail_helpers.js only touches `document` inside function bodies (popover
 // builders), never at load time, so it loads without any DOM stub. We exercise
 // the pure helper it declares at the top level: _cleanName.
-const ctx = loadScript('workspace/mail/ui/static/mail/ui/js/mail_helpers.js');
+const ctx = loadScripts([
+  'workspace/common/static/ui/js/popover.js',
+  'workspace/common/static/ui/js/card_popover.js',
+  'workspace/mail/ui/static/mail/ui/js/mail_helpers.js',
+]);
 const { _cleanName } = ctx;
 
 test('_cleanName keeps a plain display name untouched', () => {

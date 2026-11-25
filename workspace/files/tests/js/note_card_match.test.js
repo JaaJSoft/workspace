@@ -4,6 +4,8 @@ const { loadScripts } = require('../../../common/tests/js/loader');
 
 const ctx = loadScripts([
   'workspace/common/static/ui/js/uuid.js',
+  'workspace/common/static/ui/js/popover.js',
+  'workspace/common/static/ui/js/card_popover.js',
   'workspace/files/ui/static/files/ui/js/note_card.js',
 ]);
 

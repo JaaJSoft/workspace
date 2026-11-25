@@ -1,4 +1,6 @@
-/* Calendar event hover card, riding on the generic card_popover.js engine. */
+/* Calendar hover cards (events and tasks), on the generic card_popover.js engine. */
+
+window.calendarCard = window.createHoverCard({ className: 'event-card-popover', minSpace: 240 });
 
 /**
  * Show the card for a calendar event. Recurring virtual occurrences carry an
@@ -15,5 +17,5 @@ window._eventCardShow = function(wrapper, eventId) {
   }
   let url = '/calendar/events/' + fetchId + '/card';
   if (occStart) url += '?start=' + encodeURIComponent(occStart);
-  window._cardPopoverShow(wrapper, url);
+  window.calendarCard.show(wrapper, url);
 };

@@ -5,38 +5,18 @@ function _cleanName(raw) {
   return raw.replace(/^[^a-zA-Z\u00C0-\u024F]+|[^a-zA-Z\u00C0-\u024F]+$/g, '').trim();
 }
 
-// Rendered cards by URL, kept 30s like the user card. Adding a contact
-// clears it: every card of that address changes at once.
-const _mailCardCache = new Map();
-const _MAIL_CARD_CACHE_TTL = 30000;
+// Adding a contact refreshes the card: it changes every card of that address
+// at once, so the whole cache goes.
+const _mailCard = window.createHoverCard({
+  loadingClass: 'w-72',
+  onClick: function(event, anchor) { _mailCardAction(event, anchor); },
+});
 
 function _mailCardUrl(name, email) {
   return '/mail/contact-card?email=' + encodeURIComponent(email) + '&name=' + encodeURIComponent(name);
 }
 
-async function _mailCardLoad(popover, url) {
-  const cached = _mailCardCache.get(url);
-  let html = cached && cached.at + _MAIL_CARD_CACHE_TTL > Date.now() ? cached.html : null;
-  if (html === null) {
-    const res = await fetch(url, { credentials: 'same-origin' });
-    if (!res.ok) return;
-    html = await res.text();
-    _mailCardCache.set(url, { html, at: Date.now() });
-  }
-  if (popover.dataset.url === url) _setPopoverContent(popover, html);
-}
-
-function _mailCardSpinner(popover) {
-  popover.textContent = '';
-  const wrap = document.createElement('div');
-  wrap.className = 'p-4 w-72 flex justify-center';
-  const spinner = document.createElement('span');
-  spinner.className = 'loading loading-spinner loading-sm';
-  wrap.appendChild(spinner);
-  popover.appendChild(wrap);
-}
-
-async function _mailCardAction(event, popover) {
+async function _mailCardAction(event, anchor) {
   const button = event.target.closest('[data-mail-card-action]');
   const card = event.target.closest('[data-mail-contact-card]');
   if (!button || !card) return;
@@ -66,8 +46,7 @@ async function _mailCardAction(event, popover) {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(res.status);
-      _mailCardCache.clear();
-      await _mailCardLoad(popover, popover.dataset.url);
+      await _mailCard.refresh(anchor);
     } catch (e) {
       button.disabled = false;
       AppAlert.error(gettext('Could not add to contacts'));
@@ -94,65 +73,9 @@ window._mailCardShow = function(wrapper, nameOrAddr, email) {
   }
   email = (email && typeof email === 'string') ? email.trim() : '';
   if (!email) return;
-  const url = _mailCardUrl(_cleanName(name), email);
-  window._mailCardCancelHide(wrapper);
-  const existing = wrapper._mailCardPopover;
-  if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') return;
-  if (wrapper._showTimeout) clearTimeout(wrapper._showTimeout);
-
-  wrapper._showTimeout = setTimeout(function() {
-    wrapper._showTimeout = null;
-    let popover = wrapper._mailCardPopover;
-    if (!popover) {
-      popover = document.createElement('div');
-      popover.className = 'fixed z-9999 bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
-      popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
-      popover.style.opacity = '0';
-      popover.addEventListener('mouseenter', function() { window._mailCardCancelHide(wrapper); });
-      popover.addEventListener('mouseleave', function() { window._mailCardScheduleHide(wrapper); });
-      popover.addEventListener('click', function(e) { _mailCardAction(e, popover); });
-      document.body.appendChild(popover);
-      wrapper._mailCardPopover = popover;
-    }
-    popover.dataset.url = url;
-    _mailCardSpinner(popover);
-    _mailCardLoad(popover, url);
-
-    const pos = _computePopoverPosition(wrapper);
-    popover.style.left = pos.left + 'px';
-    popover.style.top = pos.top + 'px';
-    wrapper._placement = pos.placement;
-
-    popover.style.display = '';
-    popover.style.transition = 'none';
-    _applyPopoverTransform(popover, pos.placement, false);
-    void popover.offsetHeight;
-    popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
-    _applyPopoverTransform(popover, pos.placement, true);
-  }, 500);
+  _mailCard.show(wrapper, _mailCardUrl(_cleanName(name), email));
 };
 
 window._mailCardScheduleHide = function(wrapper) {
-  if (wrapper._showTimeout) { clearTimeout(wrapper._showTimeout); wrapper._showTimeout = null; }
-  // Cancel any previously queued hide/close so rapid mouseleave events don't
-  // stack up and cause flicker.
-  if (wrapper._hideTimeout) { clearTimeout(wrapper._hideTimeout); wrapper._hideTimeout = null; }
-  if (wrapper._closeTimeout) { clearTimeout(wrapper._closeTimeout); wrapper._closeTimeout = null; }
-  wrapper._hideTimeout = setTimeout(function() {
-    const popover = wrapper._mailCardPopover;
-    if (popover) {
-      _applyPopoverTransform(popover, wrapper._placement || 'bottom', false);
-      wrapper._closeTimeout = setTimeout(function() { popover.style.display = 'none'; }, 150);
-    }
-  }, 200);
+  _mailCard.scheduleHide(wrapper);
 };
-
-window._mailCardCancelHide = function(wrapper) {
-  if (wrapper._hideTimeout) { clearTimeout(wrapper._hideTimeout); wrapper._hideTimeout = null; }
-  if (wrapper._closeTimeout) { clearTimeout(wrapper._closeTimeout); wrapper._closeTimeout = null; }
-  const popover = wrapper._mailCardPopover;
-  if (popover && popover.style.display !== 'none') {
-    _applyPopoverTransform(popover, wrapper._placement || 'bottom', true);
-  }
-};
-

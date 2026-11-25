@@ -41,10 +41,10 @@ window.calendarTasksMixin = function calendarTasksMixin() {
       // right after the click already navigated away.
       if (window.matchMedia('(hover: hover)').matches) {
         info.el.addEventListener('mouseenter', () => {
-          window._cardPopoverShow(info.el, task.card_url);
+          window.calendarCard.show(info.el, task.card_url);
         });
         info.el.addEventListener('mouseleave', () => {
-          window._cardPopoverScheduleHide(info.el);
+          window.calendarCard.scheduleHide(info.el);
         });
       }
 

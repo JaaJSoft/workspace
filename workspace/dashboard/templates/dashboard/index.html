@@ -235,8 +235,6 @@
 
   </div>
 
-  <script src="{% static 'ui/js/card_popover.js' %}"></script>
-  <script src="{% static 'calendar/ui/js/event_card.js' %}"></script>
   <script src="{% static 'dashboard/js/badges.js' %}"></script>
   <script src="{% static 'dashboard/js/weather.js' %}"></script>
   <script src="{% static 'dashboard/js/today.js' %}"></script>
@@ -311,4 +309,9 @@
       };
     }
   </script>
+{% endblock %}
+
+{% block extra_scripts %}
+  {# After base.html's shared components: the event card is built on card_popover.js. #}
+  <script src="{% static 'calendar/ui/js/event_card.js' %}"></script>
 {% endblock %}

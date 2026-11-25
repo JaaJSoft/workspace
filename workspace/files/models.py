@@ -643,6 +643,10 @@ class File(models.Model):
             self.ProcessingStatus.PROCESSING,
         )
 
+    def version_tag(self):
+        """This version's entity tag, unquoted: the HTTP API and WebDAV share it."""
+        return f"{self.uuid}-{self.updated_at.timestamp()}"
+
     def is_locked(self):
         """Return True if this file has an active (non-expired) lock."""
         if self.locked_by_id is None:

@@ -793,7 +793,7 @@ class FileResource(_LockKeyed, DAVNonCollection):
         # without quotes - wsgidav adds them when serializing the HTTP
         # ``ETag:`` header.  Returning a quoted string here triggers a
         # 500.
-        return f"{self._file.uuid}-{self._file.updated_at.timestamp()}"
+        return self._file.version_tag()
 
 
 def _dest_parts(dest_path):

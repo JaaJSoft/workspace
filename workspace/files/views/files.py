@@ -450,10 +450,10 @@ class FileViewSet(
 
     @staticmethod
     def _file_etag(file_obj):
-        """Deterministic ETag based on UUID and last modification time."""
-        return f'"{file_obj.uuid}-{file_obj.updated_at.timestamp()}"'
+        """The quoted ``ETag`` header value of *file_obj*'s current version."""
+        return f'"{file_obj.version_tag()}"'
 
-    def _check_etag_304(self, request, file_obj):
+    def _check_etag_304(self, request, file_obj, *, cache_control="private, no-cache"):
         """Return a 304 response if the client's ETag matches, else None."""
         etag = self._file_etag(file_obj)
         if_none_match = request.META.get("HTTP_IF_NONE_MATCH")
@@ -462,14 +462,14 @@ class FileViewSet(
 
             response = DjHttpResponse(status=304)
             response["ETag"] = etag
-            response["Cache-Control"] = "private, no-cache"
+            response["Cache-Control"] = cache_control
             return response
         return None
 
-    @staticmethod
-    def _set_file_cache_headers(response, file_obj):
+    @classmethod
+    def _set_file_cache_headers(cls, response, file_obj):
         """Set ETag + Cache-Control; ConditionalGetMiddleware handles 304."""
-        response["ETag"] = f'"{file_obj.uuid}-{file_obj.updated_at.timestamp()}"'
+        response["ETag"] = cls._file_etag(file_obj)
         response["Cache-Control"] = "private, no-cache"
 
     def get_queryset(self):

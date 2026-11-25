@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from django.db import transaction
 
-from ..models import SOURCE_IMPORT, Person, PersonList
+from ..models import SOURCE_IMPORT, Person, PersonList, require_one_scope
 from ..queries import person_with_email
 from .avatar import save_avatar_from_card
 from .lists import add_members, create_list
@@ -93,8 +93,7 @@ def _store_list(scope, card, members, report):
 
 def import_vcards(text, *, owner=None, group=None):
     """Import every card of ``text`` into the address book. Raises VCardError."""
-    if (owner is None) == (group is None):
-        raise ValueError("An import goes to exactly one owner or one group.")
+    require_one_scope(owner, group)
     scope = {"owner": owner, "group": group}
     cards = parse_vcards(text)
     report = ImportReport()

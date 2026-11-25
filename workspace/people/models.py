@@ -31,6 +31,14 @@ def _one_scope_constraint(name):
     )
 
 
+def require_one_scope(owner, group):
+    """Exactly one of ``owner`` / ``group``, checked before the constraint refuses it."""
+    if (owner is None) == (group is None):
+        raise ValueError(
+            "An address book row belongs to exactly one owner or one group."
+        )
+
+
 def _unique_dav_name_constraints(prefix):
     """A CardDAV resource name is unique within its address book."""
     return [

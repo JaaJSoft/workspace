@@ -367,8 +367,9 @@ def _fallback_display_name(fields, kind):
 # ---- export ---------------------------------------------------------------
 
 
-def person_uid(person):
-    return person.import_uid or f"{_UUID_URN_PREFIX}{person.uuid}"
+def card_uid(row):
+    """The UID a person or a list is exported under: the one it came with, else ours."""
+    return row.import_uid or f"{_UUID_URN_PREFIX}{row.uuid}"
 
 
 def uid_key(uid):
@@ -379,10 +380,6 @@ def uid_key(uid):
 def own_uuid(uid):
     """The row uuid one of our ``urn:uuid:`` UIDs names, or ``None``."""
     return parse_uuid_or_none(uid_key(uid)) if uid else None
-
-
-def list_uid(person_list):
-    return person_list.import_uid or f"{_UUID_URN_PREFIX}{person_list.uuid}"
 
 
 def member_uri(uid):
@@ -452,7 +449,7 @@ def person_to_vcard(person, *, photo=None, photo_type="webp", version="4.0"):
     v3 = version == "3.0"
     card = vobject.vCard()
     _add(card, "version", version)
-    _add(card, "uid", person_uid(person))
+    _add(card, "uid", card_uid(person))
     _add(card, "fn", person.display_name)
     extra = person.extra_properties or {}
     # N is mandatory in 3.0.
@@ -534,7 +531,7 @@ def list_to_vcard(person_list, members, *, version="4.0"):
     v3 = version == "3.0"
     card = vobject.vCard()
     _add(card, "version", version)
-    _add(card, "uid", list_uid(person_list))
+    _add(card, "uid", card_uid(person_list))
     _add(card, "fn", person_list.name)
     if v3:
         _add(card, "n", vobject.vcard.Name(family=person_list.name))
@@ -543,7 +540,7 @@ def list_to_vcard(person_list, members, *, version="4.0"):
         _add(card, "kind", "group")
     member_property = "X-ADDRESSBOOKSERVER-MEMBER" if v3 else "member"
     for member in members:
-        _add(card, member_property, member_uri(person_uid(member)))
+        _add(card, member_property, member_uri(card_uid(member)))
     return card
 
 

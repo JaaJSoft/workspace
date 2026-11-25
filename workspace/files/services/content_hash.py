@@ -5,7 +5,7 @@ import logging
 
 from workspace.common.logging import scrub
 
-from ..models import File
+from ..models import File, tree_q
 from .processors import register_processor
 
 logger = logging.getLogger(__name__)
@@ -61,17 +61,17 @@ def find_duplicates(file_obj):
     """
     if not file_obj.content_hash:
         return File.objects.none()
-    qs = File.objects.filter(
-        content_hash=file_obj.content_hash,
-        size=file_obj.size,
-        node_type=File.NodeType.FILE,
-        deleted_at__isnull=True,
-    ).exclude(pk=file_obj.pk)
-    if file_obj.group_id:
-        qs = qs.filter(group_id=file_obj.group_id)
-    else:
-        qs = qs.filter(owner_id=file_obj.owner_id, group__isnull=True)
-    return qs.name_ordered()
+    return (
+        File.objects.filter(
+            tree_q(file_obj.owner_id, file_obj.group_id),
+            content_hash=file_obj.content_hash,
+            size=file_obj.size,
+            node_type=File.NodeType.FILE,
+            deleted_at__isnull=True,
+        )
+        .exclude(pk=file_obj.pk)
+        .name_ordered()
+    )
 
 
 def pending_hash_qs(*, reanalyze=False):

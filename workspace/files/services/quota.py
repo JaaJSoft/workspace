@@ -20,7 +20,13 @@ from django.template.defaultfilters import filesizeformat
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.exceptions import APIException
 
-from ..models import File, GroupStorageQuota, UploadSession, UserStorageQuota
+from ..models import (
+    File,
+    GroupStorageQuota,
+    UploadSession,
+    UserStorageQuota,
+    tree_q,
+)
 from . import bucket_usage
 
 
@@ -118,11 +124,9 @@ def _group_name(group):
 
 
 def _open_sessions(*, owner, group, excluding=None):
-    sessions = UploadSession.objects.filter(completed_at__isnull=True)
-    if group is not None:
-        sessions = sessions.filter(group_id=_pk(group))
-    else:
-        sessions = sessions.filter(owner_id=_pk(owner), group__isnull=True)
+    sessions = UploadSession.objects.filter(
+        tree_q(_pk(owner), _pk(group)), completed_at__isnull=True
+    )
     if excluding is not None:
         sessions = sessions.exclude(pk=_pk(excluding))
     return sessions

@@ -48,7 +48,6 @@ from workspace.files.services.public_links import (
     access_token_opens,
     presented_access_token,
     resolve_within,
-    scope_q,
 )
 from workspace.files.services.quota import usage_percent
 from workspace.files.services.scanning.policy import with_scan
@@ -75,6 +74,7 @@ from ..models import (
     FileShareLink,
     PinnedFolder,
     Tag,
+    tree_q,
 )
 from .viewers import (
     CARD_PREVIEW_TEMPLATE,
@@ -1171,7 +1171,7 @@ def _shared_file_siblings(link, target, path, view_mode):
         return "", "", 0, 0
     uuids = list(
         File.objects.filter(
-            scope_q(link.file),
+            tree_q(link.file.owner_id, link.file.group_id),
             parent_id=target.parent_id,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
@@ -1228,7 +1228,9 @@ def _shared_folder_listing_context(link, current, request, view_mode):
         with_scan(
             with_sensitivity(
                 File.objects.filter(
-                    scope_q(link.file), parent=current, deleted_at__isnull=True
+                    tree_q(link.file.owner_id, link.file.group_id),
+                    parent=current,
+                    deleted_at__isnull=True,
                 ).exclude(node_type=File.NodeType.SHORTCUT)
             ).name_ordered("-node_type")
         )[: SHARED_FOLDER_PAGE_SIZE + 1]

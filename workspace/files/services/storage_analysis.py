@@ -22,7 +22,7 @@ from django.utils.translation import gettext, gettext_lazy
 
 from workspace.common.text import fold_text
 
-from ..models import File
+from ..models import File, tree_q
 from ..queries import get_permission, reads_full_path, visible_path
 
 LARGEST_FILES_LIMIT = 20
@@ -128,25 +128,24 @@ class StorageScope:
         return self.folder.group if self.folder is not None else None
 
     @property
-    def owner(self):
-        """Owner of the personal tree being analysed (the folder's, not the viewer's)."""
-        return self.folder.owner if self.folder is not None else self.user
-
-    @property
     def is_root(self):
         return self.folder is None or (
             self.folder.group_id is not None and self.folder.parent_id is None
         )
 
+    def own_tree_q(self):
+        """Every row of the tree the scope lies in, trashed or not."""
+        if self.folder is None:
+            return tree_q(self.user.pk, None)
+        return tree_q(self.folder.owner_id, self.folder.group_id)
+
     def tree_q(self):
         """Filter matching every live node strictly below the scope."""
+        q = self.own_tree_q() & Q(deleted_at__isnull=True)
         if self.folder is None:
-            return Q(owner=self.user, group__isnull=True, deleted_at__isnull=True)
+            return q
         path = self.folder.path
-        q = Q(path__startswith=f"{path}/", deleted_at__isnull=True)
-        if self.folder.group_id:
-            return q & Q(group=self.folder.group)
-        return q & Q(owner=self.owner, group__isnull=True)
+        return q & Q(path__startswith=f"{path}/")
 
     def trash_q(self):
         if self.group is not None:
@@ -196,9 +195,7 @@ def subfolder_breakdown(scope):
     each row's share of that total.
     """
     if scope.folder is None:
-        children = File.objects.filter(
-            owner=scope.user, group__isnull=True, parent__isnull=True
-        )
+        children = File.objects.filter(scope.own_tree_q(), parent__isnull=True)
     else:
         children = File.objects.filter(parent=scope.folder)
     children = children.filter(deleted_at__isnull=True)
@@ -210,11 +207,7 @@ def subfolder_breakdown(scope):
         path__startswith=Concat(OuterRef("path"), Value("/")),
         node_type=File.NodeType.FILE,
         deleted_at__isnull=True,
-    )
-    if scope.group is not None:
-        descendants = descendants.filter(group=scope.group)
-    else:
-        descendants = descendants.filter(owner=scope.owner, group__isnull=True)
+    ).filter(scope.own_tree_q())
     descendants = descendants.order_by().annotate(one=Value(1)).values("one")
 
     folders = (

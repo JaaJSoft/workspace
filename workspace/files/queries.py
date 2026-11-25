@@ -11,7 +11,7 @@ import enum
 from django.contrib.auth.models import Group
 from django.db.models import BooleanField, Exists, ExpressionWrapper, OuterRef, Q
 
-from .models import File, FileFavorite, FileShare, PinnedFolder
+from .models import File, FileFavorite, FileShare, PinnedFolder, tree_q
 
 
 class FilePermission(enum.IntEnum):
@@ -203,13 +203,8 @@ def visible_ancestors(user, folder, permission):
     ancestor_paths = ["/".join(parts[:i]) for i in range(1, len(parts))]
     if not ancestor_paths:
         return []
-    # Scoped to the folder's tree: paths repeat across owners and groups.
-    if folder.group_id:
-        tree = Q(group_id=folder.group_id)
-    else:
-        tree = Q(owner_id=folder.owner_id, group__isnull=True)
     ancestors = File.objects.filter(
-        tree,
+        tree_q(folder.owner_id, folder.group_id),
         path__in=ancestor_paths,
         node_type=File.NodeType.FOLDER,
         deleted_at__isnull=True,

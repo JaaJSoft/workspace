@@ -42,7 +42,6 @@ class InstanceStatusesTests(PresenceStreamResetMixin, TestCase):
             UserPresence.objects.create(
                 user=user,
                 last_seen=now - delta,
-                last_activity=now - delta,
                 manual_status=manual,
             )
             return user

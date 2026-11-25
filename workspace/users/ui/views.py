@@ -231,12 +231,6 @@ def profile_view(request, username=None):
         # profile_activity_feed) so the initial render skips the per-provider
         # fan-out. get_sources() is in-memory, so this adds no DB cost.
         "activity_sources": get_sources(request.user),
-        "activity_source": None,
-        "activity_search": "",
-        "activity_prefix": "profile-activity",
-        "activity_base_url": reverse(
-            "users_ui:profile_activity_feed", kwargs={"username": profile_user.username}
-        ),
     }
     return render(request, "users/ui/profile.html", context)
 

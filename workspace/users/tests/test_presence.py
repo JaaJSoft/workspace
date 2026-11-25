@@ -77,7 +77,6 @@ class TouchTests(PresenceTestMixin, TestCase):
         self.assertIsNotNone(raw)
 
     def test_touch_skips_public_cache_for_invisible(self):
-        # Ensure a UserPresence row exists so sync_to_db doesn't fail on create
         UserPresence.objects.create(user=self.user, last_seen=timezone.now())
         presence_service.set_manual_status(self.user.pk, "invisible")
         cache.delete(f"presence:{self.user.pk}")
@@ -96,6 +95,13 @@ class TouchTests(PresenceTestMixin, TestCase):
         raw = cache.get(f"presence:{self.user.pk}")
         self.assertIsNone(raw)
 
+    def test_touch_sends_no_db_sync_while_invisible(self):
+        presence_service.set_manual_status(self.user.pk, "invisible")
+        with patch("workspace.users.tasks.sync_presence.delay") as delay:
+            presence_service.touch(self.user.pk)
+        delay.assert_not_called()
+        self.assertIsNotNone(cache.get(f"presence:activity:{self.user.pk}"))
+
     def test_touch_syncs_to_db(self):
         presence_service.touch(self.user.pk)
         self.assertTrue(UserPresence.objects.filter(user=self.user).exists())
@@ -107,7 +113,7 @@ class TouchTests(PresenceTestMixin, TestCase):
         ):
             presence_service.touch(self.user.pk)
         delay.assert_called_once_with(
-            self.user.pk, cache.get(f"presence:activity:{self.user.pk}"), True
+            self.user.pk, cache.get(f"presence:activity:{self.user.pk}")
         )
         self.assertFalse(UserPresence.objects.filter(user=self.user).exists())
 

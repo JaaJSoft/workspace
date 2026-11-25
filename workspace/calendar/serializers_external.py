@@ -34,7 +34,6 @@ class ExternalSourceSerializer(serializers.ModelSerializer):
             "last_synced_at",
             "last_error",
             "is_active",
-            "sync_interval",
         ]
 
 

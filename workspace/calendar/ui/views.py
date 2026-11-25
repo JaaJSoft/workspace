@@ -66,7 +66,6 @@ def index(request):
         "calendar/ui/index.html",
         {
             "owned_calendars": owned,
-            "subscribed_calendars": subscribed,
             "calendars": {
                 "owned": CalendarSerializer(owned, many=True).data,
                 "subscribed": CalendarSerializer(subscribed, many=True).data,

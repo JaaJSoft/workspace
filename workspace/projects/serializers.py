@@ -16,6 +16,7 @@ from workspace.common.serializers import (
     UuidListSerializer,
 )
 from workspace.common.services.mentions import render_comment_body
+from workspace.users.queries import nameable_groups
 from workspace.users.serializers import UserSummarySerializer
 
 from .models import (
@@ -86,6 +87,20 @@ def _anyone(queryset, context):
     return queryset
 
 
+def _nameable_groups(queryset, context):
+    """The groups the caller may name (no hidden group they are not in), and
+    those the project already carries: an admin who is not in an attached
+    hidden group must still be able to save the list without dropping it."""
+    request = context.get("request")
+    if request is None:
+        return queryset.none()
+    project = context.get("project")
+    already_named = project.groups.values("pk") if project is not None else None
+    return queryset.filter(
+        pk__in=nameable_groups(request.user, already_named=already_named).values("pk")
+    )
+
+
 class GroupSummarySerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
@@ -97,7 +112,7 @@ class ProjectSerializer(ApiModelSerializer):
     groups = SummaryField(
         GroupSummarySerializer,
         queryset=Group.objects.all(),
-        narrow=_anyone,
+        narrow=_nameable_groups,
         many=True,
         required=False,
     )

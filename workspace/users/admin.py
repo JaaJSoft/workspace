@@ -4,12 +4,12 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.models import Group, User
 from knox.admin import AuthTokenAdmin as KnoxAuthTokenAdmin
 from knox.models import AuthToken
-from unfold.admin import ModelAdmin
+from unfold.admin import ModelAdmin, StackedInline
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
 from workspace.files.admin import GroupStorageQuotaInline, UserStorageQuotaInline
 
-from .models import APITokenLabel, UserPresence, UserSetting
+from .models import APITokenLabel, GroupVisibility, UserPresence, UserSetting
 from .validators import validate_username
 
 
@@ -82,10 +82,47 @@ class UserAdmin(DjangoUserAdmin, ModelAdmin):
     )
 
 
+class GroupVisibilityInline(StackedInline):
+    """The hidden flag, on the group's own page. The one blank form saves
+    nothing until the box is ticked, so a visible group keeps no row."""
+
+    model = GroupVisibility
+    extra = 1
+    max_num = 1
+    can_delete = False
+    fields = ("is_hidden",)
+
+
+class HiddenGroupFilter(admin.SimpleListFilter):
+    """A visible group has no row at all, which a plain filter on
+    ``visibility__is_hidden`` would leave out of "No"."""
+
+    title = "hidden"
+    parameter_name = "hidden"
+
+    def lookups(self, request, model_admin):
+        return (("yes", "Yes"), ("no", "No"))
+
+    def queryset(self, request, queryset):
+        if self.value() == "yes":
+            return queryset.filter(visibility__is_hidden=True)
+        if self.value() == "no":
+            return queryset.exclude(visibility__is_hidden=True)
+        return queryset
+
+
 @admin.register(Group)
 class GroupAdmin(DjangoGroupAdmin, ModelAdmin):
-    inlines = (GroupStorageQuotaInline,)
+    inlines = (GroupVisibilityInline, GroupStorageQuotaInline)
+    list_display = ("name", "is_hidden")
+    list_filter = (HiddenGroupFilter,)
+    list_select_related = ("visibility",)
     search_fields = ("name",)
+
+    @admin.display(boolean=True, description="Hidden", ordering="visibility__is_hidden")
+    def is_hidden(self, group):
+        visibility = getattr(group, "visibility", None)
+        return visibility is not None and visibility.is_hidden
 
 
 @admin.register(AuthToken)

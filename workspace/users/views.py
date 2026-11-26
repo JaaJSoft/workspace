@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings as django_settings
 from django.contrib.auth import password_validation, update_session_auth_hash
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
@@ -33,6 +33,7 @@ from workspace.users.queries import (
     DEFAULT_SEARCH_LIMIT,
     MAX_SEARCH_LIMIT,
     MIN_SEARCH_QUERY_LENGTH,
+    nameable_groups,
     search_people,
 )
 from workspace.users.services import avatar as avatar_service
@@ -857,13 +858,14 @@ class APITokenDetailView(APIView):
 
 
 class GroupListView(APIView):
-    """Every group on the instance, for pickers that address a team the
-    caller may not belong to (sharing a file with a group)."""
+    """Every group the caller may name, for pickers that address a team the
+    caller may not belong to (sharing a file with a group). A hidden group
+    is listed to its members only."""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        summary="List all groups",
+        summary="List the groups the caller may name",
         tags=["Users"],
         responses={
             200: inline_serializer(
@@ -877,7 +879,9 @@ class GroupListView(APIView):
         },
     )
     def get(self, request):
-        groups = Group.objects.order_by(Lower("name")).values("id", "name")
+        groups = (
+            nameable_groups(request.user).order_by(Lower("name")).values("id", "name")
+        )
         return Response(list(groups))
 
 

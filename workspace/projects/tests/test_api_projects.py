@@ -14,6 +14,7 @@ from workspace.projects.services.projects import (
     get_or_create_personal_project,
 )
 from workspace.projects.services.tasks import create_task
+from workspace.users.models import GroupVisibility
 
 from .base import ProjectTestMixin
 
@@ -309,6 +310,67 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
             f"/api/v1/projects/{self.project.uuid}", {"name": "X"}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class HiddenGroupAttachmentTests(ProjectTestMixin, APITestCase):
+    """A hidden group the caller is not in answers like a group that does
+    not exist; one already attached stays attached when the list is saved."""
+
+    def setUp(self):
+        super().setUp()
+        self.council = Group.objects.create(name="council")
+        GroupVisibility.objects.create(group=self.council, is_hidden=True)
+        gone = Group.objects.create(name="gone")
+        self.missing_id = gone.pk
+        gone.delete()
+        self.client.force_authenticate(self.admin)
+        self.url = f"/api/v1/projects/{self.project.uuid}"
+
+    def answer(self, method, url, body, group_id):
+        response = getattr(self.client, method)(url, body, format="json")
+        # DRF names the id it could not find; set it aside to compare the rest.
+        return response.status_code, response.content.replace(
+            str(group_id).encode(), b"<id>"
+        )
+
+    def test_attaching_it_answers_like_a_missing_group(self):
+        self.assertEqual(
+            self.answer(
+                "patch", self.url, {"groups": [self.council.pk]}, self.council.pk
+            ),
+            self.answer(
+                "patch", self.url, {"groups": [self.missing_id]}, self.missing_id
+            ),
+        )
+        self.assertFalse(self.project.groups.exists())
+
+    def test_creating_with_it_answers_like_a_missing_group(self):
+        hidden = {"name": "New", "groups": [self.council.pk]}
+        missing = {"name": "New", "groups": [self.missing_id]}
+        self.assertEqual(
+            self.answer("post", "/api/v1/projects", hidden, self.council.pk),
+            self.answer("post", "/api/v1/projects", missing, self.missing_id),
+        )
+
+    def test_a_member_attaches_it(self):
+        self.admin.groups.add(self.council)
+        response = self.client.patch(
+            self.url, {"groups": [self.council.pk]}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list(self.project.groups.all()), [self.council])
+
+    def test_an_attached_one_survives_saving_the_list(self):
+        self.project.groups.add(self.council)
+        devs = Group.objects.create(name="devs")
+        response = self.client.patch(
+            self.url, {"groups": [self.council.pk, devs.pk]}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            set(self.project.groups.values_list("pk", flat=True)),
+            {self.council.pk, devs.pk},
+        )
 
 
 class ProjectDoneRetentionApiTests(ProjectTestMixin, APITestCase):

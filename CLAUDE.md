@@ -333,7 +333,7 @@ One contract for the whole API, so a client that learned one module can guess th
 | List | `GET` on the collection | 200, a bare array |
 | Read | `GET /{uuid}` | 200, the object |
 | Create | `POST` on the collection | 201, the full object, as `GET` returns it |
-| Update | `PATCH` (partial) and `PUT` (full), both on every updatable resource | 200, the full object |
+| Update | `PATCH` (partial) on every updatable resource. `PUT` (full replacement) is added next to it where a route has a use for one, never instead of it | 200, the full object |
 | Delete | `DELETE`; a simple parameter goes in the query (`?move_to=<uuid>`) | 204 |
 | State that is one field | `PATCH` that field | 200, the full object |
 | Action with side effects (send, sync, complete a sprint) | `POST /{uuid}/<verb>` | 204, or 200 with the resource when it changed |

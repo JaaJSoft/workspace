@@ -1,176 +1,152 @@
 from django.conf import settings as django_settings
-from django.db.models import Q
-from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers, status
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import status
+from rest_framework.generics import (
+    DestroyAPIView,
+    ListAPIView,
+    ListCreateAPIView,
+    RetrieveAPIView,
+    RetrieveUpdateDestroyAPIView,
+)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.exceptions import Conflict
 from workspace.common.mixins import CacheControlMixin
-from workspace.common.pagination import OptInLimitOffsetPagination
-from workspace.common.url_guard import UnsafeUrl
 
+from .filters import NotificationFilter
 from .models import Notification, PushSubscription
-from .serializers import NotificationSerializer
-from .services.notifications import delete_notification, mark_all_read, mark_read
+from .queries import user_notifications, user_push_subscriptions
+from .serializers import (
+    NotificationSerializer,
+    PushKeySerializer,
+    PushSubscriptionSerializer,
+)
+from .services.notifications import (
+    delete_notification,
+    mark_all_read,
+    mark_read,
+    mark_unread,
+)
 from .services.push_subscriptions import save_push_subscription
-from .services.push_transport import check_push_endpoint
 
 
 @extend_schema(tags=["Notifications"])
-class NotificationListView(CacheControlMixin, APIView):
+@extend_schema_view(get=extend_schema(summary="List notifications, newest first"))
+class NotificationListView(CacheControlMixin, ListAPIView):
+    permission_classes = [IsAuthenticated]
+    queryset = Notification.objects.none()
+    serializer_class = NotificationSerializer
+    filterset_class = NotificationFilter
+
+    def get_queryset(self):
+        return user_notifications(self.request.user)
+
+
+@extend_schema(tags=["Notifications"])
+@extend_schema_view(
+    get=extend_schema(summary="Get a notification"),
+    patch=extend_schema(summary="Mark a notification read or unread"),
+    delete=extend_schema(summary="Delete a notification"),
+)
+class NotificationDetailView(RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    queryset = Notification.objects.none()
+    serializer_class = NotificationSerializer
+    lookup_field = "uuid"
+    http_method_names = ["get", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        return user_notifications(self.request.user)
+
+    def perform_update(self, serializer):
+        is_read = serializer.validated_data.get("is_read")
+        if is_read is True:
+            mark_read(serializer.instance)
+        elif is_read is False:
+            mark_unread(serializer.instance)
+
+    def perform_destroy(self, instance):
+        delete_notification(instance)
+
+
+@extend_schema(tags=["Notifications"])
+class NotificationMarkAllReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        summary="List notifications",
+        summary="Mark all notifications as read", request=None, responses={204: None}
+    )
+    def post(self, request):
+        mark_all_read(request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=["Notifications"])
+@extend_schema_view(
+    get=extend_schema(summary="Get the VAPID public key a browser subscribes with")
+)
+class PushVapidKeyView(RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PushKeySerializer
+
+    def get_object(self):
+        return {"public_key": getattr(django_settings, "WEBPUSH_VAPID_PUBLIC_KEY", "")}
+
+
+@extend_schema(tags=["Notifications"])
+@extend_schema_view(
+    get=extend_schema(summary="List the browsers registered for push"),
+    post=extend_schema(
+        summary="Register a browser for push",
         description=(
-            "Newest first. Paginated with ?limit and ?offset; the X-Has-More "
-            "header says whether another page follows."
+            "Registering an endpoint again refreshes its keys and answers 200 "
+            "instead of 201. An endpoint held by another account moves to the "
+            "caller only with the keys stored for it, and answers 409 without."
         ),
-        responses={200: NotificationSerializer(many=True)},
-    )
-    def get(self, request):
-        qs = (
-            Notification.objects.filter(
-                recipient=request.user,
-            )
-            .select_related("actor")
-            .order_by("-created_at", "-uuid")
+        responses={
+            200: PushSubscriptionSerializer,
+            201: PushSubscriptionSerializer,
+        },
+    ),
+)
+class PushSubscriptionListView(ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    queryset = PushSubscription.objects.none()
+    serializer_class = PushSubscriptionSerializer
+    # One row per browser the user enabled push in.
+    pagination_class = None
+
+    def get_queryset(self):
+        return user_push_subscriptions(self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        keys = serializer.validated_data["keys"]
+        saved = save_push_subscription(
+            request.user,
+            serializer.validated_data["endpoint"],
+            keys["p256dh"],
+            keys["auth"],
         )
-
-        if request.query_params.get("filter") == "unread":
-            qs = qs.filter(read_at__isnull=True)
-
-        origin = request.query_params.get("origin")
-        if origin:
-            qs = qs.filter(origin=origin)
-
-        search = request.query_params.get("search", "").strip()
-        if search:
-            qs = qs.filter(Q(title__ficontains=search) | Q(body__ficontains=search))
-
-        paginator = OptInLimitOffsetPagination()
-        page = paginator.paginate_queryset(qs, request, view=self)
-        if page is None:
-            return Response(NotificationSerializer(qs, many=True).data)
-        return paginator.get_paginated_response(
-            NotificationSerializer(page, many=True).data
-        )
-
-
-@extend_schema(tags=["Notifications"])
-class NotificationDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(summary="Mark a notification as read")
-    def patch(self, request, notification_id):
-        """Mark a single notification as read."""
-        try:
-            notif = Notification.objects.get(
-                uuid=notification_id, recipient=request.user
-            )
-        except Notification.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        mark_read(notif)
-        return Response(NotificationSerializer(notif).data)
-
-    @extend_schema(summary="Delete a notification")
-    def delete(self, request, notification_id):
-        """Delete a notification."""
-        if not delete_notification(request.user, notification_id):
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@extend_schema(tags=["Notifications"])
-class NotificationReadAllView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(summary="Mark all notifications as read")
-    def post(self, request):
-        """Mark all unread notifications as read."""
-        return Response({"marked": mark_all_read(request.user)})
-
-
-@extend_schema(tags=["Notifications"])
-class PushVapidKeyView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(summary="Get VAPID public key for push subscriptions")
-    def get(self, request):
-        """Return the VAPID public key for push subscription."""
+        if saved is None:
+            raise Conflict("This push endpoint is already registered.")
+        subscription, created = saved
         return Response(
-            {
-                "public_key": getattr(django_settings, "WEBPUSH_VAPID_PUBLIC_KEY", ""),
-            }
+            self.get_serializer(subscription).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
 
 @extend_schema(tags=["Notifications"])
-class PushSubscribeView(APIView):
+@extend_schema_view(delete=extend_schema(summary="Stop pushing to a browser"))
+class PushSubscriptionDetailView(DestroyAPIView):
     permission_classes = [IsAuthenticated]
+    queryset = PushSubscription.objects.none()
+    serializer_class = PushSubscriptionSerializer
+    lookup_field = "uuid"
 
-    @extend_schema(
-        summary="Subscribe to push notifications",
-        request=inline_serializer(
-            "PushSubscribe",
-            fields={
-                "endpoint": serializers.URLField(
-                    help_text="Push service endpoint URL."
-                ),
-                "keys": inline_serializer(
-                    "PushKeys",
-                    fields={
-                        "p256dh": serializers.CharField(),
-                        "auth": serializers.CharField(),
-                    },
-                ),
-            },
-        ),
-    )
-    def post(self, request):
-        """Subscribe to push notifications."""
-        endpoint = request.data.get("endpoint")
-        keys = request.data.get("keys", {})
-        p256dh = keys.get("p256dh") if isinstance(keys, dict) else None
-        auth = keys.get("auth") if isinstance(keys, dict) else None
-
-        if not all(isinstance(v, str) and v for v in (endpoint, p256dh, auth)):
-            return Response(
-                {"error": "Missing required fields: endpoint, keys.p256dh, keys.auth"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            check_push_endpoint(endpoint)
-        except UnsafeUrl as exc:
-            return Response(
-                {"error": exc.user_message}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if not save_push_subscription(request.user, endpoint, p256dh, auth):
-            return Response(
-                {"error": "This push endpoint is already registered."},
-                status=status.HTTP_409_CONFLICT,
-            )
-        return Response(status=status.HTTP_201_CREATED)
-
-    @extend_schema(
-        summary="Unsubscribe from push notifications",
-        request=inline_serializer(
-            "PushUnsubscribe",
-            fields={
-                "endpoint": serializers.URLField(
-                    help_text="Push service endpoint URL to remove."
-                ),
-            },
-        ),
-    )
-    def delete(self, request):
-        """Unsubscribe from push notifications."""
-        endpoint = request.data.get("endpoint")
-        PushSubscription.objects.filter(
-            user=request.user,
-            endpoint=endpoint,
-        ).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    def get_queryset(self):
+        return user_push_subscriptions(self.request.user)

@@ -9,9 +9,9 @@ urlpatterns = [
         name="notifications-list",
     ),
     path(
-        "api/v1/notifications/read-all",
-        views.NotificationReadAllView.as_view(),
-        name="notifications-read-all",
+        "api/v1/notifications/mark-all-read",
+        views.NotificationMarkAllReadView.as_view(),
+        name="notifications-mark-all-read",
     ),
     path(
         "api/v1/notifications/push/key",
@@ -19,12 +19,17 @@ urlpatterns = [
         name="push-vapid-key",
     ),
     path(
-        "api/v1/notifications/push/subscribe",
-        views.PushSubscribeView.as_view(),
-        name="push-subscribe",
+        "api/v1/notifications/push/subscriptions",
+        views.PushSubscriptionListView.as_view(),
+        name="push-subscription-list",
     ),
     path(
-        "api/v1/notifications/<uuid:notification_id>",
+        "api/v1/notifications/push/subscriptions/<uuid:uuid>",
+        views.PushSubscriptionDetailView.as_view(),
+        name="push-subscription-detail",
+    ),
+    path(
+        "api/v1/notifications/<uuid:uuid>",
         views.NotificationDetailView.as_view(),
         name="notifications-detail",
     ),

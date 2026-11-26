@@ -63,6 +63,10 @@ msgctxt "time ago date with year"
 msgid "M d, Y"
 msgstr "j N Y"
 
+#: exceptions.py
+msgid "The current state does not allow this."
+msgstr "L’état actuel ne le permet pas."
+
 #: templates/ui/partials/attachment_menu.html
 msgid "Attach files"
 msgstr "Joindre des fichiers"

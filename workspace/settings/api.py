@@ -13,8 +13,7 @@ from .env import env_non_negative_int
 _NUM_PROXIES = env_non_negative_int("NUM_PROXIES")
 
 REST_FRAMEWORK = {
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 50,
+    "DEFAULT_PAGINATION_CLASS": "workspace.common.pagination.ListPagination",
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -92,6 +91,11 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
     "SCHEMA_PATH_PREFIX": r"/v[1-9]",
     "SERVE_INCLUDE_SCHEMA": False,
+    # Two choice sets under one field name get a hash for a name unless told.
+    "ENUM_NAME_OVERRIDES": {
+        "NotificationPriorityEnum": "workspace.notifications.models.Notification.Priority",
+        "TaskPriorityEnum": "workspace.projects.models.Task.Priority",
+    },
     "TAGS": [
         {
             "name": "Activity",

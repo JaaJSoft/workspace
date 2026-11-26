@@ -13,7 +13,7 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-function loadPushStore({ subscription = null, fetchOk = true, appVersion = '', language = 'en' } = {}) {
+function loadPushStore({ subscription = null, fetchOk = true, saveOk = () => fetchOk, appVersion = '', language = 'en' } = {}) {
   const stores = {};
   const fetchCalls = [];
   const warnings = [];
@@ -61,7 +61,8 @@ function loadPushStore({ subscription = null, fetchOk = true, appVersion = '', l
     console: { ...console, warn: (...args) => warnings.push(args) },
     fetch: async (url, opts) => {
       fetchCalls.push({ url, opts: opts || {} });
-      return { ok: fetchOk, status: fetchOk ? 201 : 500, json: async () => ({}) };
+      const ok = (opts || {}).method === 'POST' ? saveOk() : fetchOk;
+      return { ok, status: ok ? 201 : 500, json: async () => ({ uuid: 'sub-uuid' }) };
     },
   });
   // Fire alpine:init: registers the stores, which runs push.init().
@@ -89,9 +90,9 @@ test('init re-registers an existing browser subscription with the backend', asyn
 
   assert.equal(stores.push.enabled, true);
   const sync = fetchCalls.find(
-    (c) => c.url === '/api/v1/notifications/push/subscribe' && c.opts.method === 'POST'
+    (c) => c.url === '/api/v1/notifications/push/subscriptions' && c.opts.method === 'POST'
   );
-  assert.ok(sync, 'expected a POST /push/subscribe resync on init');
+  assert.ok(sync, 'expected a POST /push/subscriptions resync on init');
   const body = JSON.parse(sync.opts.body);
   assert.equal(body.endpoint, 'https://push.example.com/sub/1');
   assert.deepStrictEqual({ ...body.keys }, { p256dh: 'p', auth: 'a' });
@@ -124,4 +125,76 @@ test('the worker url carries the page language, so a new language reinstalls it'
   await flush();
 
   assert.deepStrictEqual([...registered], ['/sw.js?v=1.2.0&lang=fr']);
+});
+
+function browserSubscription() {
+  return {
+    endpoint: 'https://push.example.com/sub/1',
+    unsubscribed: false,
+    toJSON() {
+      return { endpoint: this.endpoint, keys: { p256dh: 'p', auth: 'a' } };
+    },
+    async unsubscribe() {
+      this.unsubscribed = true;
+    },
+  };
+}
+
+test('turning push off deletes the row the server answered on save', async () => {
+  const sub = browserSubscription();
+  const { stores, fetchCalls } = loadPushStore({ subscription: sub });
+  await flush();
+
+  await stores.push.toggle();
+
+  assert.equal(sub.unsubscribed, true);
+  assert.equal(stores.push.enabled, false);
+  const removal = fetchCalls.find((c) => c.opts.method === 'DELETE');
+  assert.equal(removal.url, '/api/v1/notifications/push/subscriptions/sub-uuid');
+  assert.equal(removal.opts.body, undefined);
+});
+
+test('turning push off after a failed save on load asks the server for its row first', async () => {
+  const sub = browserSubscription();
+  let saves = 0;
+  // The save on load fails, the one made before turning off goes through.
+  const { stores, fetchCalls } = loadPushStore({ subscription: sub, saveOk: () => ++saves > 1 });
+  await flush();
+  assert.equal(stores.push.subscriptionUuid, null);
+
+  await stores.push.toggle();
+
+  assert.deepStrictEqual(
+    fetchCalls.map((c) => c.opts.method),
+    ['POST', 'POST', 'DELETE']
+  );
+  assert.equal(fetchCalls[2].url, '/api/v1/notifications/push/subscriptions/sub-uuid');
+});
+
+test('turning push off still unsubscribes the browser when the network is down', async () => {
+  const sub = browserSubscription();
+  const offline = () => {
+    throw new Error('offline');
+  };
+  const { stores, fetchCalls, warnings } = loadPushStore({ subscription: sub, saveOk: offline });
+  await flush();
+
+  await stores.push.toggle();
+
+  assert.equal(sub.unsubscribed, true);
+  assert.equal(stores.push.enabled, false);
+  assert.equal(fetchCalls.some((c) => c.opts.method === 'DELETE'), false);
+  assert.ok(warnings.some((args) => args.join(' ').includes('before unsubscribe')));
+});
+
+test('turning push off still unsubscribes the browser when the server refuses the save', async () => {
+  const sub = browserSubscription();
+  const { stores, fetchCalls } = loadPushStore({ subscription: sub, saveOk: () => false });
+  await flush();
+
+  await stores.push.toggle();
+
+  assert.equal(sub.unsubscribed, true);
+  assert.equal(stores.push.enabled, false);
+  assert.equal(fetchCalls.some((c) => c.opts.method === 'DELETE'), false);
 });

@@ -273,14 +273,22 @@ def mark_all_read(user):
     return marked
 
 
-def delete_notification(user, notification_uuid):
-    """Delete one of *user*'s notifications. Returns whether it existed."""
-    deleted, _ = Notification.objects.filter(
-        uuid=notification_uuid, recipient=user
-    ).delete()
-    if deleted:
-        _announce([user.pk])
-    return bool(deleted)
+def mark_unread(notification):
+    """Put one notification back among the unread ones and refresh its
+    recipient's count in every open tab."""
+    if notification.read_at is None:
+        return
+    notification.read_at = None
+    notification.save(update_fields=["read_at"])
+    _announce([notification.recipient_id])
+
+
+def delete_notification(notification):
+    """Delete one notification and refresh its recipient's count in every
+    open tab."""
+    recipient_id = notification.recipient_id
+    notification.delete()
+    _announce([recipient_id])
 
 
 def mark_source_read(user, source):

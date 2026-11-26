@@ -25,15 +25,13 @@ class SyncPresenceTests(TestCase):
 
         row = UserPresence.objects.get(user=self.user)
         self.assertEqual(row.last_seen, seen_at)
-        self.assertEqual(row.last_activity, seen_at)
 
-    def test_keeps_last_seen_when_not_public(self):
-        earlier = timezone.now() - timedelta(hours=1)
-        UserPresence.objects.create(user=self.user, last_seen=earlier)
+    def test_moves_last_seen_of_an_existing_row(self):
+        UserPresence.objects.create(
+            user=self.user, last_seen=timezone.now() - timedelta(hours=1)
+        )
         seen_at = timezone.now()
 
-        sync_presence(self.user.pk, seen_at.isoformat(), False)
+        sync_presence(self.user.pk, seen_at.isoformat())
 
-        row = UserPresence.objects.get(user=self.user)
-        self.assertEqual(row.last_seen, earlier)
-        self.assertEqual(row.last_activity, seen_at)
+        self.assertEqual(UserPresence.objects.get(user=self.user).last_seen, seen_at)

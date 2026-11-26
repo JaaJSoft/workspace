@@ -20,10 +20,6 @@ class ExternalCalendar(models.Model):
     last_synced_at = models.DateTimeField(null=True, blank=True)
     last_etag = models.CharField(max_length=255, blank=True, default="")
     last_error = models.TextField(blank=True, default="")
-    sync_interval = models.PositiveIntegerField(
-        default=900,
-        help_text="Sync interval in seconds (default: 15 minutes)",
-    )
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

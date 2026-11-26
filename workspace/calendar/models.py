@@ -249,10 +249,6 @@ class EventMember(models.Model):
     def __str__(self):
         return f"{self.user or self.email} - {self.event} ({self.status})"
 
-    @property
-    def is_external(self):
-        return self.user_id is None
-
 
 class CalendarObjectChange(models.Model):
     """The last revision at which one calendar object changed in a calendar.

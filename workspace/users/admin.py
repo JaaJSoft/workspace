@@ -15,7 +15,7 @@ from .validators import validate_username
 
 @admin.register(UserPresence)
 class UserPresenceAdmin(ModelAdmin):
-    list_display = ("user", "last_seen", "last_activity", "manual_status")
+    list_display = ("user", "last_seen", "manual_status")
     list_filter = ("last_seen", "manual_status")
     list_select_related = ("user",)
     search_fields = ("user__username", "user__email")

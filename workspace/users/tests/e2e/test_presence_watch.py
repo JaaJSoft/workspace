@@ -23,7 +23,7 @@ class PresenceWatchTests(PlaywrightTestCase):
         self.other = self.create_user(username="someone-online")
         now = timezone.now()
         UserPresence.objects.create(
-            user=self.other, last_seen=now, last_activity=now, manual_status="busy"
+            user=self.other, last_seen=now, manual_status="busy"
         )
         presence_stream._instance_cache["value"] = None
         self.login_as(self.viewer)

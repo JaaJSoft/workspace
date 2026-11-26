@@ -203,7 +203,6 @@ class ExternalCalendarModelTests(TestCase):
         self.assertIsNotNone(ext.uuid)
         self.assertEqual(ext.calendar, self.calendar)
         self.assertTrue(ext.is_active)
-        self.assertEqual(ext.sync_interval, 900)
         self.assertIsNone(ext.last_synced_at)
 
     def test_onetoone_relationship(self):

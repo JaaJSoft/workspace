@@ -82,10 +82,10 @@ def touch(user_id: int) -> None:
     # Always track real activity (internal only, never exposed)
     cache.set(_activity_key(user_id), iso, CACHE_TTL)
 
-    # Public last_seen: skip update when user forces away/invisible
-    update_public = get_manual_status(user_id) not in ("invisible", "away")
-    if update_public:
-        cache.set(_cache_key(user_id), iso, CACHE_TTL)
+    # Public last_seen: frozen while the user forces away/invisible
+    if get_manual_status(user_id) in ("invisible", "away"):
+        return
+    cache.set(_cache_key(user_id), iso, CACHE_TTL)
 
     # Throttled DB sync - at most once per DB_SYNC_TTL seconds. Written by a
     # task, never by the request: on SQLite the write waits for the database
@@ -95,18 +95,15 @@ def touch(user_id: int) -> None:
         cache.set(_dbsync_key(user_id), "1", DB_SYNC_TTL)
         from workspace.users.tasks import sync_presence
 
-        sync_presence.delay(user_id, iso, update_public)
+        sync_presence.delay(user_id, iso)
 
 
-def sync_to_db(user_id: int, now: datetime, *, update_public: bool = True) -> None:
+def sync_to_db(user_id: int, now: datetime) -> None:
     from workspace.users.models import UserPresence
 
-    defaults = {"last_activity": now}
-    if update_public:
-        defaults["last_seen"] = now
     UserPresence.objects.update_or_create(
         user_id=user_id,
-        defaults=defaults,
+        defaults={"last_seen": now},
     )
 
 

@@ -1,5 +1,7 @@
 import re
 
+from django.db.models import Q
+
 from workspace.common.search import apply_fulltext
 from workspace.common.search.schema import Col, FulltextIndex
 
@@ -55,26 +57,33 @@ def search_tasks_qs(user, query):
 NUMBER_RE = re.compile(r"^#?([0-9]{1,9})$")
 
 
+def reference_q(query):
+    """Q for the task a reference names (WR-42, or a bare 42 or #42 in any
+    project), or None when *query* is not shaped like one."""
+    text = query.strip()
+    match = REFERENCE_RE.match(text)
+    if match:
+        return Q(project__key=match.group(1).upper(), number=int(match.group(2)))
+    match = NUMBER_RE.match(text)
+    if match:
+        return Q(number=int(match.group(1)))
+    return None
+
+
 def reference_tasks_qs(user, query):
     """Exact task matches for a WR-42 reference or a bare number (42, #42).
 
     Empty queryset when the query is not reference-shaped; access-filtered
     and archived-excluded like the full-text search.
     """
-    text = query.strip()
-    base = Task.objects.filter(
+    named = reference_q(query)
+    if named is None:
+        return Task.objects.none()
+    return Task.objects.filter(
+        named,
         project_id__in=user_project_ids(user),
         project__archived_at__isnull=True,
     )
-    match = REFERENCE_RE.match(text)
-    if match:
-        return base.filter(
-            project__key=match.group(1).upper(), number=int(match.group(2))
-        )
-    match = NUMBER_RE.match(text)
-    if match:
-        return base.filter(number=int(match.group(1)))
-    return Task.objects.none()
 
 
 def combined_task_search(user, query, *, limit, extra_filter=None):

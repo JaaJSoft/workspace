@@ -330,7 +330,7 @@ class TaskPanelLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
             data["links_url"],
             f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/links",
         )
-        self.assertEqual(data["link_search_url"], "/api/v1/projects/tasks/search")
+        self.assertEqual(data["link_search_url"], "/api/v1/projects/tasks")
 
     def test_member_gets_the_link_picker(self):
         self.client.force_login(self.member)

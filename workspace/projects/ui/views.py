@@ -17,6 +17,11 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.module_registry import registry
 from workspace.core.services.activity import annotate_time_ago
 from workspace.projects.actions import ProjectActionRegistry
+from workspace.projects.filters import (
+    InvalidTaskFilter,
+    filter_tasks,
+    task_filters_active,
+)
 from workspace.projects.models import (
     Project,
     ProjectMember,
@@ -61,11 +66,6 @@ from workspace.projects.services.notification_levels import module_level
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.references import REFERENCE_RE
 from workspace.projects.services.rendering import render_task_description
-from workspace.projects.services.task_filters import (
-    TaskFilterError,
-    apply_task_filters,
-    task_filters_active,
-)
 from workspace.projects.services.timeline import build_timeline, coerce_scale
 from workspace.projects.sse_provider import project_revision
 from workspace.projects.tasks import reminder_hour
@@ -328,7 +328,7 @@ def _filtered_tasks(request, qs):
     Returns (tasks, truncated); the one extra fetched row is what detects
     truncation without a COUNT query.
     """
-    qs = apply_task_filters(qs, request.GET).distinct()
+    qs = filter_tasks(qs, request).distinct()
     tasks = list(qs[: TASK_RENDER_LIMIT + 1])
     return tasks[:TASK_RENDER_LIMIT], len(tasks) > TASK_RENDER_LIMIT
 
@@ -344,7 +344,7 @@ def _estimate_totals(request, project, qs):
     """
     if not project.estimate_unit:
         return {}
-    filtered = apply_task_filters(qs, request.GET).values("uuid")
+    filtered = filter_tasks(qs, request).values("uuid")
     return dict(
         project.tasks.filter(uuid__in=filtered)
         .values_list("status_id")
@@ -419,7 +419,7 @@ def _task_panel_context(user, project, role, task, *, members=None):
                 "project-task-file-links",
                 kwargs={"project_uuid": project.uuid, "task_uuid": task.uuid},
             ),
-            "link_search_url": reverse("project-tasks-search"),
+            "link_search_url": reverse("project-all-tasks"),
             "title": task.title,
             "description": task.description,
             "status": str(task.status_id),
@@ -601,7 +601,7 @@ def board(request, project_uuid):
     try:
         tasks, truncated = _filtered_tasks(request, tasks_qs)
         estimate_totals = _estimate_totals(request, project, tasks_qs)
-    except TaskFilterError as exc:
+    except InvalidTaskFilter as exc:
         return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
     context["filters_active"] = task_filters_active(request.GET)
     context["tasks_truncated"] = truncated
@@ -668,7 +668,7 @@ def backlog(request, project_uuid):
     try:
         backlog_tasks, truncated = _filtered_tasks(request, backlog_qs)
         estimate_totals = _estimate_totals(request, project, backlog_qs)
-    except TaskFilterError as exc:
+    except InvalidTaskFilter as exc:
         return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
     context["backlog_tasks"] = backlog_tasks
     context["estimate_total"] = sum(
@@ -695,7 +695,7 @@ def all_tasks(request, project_uuid):
                 "status__position", "status__created_at", "position", "created_at"
             ),
         )
-    except TaskFilterError as exc:
+    except InvalidTaskFilter as exc:
         return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
     context["all_tasks"] = all_tasks_list
     context["filters_active"] = task_filters_active(request.GET)
@@ -723,7 +723,7 @@ def timeline(request, project_uuid):
             request,
             project.tasks.select_related("project", "status", "epic"),
         )
-    except TaskFilterError as exc:
+    except InvalidTaskFilter as exc:
         return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
     epics = list(epics_with_progress(project))
     sprints = list(project.sprints.all()) if project.type == Project.Type.SCRUM else []

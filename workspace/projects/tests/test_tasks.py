@@ -284,7 +284,7 @@ class SettleOnResolutionTests(NotifyDueTasksMixin, TestCase):
 class SettleOnDueDateChangeTests(NotifyDueTasksMixin, APITestCase):
     def _patch_task(self, task, payload):
         self.client.force_authenticate(self.admin)
-        url = f"/api/v1/projects/{self.project.uuid}/tasks/{task.uuid}"
+        url = f"/api/v1/projects/tasks/{task.uuid}"
         return self.client.patch(url, payload, format="json")
 
     def test_pushing_due_date_back_settles(self):
@@ -318,7 +318,7 @@ class SettleOnDueDateChangeTests(NotifyDueTasksMixin, APITestCase):
 
         # A session login, so the timezone middleware sees the editor.
         self.client.force_login(self.admin)
-        url = f"/api/v1/projects/{self.project.uuid}/tasks/{task.uuid}"
+        url = f"/api/v1/projects/tasks/{task.uuid}"
         with _frozen(hour=20):
             editor_today = timezone.now().astimezone(ZoneInfo("Pacific/Auckland"))
             resp = self.client.patch(

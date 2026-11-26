@@ -35,15 +35,25 @@ class BulkTestsBase(ProjectTestMixin, APITestCase):
         self.t2 = create_task(self.project, self.admin, title="t2")
         self.t3 = create_task(self.project, self.admin, title="t3")
         self.bug = self.project.labels.create(name="Bug", color="#ff0000")
-        self.url = f"/api/v1/projects/{self.project.uuid}/tasks/bulk"
-        self.delete_url = f"/api/v1/projects/{self.project.uuid}/tasks/bulk-delete"
+        self.url = f"/api/v1/projects/{self.project.uuid}/tasks/batch"
 
     def tearDown(self):
         cache.clear()
 
-    def _post(self, payload, user=None, url=None):
+    def _body(self, payload, action="edit"):
+        """A selection and its changes, as the batch endpoint takes them."""
+        payload = dict(payload)
+        body = {"action": action, "uuids": payload.pop("tasks")}
+        if action == "edit":
+            body["data"] = payload
+        return body
+
+    def _post(self, payload, user=None, action="edit"):
         self.client.force_authenticate(user or self.member)
-        return self.client.post(url or self.url, payload, format="json")
+        return self.client.post(self.url, self._body(payload, action), format="json")
+
+    def _delete(self, payload, user=None):
+        return self._post(payload, user=user, action="delete")
 
     def _uuids(self, *tasks):
         return [str(t.uuid) for t in tasks]
@@ -61,7 +71,11 @@ class BulkEditTests(BulkTestsBase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, {"success": True, "updated": 2, "skipped": 0})
+        self.assertEqual([task["title"] for task in response.data], ["t1", "t2"])
+        self.assertEqual(
+            [[user["id"] for user in task["assignees"]] for task in response.data],
+            [sorted([self.admin.pk, self.member.pk]), [self.member.pk]],
+        )
         # Add semantics: the existing assignee stays.
         self.assertEqual(
             set(self.t1.assignees.values_list("pk", flat=True)),
@@ -77,11 +91,8 @@ class BulkEditTests(BulkTestsBase):
     def test_assigning_an_existing_assignee_is_a_no_op(self):
         self.t1.assignees.add(self.member)
 
-        response = self._post(
-            {"tasks": self._uuids(self.t1), "assign": [self.member.pk]}
-        )
+        self._post({"tasks": self._uuids(self.t1), "assign": [self.member.pk]})
 
-        self.assertEqual(response.data["updated"], 0)
         self.assertFalse(self._events(self.t1, TaskEvent.Type.ASSIGNED).exists())
 
     def test_bulk_assign_collapses_to_one_notification_per_user(self):
@@ -116,11 +127,10 @@ class BulkEditTests(BulkTestsBase):
         self.t1.assignees.add(self.member, self.admin)
         self.t2.assignees.add(self.admin)
 
-        response = self._post(
+        self._post(
             {"tasks": self._uuids(self.t1, self.t2), "unassign": [self.member.pk]}
         )
 
-        self.assertEqual(response.data["updated"], 1)
         self.assertEqual(list(self.t1.assignees.all()), [self.admin])
         self.assertEqual(list(self.t2.assignees.all()), [self.admin])
         self.assertTrue(self._events(self.t1, TaskEvent.Type.UPDATED).exists())
@@ -131,7 +141,7 @@ class BulkEditTests(BulkTestsBase):
         self.t1.labels.add(self.bug)
         self.t2.labels.add(feature)
 
-        response = self._post(
+        self._post(
             {
                 "tasks": self._uuids(self.t1, self.t2),
                 "add_labels": [str(feature.uuid)],
@@ -139,7 +149,6 @@ class BulkEditTests(BulkTestsBase):
             }
         )
 
-        self.assertEqual(response.data["updated"], 1)
         self.assertEqual(list(self.t1.labels.all()), [feature])
         self.assertEqual(list(self.t2.labels.all()), [feature])
         self.assertTrue(self._events(self.t1, TaskEvent.Type.UPDATED).exists())
@@ -150,7 +159,7 @@ class BulkEditTests(BulkTestsBase):
         self.t1.save(update_fields=["priority"])
         before = self.t1.updated_at
 
-        response = self._post(
+        self._post(
             {
                 "tasks": self._uuids(self.t1, self.t2),
                 "priority": "high",
@@ -158,7 +167,6 @@ class BulkEditTests(BulkTestsBase):
             }
         )
 
-        self.assertEqual(response.data["updated"], 2)
         for task in (self.t1, self.t2):
             task.refresh_from_db()
             self.assertEqual(task.priority, "high")
@@ -170,15 +178,12 @@ class BulkEditTests(BulkTestsBase):
         self.t1.due_date = datetime.date(2030, 1, 1)
         self.t1.save(update_fields=["due_date"])
 
-        response = self._post(
-            {"tasks": self._uuids(self.t1, self.t2), "due_date": None}
-        )
+        self._post({"tasks": self._uuids(self.t1, self.t2), "due_date": None})
 
-        self.assertEqual(response.data["updated"], 1)
         self.t1.refresh_from_db()
         self.assertIsNone(self.t1.due_date)
 
-    def test_due_date_before_a_planned_start_skips_that_task_only(self):
+    def test_a_due_date_before_one_planned_start_refuses_the_whole_lot(self):
         self.t1.start_date = datetime.date(2030, 6, 1)
         self.t1.save(update_fields=["start_date"])
 
@@ -190,17 +195,17 @@ class BulkEditTests(BulkTestsBase):
             }
         )
 
-        self.assertEqual(response.data, {"success": True, "updated": 1, "skipped": 1})
-        self.t1.refresh_from_db()
-        self.t2.refresh_from_db()
-        self.assertIsNone(self.t1.due_date)
-        # The refused task is left whole, not half-edited.
-        self.assertEqual(self.t1.priority, "medium")
-        self.assertEqual(self.t2.due_date, datetime.date(2030, 1, 15))
-        self.assertEqual(self.t2.priority, "urgent")
-        self.assertFalse(self._events(self.t1, TaskEvent.Type.UPDATED).exists())
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(response.data), ["uuids"])
+        (refusal,) = response.data["uuids"]
+        self.assertIn(str(self.t1.uuid), refusal)
+        for task in (self.t1, self.t2):
+            task.refresh_from_db()
+            self.assertIsNone(task.due_date)
+            self.assertEqual(task.priority, "medium")
+            self.assertFalse(self._events(task, TaskEvent.Type.UPDATED).exists())
 
-    def test_tasks_of_another_project_are_ignored(self):
+    def test_a_task_of_another_project_refuses_the_whole_lot(self):
         other = create_project(self.admin, name="Other")
         foreign = create_task(other, self.admin, title="foreign")
 
@@ -208,9 +213,25 @@ class BulkEditTests(BulkTestsBase):
             {"tasks": self._uuids(self.t1, foreign), "priority": "low"}
         )
 
-        self.assertEqual(response.data["updated"], 1)
-        foreign.refresh_from_db()
-        self.assertEqual(foreign.priority, "medium")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(str(foreign.uuid), response.data["uuids"][0])
+        for task in (self.t1, foreign):
+            task.refresh_from_db()
+            self.assertEqual(task.priority, "medium")
+
+    def test_a_task_out_of_reach_answers_like_one_that_does_not_exist(self):
+        other = create_project(self.admin, name="Other")
+        foreign = create_task(other, self.admin, title="foreign")
+        absent = uuid_module.uuid4()
+
+        hidden = self._post({"tasks": [str(foreign.uuid)], "priority": "low"})
+        unknown = self._post({"tasks": [str(absent)], "priority": "low"})
+
+        self.assertEqual(hidden.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            hidden.content.replace(str(foreign.uuid).encode(), b"<uuid>"),
+            unknown.content.replace(str(absent).encode(), b"<uuid>"),
+        )
 
     def test_no_operation_is_400(self):
         response = self._post({"tasks": self._uuids(self.t1)})
@@ -292,9 +313,8 @@ class BulkEditTests(BulkTestsBase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_anonymous_is_rejected(self):
-        response = self.client.post(
-            self.url, {"tasks": self._uuids(self.t1), "priority": "low"}, format="json"
-        )
+        payload = {"tasks": self._uuids(self.t1), "priority": "low"}
+        response = self.client.post(self.url, self._body(payload), format="json")
         self.assertIn(
             response.status_code,
             (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
@@ -303,12 +323,9 @@ class BulkEditTests(BulkTestsBase):
 
 class BulkDeleteTests(BulkTestsBase):
     def test_deletes_the_selection_with_one_event_each(self):
-        response = self._post(
-            {"tasks": self._uuids(self.t1, self.t3)}, url=self.delete_url
-        )
+        response = self._delete({"tasks": self._uuids(self.t1, self.t3)})
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, {"success": True, "deleted": 2})
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(
             list(self.project.tasks.values_list("title", flat=True)), ["t2"]
         )
@@ -320,36 +337,42 @@ class BulkDeleteTests(BulkTestsBase):
         )
         self.assertTrue(all(ev.actor == self.member for ev in deleted))
 
-    def test_unknown_and_foreign_tasks_are_skipped(self):
+    def test_an_unknown_or_foreign_task_refuses_the_whole_lot(self):
         other = create_project(self.admin, name="Other")
         foreign = create_task(other, self.admin, title="foreign")
+        absent = uuid_module.uuid4()
 
-        response = self._post(
-            {"tasks": self._uuids(self.t1, foreign) + [str(uuid_module.uuid4())]},
-            url=self.delete_url,
+        response = self._delete(
+            {"tasks": [*self._uuids(self.t1, foreign), str(absent)]}
         )
 
-        self.assertEqual(response.data["deleted"], 1)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(len(response.data["uuids"]), 2)
+        self.assertTrue(self.project.tasks.filter(pk=self.t1.pk).exists())
         self.assertTrue(other.tasks.filter(pk=foreign.pk).exists())
 
+    def test_deleting_the_same_selection_twice_refuses_the_second_time(self):
+        """A delete replayed after it landed names rows that are gone: the
+        client drops them from its selection rather than retrying."""
+        self._delete({"tasks": self._uuids(self.t1)})
+        again = self._delete({"tasks": self._uuids(self.t1)})
+        self.assertEqual(again.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_oversized_list_is_400(self):
-        response = self._post(
-            {"tasks": [str(uuid_module.uuid4()) for _ in range(1001)]},
-            url=self.delete_url,
+        response = self._delete(
+            {"tasks": [str(uuid_module.uuid4()) for _ in range(1001)]}
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_archived_project_is_403(self):
         self.project.archived_at = timezone.now()
         self.project.save(update_fields=["archived_at"])
-        response = self._post({"tasks": self._uuids(self.t1)}, url=self.delete_url)
+        response = self._delete({"tasks": self._uuids(self.t1)})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(self.project.tasks.filter(pk=self.t1.pk).exists())
 
     def test_outsider_gets_404(self):
-        response = self._post(
-            {"tasks": self._uuids(self.t1)}, user=self.outsider, url=self.delete_url
-        )
+        response = self._delete({"tasks": self._uuids(self.t1)}, user=self.outsider)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(self.project.tasks.filter(pk=self.t1.pk).exists())
 
@@ -358,7 +381,7 @@ class BulkActionFlagTests(BulkTestsBase):
     def test_selection_actions_are_flagged_bulk(self):
         self.client.force_authenticate(self.member)
         response = self.client.post(
-            "/api/v1/projects/actions",
+            "/api/v1/projects/available-actions",
             {"uuids": self._uuids(self.t1)},
             format="json",
         )

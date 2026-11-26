@@ -103,7 +103,7 @@ class RegistryGatesTheWritePathTests(ProjectTestMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.task = create_task(self.project, self.admin, title="t")
-        self.task_url = f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}"
+        self.task_url = f"/api/v1/projects/tasks/{self.task.uuid}"
 
     def _withdrawn(self, action_id, target):
         from unittest.mock import patch

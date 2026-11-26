@@ -55,7 +55,7 @@ function panelDeleteBoard(calls) {
     replace: () => {}, returnTo: () => {},
   };
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -113,7 +113,7 @@ test('_closeDrawerOnMobile unchecks drawer when on mobile', () => {
       return null;
     },
   };
-  const board = ctx.projectBoard({ apiBase: '/api', writable: true });
+  const board = ctx.projectBoard({ apiBase: '/api', taskApi: '/api/tasks', writable: true });
   board.isMobile = () => true;
   board._closeDrawerOnMobile();
   assert.equal(checkboxState.checked, false);
@@ -129,7 +129,7 @@ test('_closeDrawerOnMobile does nothing when not on mobile', () => {
       return null;
     },
   };
-  const board = ctx.projectBoard({ apiBase: '/api', writable: true });
+  const board = ctx.projectBoard({ apiBase: '/api', taskApi: '/api/tasks', writable: true });
   board.isMobile = () => false;
   board._closeDrawerOnMobile();
   assert.equal(checkboxState.checked, true);
@@ -541,7 +541,7 @@ test('moveTasks posts to the bulk endpoint and prunes the selection', async () =
   board.selected = ['u1', 'u2', 'u3'];
   await board.moveTasks(['u1', 'u3'], 's-active');
   assert.deepStrictEqual(Array.from(calls), [
-    'POST /api/tasks/move {"status":"s-active","tasks":["u1","u3"]}',
+    'POST /api/tasks/batch {"action":"move","uuids":["u1","u3"],"data":{"status":"s-active"}}',
     'refresh',
   ]);
   assert.deepStrictEqual(Array.from(board.selected), ['u2']);
@@ -576,7 +576,7 @@ test('sendToBoard moves the single task to the first active status', async () =>
   ];
   await board.sendToBoard('u1');
   assert.deepStrictEqual(Array.from(calls), [
-    'POST /api/tasks/move {"status":"s-todo","tasks":["u1"]}',
+    'POST /api/tasks/batch {"action":"move","uuids":["u1"],"data":{"status":"s-todo"}}',
   ]);
 });
 
@@ -595,7 +595,7 @@ test('sendSelected defaults to the first active status', async () => {
   board.selected = ['u1', 'u2'];
   await board.sendSelected();
   assert.deepStrictEqual(Array.from(calls), [
-    'POST /api/tasks/move {"status":"s-todo","tasks":["u1","u2"]}',
+    'POST /api/tasks/batch {"action":"move","uuids":["u1","u2"],"data":{"status":"s-todo"}}',
   ]);
   assert.deepStrictEqual(Array.from(board.selected), []);
 });
@@ -611,7 +611,7 @@ test('sendSelected honours an explicit target status', async () => {
   board.selected = ['u1'];
   await board.sendSelected('s-done');
   assert.deepStrictEqual(Array.from(calls), [
-    'POST /api/tasks/move {"status":"s-done","tasks":["u1"]}',
+    'POST /api/tasks/batch {"action":"move","uuids":["u1"],"data":{"status":"s-done"}}',
   ]);
 });
 
@@ -840,7 +840,7 @@ test('openTask pushes the task URL and swaps the panel', async () => {
     returnTo: (url) => calls.push('returnTo ' + url),
   };
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -864,7 +864,7 @@ test('closePanel clears state and strips the param', () => {
     returnTo: (url) => calls.push('returnTo ' + url),
   };
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -883,7 +883,7 @@ function panelBoard() {
   };
   ctx.navHistory = { push: () => {}, replace: () => {}, returnTo: () => {} };
   return ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -1305,7 +1305,7 @@ test('refresh targets the all-tasks partial when viewing tasks', () => {
   };
   const calls = [];
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -1322,7 +1322,7 @@ test('onRestore recognizes the tasks view', () => {
     href: 'http://x.test/projects/p/tasks',
   };
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -1338,7 +1338,7 @@ test('refresh targets the analytics partial when viewing analytics', () => {
   };
   const calls = [];
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -1355,7 +1355,7 @@ test('onRestore recognizes the analytics view', () => {
     href: 'http://x.test/projects/p/analytics',
   };
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -1370,7 +1370,7 @@ test('onRestore recognizes the timeline view', () => {
     href: 'http://x.test/projects/p/timeline',
   };
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -1386,7 +1386,7 @@ test('refresh targets the timeline partial with scale and group when viewing tim
   };
   const calls = [];
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -1402,7 +1402,7 @@ test('refresh targets the timeline partial with scale and group when viewing tim
 function keydownBoard() {
   ctx.sidebarPreference = sidebarPreferenceStub();
   return ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -1574,7 +1574,7 @@ function sprintBoard(calls, islandData) {
         : null,
   };
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -1593,7 +1593,7 @@ test('sendSelectedToSprint posts the selection and clears it', async () => {
   await board.sendSelectedToSprint('s1');
   assert.equal(board.selected.length, 0);
   assert.deepStrictEqual(Array.from(calls), [
-    'POST /api/tasks/assign-sprint {"sprint":"s1","tasks":["a","b"]}',
+    'POST /api/tasks/batch {"action":"set_sprint","uuids":["a","b"],"data":{"sprint":"s1"}}',
     'refresh',
   ]);
 });
@@ -1608,7 +1608,7 @@ test('sendSelectedToSprint(null) clears the sprint assignment', async () => {
   board.selected = ['a'];
   await board.sendSelectedToSprint(null);
   assert.deepStrictEqual(Array.from(calls), [
-    'POST /api/tasks/assign-sprint {"sprint":null,"tasks":["a"]}',
+    'POST /api/tasks/batch {"action":"set_sprint","uuids":["a"],"data":{"sprint":null}}',
     'refresh',
   ]);
 });
@@ -1770,7 +1770,7 @@ test('bulkAssign posts an add or a remove set for the whole selection', async ()
   const calls = [];
   ctx.fetch = async (url, opts) => {
     calls.push([opts.method + ' ' + url, JSON.parse(opts.body)]);
-    return { ok: true, json: async () => ({ success: true, updated: 2, skipped: 0 }) };
+    return { ok: true, json: async () => [] };
   };
   const board = bulkBoard(calls, ['assign', 'set_labels', 'set_priority', 'set_due']);
   await board.bulkAssign('7', true);
@@ -1782,14 +1782,16 @@ test('bulkAssign posts an add or a remove set for the whole selection', async ()
   const requests = calls.filter((c) => Array.isArray(c));
   assert.deepStrictEqual(
     requests.map((c) => c[0]),
-    Array(6).fill('POST /api/tasks/bulk')
+    Array(6).fill('POST /api/tasks/batch')
   );
-  assert.deepStrictEqual({ ...requests[0][1] }, { tasks: ['u1', 'u2'], assign: ['7'] });
-  assert.deepStrictEqual({ ...requests[1][1] }, { tasks: ['u1', 'u2'], unassign: ['7'] });
-  assert.deepStrictEqual({ ...requests[2][1] }, { tasks: ['u1', 'u2'], add_labels: ['l1'] });
-  assert.deepStrictEqual({ ...requests[3][1] }, { tasks: ['u1', 'u2'], remove_labels: ['l1'] });
-  assert.deepStrictEqual({ ...requests[4][1] }, { tasks: ['u1', 'u2'], priority: 'high' });
-  assert.deepStrictEqual({ ...requests[5][1] }, { tasks: ['u1', 'u2'], due_date: null });
+  const edit = (data) => ({ action: 'edit', uuids: ['u1', 'u2'], data });
+  const sent = (i) => JSON.parse(JSON.stringify(requests[i][1]));
+  assert.deepStrictEqual(sent(0), edit({ assign: ['7'] }));
+  assert.deepStrictEqual(sent(1), edit({ unassign: ['7'] }));
+  assert.deepStrictEqual(sent(2), edit({ add_labels: ['l1'] }));
+  assert.deepStrictEqual(sent(3), edit({ remove_labels: ['l1'] }));
+  assert.deepStrictEqual(sent(4), edit({ priority: 'high' }));
+  assert.deepStrictEqual(sent(5), edit({ due_date: null }));
   // The selection survives an edit so the next one applies to the same tasks.
   assert.deepStrictEqual(Array.from(board.selected), ['u1', 'u2']);
   assert.equal(calls.filter((c) => c === 'refresh').length, 6);
@@ -1806,17 +1808,35 @@ test('bulkEdit is gated on the fetched action list', async () => {
   assert.deepStrictEqual(Array.from(calls), []);
 });
 
-test('bulkEdit warns about tasks skipped for a start/due conflict', async () => {
+test('bulkEdit says how many tasks refused a due date, and that nothing changed', async () => {
   const warnings = [];
-  ctx.AppAlert = { warning: (m) => warnings.push(m), error: () => {} };
+  const errors = [];
+  ctx.AppAlert = { warning: (m) => warnings.push(m), error: (m) => errors.push(m) };
   ctx.fetch = async () => ({
-    ok: true,
-    json: async () => ({ success: true, updated: 1, skipped: 1 }),
+    ok: false,
+    status: 400,
+    json: async () => ({ uuids: ['u2 starts after this due date.'] }),
   });
   const board = bulkBoard([], ['set_due']);
   await board.bulkDueDate('2030-01-01');
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /1 task starts after that due date/);
+  assert.match(warnings[0], /1 task starts after that due date: nothing was changed/);
+  assert.equal(errors.length, 0);
+});
+
+test('bulkEdit reports any other refusal as a failure', async () => {
+  const warnings = [];
+  const errors = [];
+  ctx.AppAlert = { warning: (m) => warnings.push(m), error: (m) => errors.push(m) };
+  ctx.fetch = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({ uuids: ['Invalid pk "u2" - object does not exist.'] }),
+  });
+  const board = bulkBoard([], ['assign']);
+  await board.bulkAssign('7', true);
+  assert.equal(warnings.length, 0);
+  assert.equal(errors.length, 1);
 });
 
 test('bulkDeleteSelected aborts without a request when declined', async () => {
@@ -1853,8 +1873,8 @@ test('bulkDeleteSelected deletes, prunes the selection and closes a deleted pane
   board.panelTaskUuid = 'u2';
   await board.bulkDeleteSelected();
   assert.equal(calls[0], 'confirm:Delete 2 tasks');
-  assert.equal(calls[1][0], 'POST /api/tasks/bulk-delete');
-  assert.deepStrictEqual({ ...calls[1][1] }, { tasks: ['u1', 'u2'] });
+  assert.equal(calls[1][0], 'POST /api/tasks/batch');
+  assert.deepStrictEqual({ ...calls[1][1] }, { action: 'delete', uuids: ['u1', 'u2'] });
   assert.equal(calls[2], 'refresh');
   assert.deepStrictEqual(Array.from(board.selected), []);
   assert.equal(board.panelTaskUuid, null);
@@ -1876,7 +1896,7 @@ function savingBoard(calls) {
   ctx.getCSRFToken = () => 'token';
   ctx.sidebarPreference = sidebarPreferenceStub();
   const board = ctx.projectBoard({
-    apiBase: '/api',
+    apiBase: '/api', taskApi: '/api/tasks',
     projectBase: '/projects/p',
     writable: true,
   });
@@ -2150,7 +2170,7 @@ test('opening the sprint dialog asks its list again', () => {
   ctx.CustomEvent = class { constructor(type) { this.type = type; } };
   ctx.navHistory = { push: () => {}, replace: () => {}, returnTo: () => {} };
   ctx.location = { href: 'http://x.test/projects/p/board' };
-  const board = ctx.projectBoard({ apiBase: '/api', projectBase: '/projects/p', writable: true });
+  const board = ctx.projectBoard({ apiBase: '/api', taskApi: '/api/tasks', projectBase: '/projects/p', writable: true });
 
   board.openSprints({ add: true });
   assert.deepStrictEqual(events, ['sprints-opened', 'sprint-add']);

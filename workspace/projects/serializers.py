@@ -8,7 +8,13 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from workspace.common.serializers import (
+    ApiModelSerializer,
+    SummaryField,
+    UuidListSerializer,
+)
 from workspace.common.services.mentions import render_comment_body
+from workspace.users.serializers import UserSummarySerializer
 
 from .models import (
     Epic,
@@ -317,27 +323,90 @@ class TaskStatusSerializer(serializers.ModelSerializer):
         return _validate_hex_color(value)
 
 
-class TaskSerializer(serializers.ModelSerializer):
-    status = serializers.PrimaryKeyRelatedField(
-        queryset=TaskStatus.objects.none(), required=False
+def _of_the_project(queryset, context):
+    return queryset.filter(project=context["project"])
+
+
+def _assignable(queryset, context):
+    return project_users_qs(context["project"])
+
+
+def _open_sprints(queryset, context):
+    # Closed sprints are history: tasks can only join open ones.
+    return _of_the_project(queryset, context).exclude(state=Sprint.State.CLOSED)
+
+
+class ProjectSummarySerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    name = serializers.CharField()
+    key = serializers.CharField()
+
+
+class TaskStatusSummarySerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    name = serializers.CharField()
+    category = serializers.ChoiceField(choices=TaskStatus.Category.choices)
+    color = serializers.CharField(allow_blank=True)
+
+
+class LabelSummarySerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    name = serializers.CharField()
+    color = serializers.CharField(allow_blank=True)
+
+
+class EpicSummarySerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    name = serializers.CharField()
+    color = serializers.CharField(allow_blank=True)
+
+
+class SprintSummarySerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    name = serializers.CharField()
+    state = serializers.ChoiceField(choices=Sprint.State.choices)
+
+
+class TaskSerializer(ApiModelSerializer):
+    project = ProjectSummarySerializer(read_only=True)
+    status = SummaryField(
+        TaskStatusSummarySerializer,
+        queryset=TaskStatus.objects.all(),
+        narrow=_of_the_project,
+        required=False,
     )
-    status_category = serializers.CharField(source="status.category", read_only=True)
-    # Narrowed to the project's users in __init__: anyone else is refused
-    # with the message an unknown id gets, so the field names nobody.
-    assignees = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.none(), many=True, required=False
+    # Anyone the project does not reach is refused with the message an
+    # unknown id gets, so the field names nobody.
+    assignees = SummaryField(
+        UserSummarySerializer,
+        queryset=User.objects.all(),
+        narrow=_assignable,
+        many=True,
+        required=False,
     )
-    labels = serializers.PrimaryKeyRelatedField(
-        queryset=Label.objects.none(), many=True, required=False
+    labels = SummaryField(
+        LabelSummarySerializer,
+        queryset=Label.objects.all(),
+        narrow=_of_the_project,
+        many=True,
+        required=False,
     )
-    epic = serializers.PrimaryKeyRelatedField(
-        queryset=Epic.objects.none(), required=False, allow_null=True
+    epic = SummaryField(
+        EpicSummarySerializer,
+        queryset=Epic.objects.all(),
+        narrow=_of_the_project,
+        required=False,
+        allow_null=True,
     )
-    sprint = serializers.PrimaryKeyRelatedField(
-        queryset=Sprint.objects.none(), required=False, allow_null=True
+    sprint = SummaryField(
+        SprintSummarySerializer,
+        queryset=Sprint.objects.all(),
+        narrow=_open_sprints,
+        required=False,
+        allow_null=True,
     )
-    created_by = serializers.PrimaryKeyRelatedField(read_only=True)
-    reference = serializers.SerializerMethodField()
+    created_by = UserSummarySerializer(read_only=True, allow_null=True)
+    reference = serializers.CharField(read_only=True)
     estimate = serializers.DecimalField(
         max_digits=6, decimal_places=1, required=False, allow_null=True, min_value=0
     )
@@ -346,10 +415,10 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             "uuid",
+            "project",
             "title",
             "description",
             "status",
-            "status_category",
             "priority",
             "due_date",
             "start_date",
@@ -373,24 +442,6 @@ class TaskSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-
-    def get_reference(self, obj) -> str:
-        # Context project avoids an N+1; the fallback costs a query per task.
-        project = self.context.get("project") or obj.project
-        return f"{project.key}-{obj.number}"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        project = self.context.get("project")
-        if project is not None:
-            self.fields["status"].queryset = project.statuses.all()
-            self.fields["labels"].child_relation.queryset = project.labels.all()
-            self.fields["assignees"].child_relation.queryset = project_users_qs(project)
-            self.fields["epic"].queryset = project.epics.all()
-            # Closed sprints are history: tasks can only join open ones.
-            self.fields["sprint"].queryset = project.sprints.exclude(
-                state=Sprint.State.CLOSED
-            )
 
     def validate(self, attrs):
         start = attrs.get(
@@ -478,58 +529,51 @@ def _parse_uuid_list(value, field_name):
     return parsed
 
 
-class TaskReorderSerializer(serializers.Serializer):
-    status = serializers.UUIDField()
-    order = serializers.ListField()
+class _InProject(serializers.PrimaryKeyRelatedField):
+    """A row of the project at hand, named by its identifier."""
 
-    def validate_order(self, value):
-        return _parse_uuid_list(value, "order")
-
-
-class TaskMoveSerializer(serializers.Serializer):
-    status = serializers.UUIDField()
-    # max_length caps the IN clause of the bulk move: past a few thousand
-    # parameters SQLite (a production target) errors out with "too many
-    # SQL variables" and the request would 500 instead of 400.
-    tasks = serializers.ListField(allow_empty=False, max_length=1000)
-
-    def validate_tasks(self, value):
-        return _parse_uuid_list(value, "tasks")
+    def get_queryset(self):
+        return _of_the_project(super().get_queryset(), self.context)
 
 
-class TaskSprintSerializer(serializers.Serializer):
-    """Bulk sprint assignment payload; null sprint returns tasks to the pool."""
+class _Assignable(serializers.PrimaryKeyRelatedField):
+    """A user the project at hand reaches; anyone else answers like an
+    unknown id."""
 
-    sprint = serializers.UUIDField(allow_null=True)
-    # Same cap rationale as TaskMoveSerializer.
-    tasks = serializers.ListField(allow_empty=False, max_length=1000)
-
-    def validate_tasks(self, value):
-        return _parse_uuid_list(value, "tasks")
+    def get_queryset(self):
+        return _assignable(super().get_queryset(), self.context)
 
 
-class TaskBulkEditSerializer(serializers.Serializer):
-    """Bulk field edit payload: the selection plus at least one operation.
+class TaskReorderSerializer(UuidListSerializer):
+    """The tasks of one column, in the order they should take."""
+
+    status = _InProject(queryset=TaskStatus.objects.all())
+
+
+class TaskBatchMoveSerializer(serializers.Serializer):
+    status = _InProject(queryset=TaskStatus.objects.all())
+
+
+class TaskBatchSprintSerializer(serializers.Serializer):
+    """A null sprint returns the tasks to the pool."""
+
+    sprint = _InProject(queryset=Sprint.objects.all(), allow_null=True)
+
+
+class TaskBatchEditSerializer(serializers.Serializer):
+    """The changes a lot applies to every task it names: at least one.
 
     Assignees and labels are add/remove sets rather than replacement lists:
     the selection's tasks carry different values, and "put Alice on these"
     must not strip whoever else was on them.
     """
 
-    # Same cap rationale as TaskMoveSerializer.
-    tasks = serializers.ListField(allow_empty=False, max_length=1000)
-    assign = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.none(), many=True, required=False
-    )
+    assign = _Assignable(queryset=User.objects.all(), many=True, required=False)
     unassign = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), many=True, required=False
     )
-    add_labels = serializers.PrimaryKeyRelatedField(
-        queryset=Label.objects.none(), many=True, required=False
-    )
-    remove_labels = serializers.PrimaryKeyRelatedField(
-        queryset=Label.objects.none(), many=True, required=False
-    )
+    add_labels = _InProject(queryset=Label.objects.all(), many=True, required=False)
+    remove_labels = _InProject(queryset=Label.objects.all(), many=True, required=False)
     priority = serializers.ChoiceField(choices=Task.Priority.choices, required=False)
     due_date = serializers.DateField(required=False, allow_null=True)
 
@@ -541,17 +585,6 @@ class TaskBulkEditSerializer(serializers.Serializer):
         "priority",
         "due_date",
     )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        project = self.context.get("project")
-        if project is not None:
-            for field in ("add_labels", "remove_labels"):
-                self.fields[field].child_relation.queryset = project.labels.all()
-            self.fields["assign"].child_relation.queryset = project_users_qs(project)
-
-    def validate_tasks(self, value):
-        return _parse_uuid_list(value, "tasks")
 
     def validate(self, attrs):
         if not any(field in attrs for field in self.OPERATIONS):
@@ -575,14 +608,6 @@ class TaskBulkEditSerializer(serializers.Serializer):
                 {"remove_labels": _("A label cannot be both added and removed.")}
             )
         return attrs
-
-
-class TaskBulkDeleteSerializer(serializers.Serializer):
-    # Same cap rationale as TaskMoveSerializer.
-    tasks = serializers.ListField(allow_empty=False, max_length=1000)
-
-    def validate_tasks(self, value):
-        return _parse_uuid_list(value, "tasks")
 
 
 class ProjectConvertSerializer(serializers.Serializer):

@@ -28,8 +28,15 @@ class TaskListCreateTests(TaskApiMixin, APITestCase):
         self.client.force_authenticate(self.member)
         response = self.client.post(self.tasks_url, {"title": "Ship it"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["status"], self.backlog.uuid)
-        self.assertEqual(response.data["status_category"], "backlog")
+        self.assertEqual(
+            response.data["status"],
+            {
+                "uuid": str(self.backlog.uuid),
+                "name": self.backlog.name,
+                "category": "backlog",
+                "color": self.backlog.color,
+            },
+        )
 
     def test_create_with_assignee_and_label(self):
         label = self.project.labels.create(name="bug", color="#ff0000")
@@ -198,10 +205,9 @@ class TaskListFilteringTests(TaskApiMixin, APITestCase):
         self.assertEqual(
             sorted(self._titles({"completed": "false"})), ["alpha", "beta"]
         )
-        # is_truthy is permissive: an unknown value reads as false, not 400.
-        self.assertEqual(
-            sorted(self._titles({"completed": "maybe"})), ["alpha", "beta"]
-        )
+        response = self.client.get(self.tasks_url, {"completed": "maybe"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(response.data), ["completed"])
 
     def test_filters_compose(self):
         titles = self._titles({"assignee": "none", "priority": "low"})
@@ -274,12 +280,29 @@ class TaskListPaginationTests(TaskApiMixin, APITestCase):
             create_task(self.project, self.admin, title=f"task {i}")
         self.client.force_authenticate(self.member)
 
-    def test_without_limit_the_full_array_is_returned(self):
+    def test_without_limit_a_bare_array_page_is_returned(self):
         response = self.client.get(self.tasks_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsInstance(response.data, list)
         self.assertEqual(len(response.data), 5)
-        self.assertNotIn("X-Has-More", response.headers)
+        self.assertEqual(response.headers["X-Has-More"], "false")
+
+    def test_without_limit_the_page_holds_fifty(self):
+        backlog = self.project.statuses.get(name="Backlog")
+        Task.objects.bulk_create(
+            Task(
+                project=self.project,
+                status=backlog,
+                title=f"bulk {i}",
+                number=1000 + i,
+                position=100 + i,
+                created_by=self.admin,
+            )
+            for i in range(50)
+        )
+        response = self.client.get(self.tasks_url)
+        self.assertEqual(len(response.data), 50)
+        self.assertEqual(response.headers["X-Has-More"], "true")
 
     def test_limit_returns_a_bare_array_page_with_has_more_header(self):
         response = self.client.get(self.tasks_url, {"limit": "2"})
@@ -309,7 +332,7 @@ class TaskDetailTests(TaskApiMixin, APITestCase):
     def setUp(self):
         super().setUp()
         self.task = create_task(self.project, self.admin, title="t")
-        self.detail_url = f"{self.tasks_url}/{self.task.uuid}"
+        self.detail_url = f"/api/v1/projects/tasks/{self.task.uuid}"
 
     def test_member_updates_fields(self):
         self.client.force_authenticate(self.member)
@@ -393,7 +416,7 @@ class TaskPatchCompletionTests(TaskApiMixin, APITestCase):
             self.project, name="Shipped", category=TaskStatus.Category.DONE
         )
         self.task = create_task(self.project, self.admin, title="t", status=self.todo)
-        self.detail_url = f"{self.tasks_url}/{self.task.uuid}"
+        self.detail_url = f"/api/v1/projects/tasks/{self.task.uuid}"
         self.client.force_authenticate(self.member)
 
     def _while_the_request_runs(self, concurrent_write):
@@ -406,7 +429,7 @@ class TaskPatchCompletionTests(TaskApiMixin, APITestCase):
             return has_field_updates(task, validated_data)
 
         return mock.patch(
-            "workspace.projects.views.viewsets.has_field_updates",
+            "workspace.projects.views.tasks.has_field_updates",
             side_effect=interleaved,
         )
 
@@ -434,14 +457,16 @@ class TaskPatchCompletionTests(TaskApiMixin, APITestCase):
             Task.objects.filter(pk=self.task.pk).delete()
 
         with mock.patch(
-            "workspace.projects.views.viewsets.record_task_event",
+            "workspace.projects.views.tasks.record_task_event",
             side_effect=deleted_meanwhile,
         ):
             response = self.client.patch(
                 self.detail_url, {"title": "renamed"}, format="json"
             )
         missing = self.client.patch(
-            f"{self.tasks_url}/{uuid.uuid4()}", {"title": "renamed"}, format="json"
+            f"/api/v1/projects/tasks/{uuid.uuid4()}",
+            {"title": "renamed"},
+            format="json",
         )
         self.assertEqual(
             (response.status_code, response.content),
@@ -456,11 +481,11 @@ class TaskPatchCompletionTests(TaskApiMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             (
-                response.data["status"],
-                response.data["status_category"],
+                response.data["status"]["uuid"],
+                response.data["status"]["category"],
                 response.data["completed_at"],
             ),
-            (self.shipped.pk, TaskStatus.Category.DONE, "2026-01-05T09:00:00Z"),
+            (str(self.shipped.pk), TaskStatus.Category.DONE, "2026-01-05T09:00:00Z"),
         )
 
     def test_asking_for_the_loaded_status_undoes_a_move_landed_meanwhile(self):
@@ -471,7 +496,7 @@ class TaskPatchCompletionTests(TaskApiMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         stored = Task.objects.get(pk=self.task.pk)
         self.assertEqual((stored.status, stored.completed_at), (self.todo, None))
-        self.assertEqual(response.data["status"], self.todo.pk)
+        self.assertEqual(response.data["status"]["uuid"], str(self.todo.pk))
 
     def test_moving_into_done_keeps_a_stamp_landed_meanwhile(self):
         with self._while_the_request_runs(self._complete_elsewhere):
@@ -510,7 +535,7 @@ class TaskUpdateEventTests(TaskApiMixin, APITestCase):
         self.task = create_task(
             self.project, self.admin, title="Original", status=self.todo
         )
-        self.task_url = f"{self.tasks_url}/{self.task.uuid}"
+        self.task_url = f"/api/v1/projects/tasks/{self.task.uuid}"
 
     def _updated_events(self):
         return TaskEvent.objects.filter(task=self.task, type=TaskEvent.Type.UPDATED)
@@ -598,7 +623,7 @@ class TaskEstimateApiTests(TaskApiMixin, APITestCase):
         )
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"{self.tasks_url}/{task.uuid}", {"estimate": "5"}, format="json"
+            f"/api/v1/projects/tasks/{task.uuid}", {"estimate": "5"}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         event = task.events.get(type=TaskEvent.Type.ESTIMATED)
@@ -613,7 +638,7 @@ class TaskEstimateApiTests(TaskApiMixin, APITestCase):
         )
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"{self.tasks_url}/{task.uuid}", {"estimate": "3"}, format="json"
+            f"/api/v1/projects/tasks/{task.uuid}", {"estimate": "3"}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(task.events.filter(type=TaskEvent.Type.ESTIMATED).exists())
@@ -624,7 +649,7 @@ class TaskEstimateApiTests(TaskApiMixin, APITestCase):
         )
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"{self.tasks_url}/{task.uuid}", {"estimate": None}, format="json"
+            f"/api/v1/projects/tasks/{task.uuid}", {"estimate": None}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         task.refresh_from_db()
@@ -638,7 +663,7 @@ class TaskEstimateApiTests(TaskApiMixin, APITestCase):
         self.client.force_authenticate(self.member)
         for bad in ("-1", "abc", "3.55", "123456"):
             response = self.client.patch(
-                f"{self.tasks_url}/{task.uuid}", {"estimate": bad}, format="json"
+                f"/api/v1/projects/tasks/{task.uuid}", {"estimate": bad}, format="json"
             )
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad)
 

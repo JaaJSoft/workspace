@@ -286,9 +286,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.admin)
 
         with self.captureOnCommitCallbacks(execute=True):
-            resp = self.client.delete(
-                f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}"
-            )
+            resp = self.client.delete(f"/api/v1/projects/tasks/{self.task.uuid}")
 
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(default_storage.exists(blob_path))

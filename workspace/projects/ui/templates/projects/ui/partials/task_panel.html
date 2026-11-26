@@ -40,7 +40,7 @@
     <div
       class="dropdown dropdown-end ml-auto"
       x-data="taskWatch({
-      url: '{% url 'project-task-watch' project_uuid=project.uuid task_uuid=panel_task.uuid %}',
+      url: '{% url 'project-task-watch' uuid=panel_task.uuid %}',
       state: '{{ panel_watch_state|escapejs }}',
       userId: '{{ request.user.pk|escapejs }}',
       username: '{{ request.user.username|escapejs }}',
@@ -641,7 +641,7 @@
                         <span class="text-sm min-w-0 truncate" x-text="result.title"></span>
                         <span
                           class="ml-auto text-xs text-base-content/40 truncate max-w-24"
-                          x-text="result.project_name"
+                          x-text="result.project.name"
                         ></span>
                       </button>
                     </li>

@@ -42,6 +42,7 @@ class NotesConfig(AppConfig):
                 slug="notes",
                 module_slug="notes",
                 search_fn=search_notes,
+                scoped=True,
                 refines=("files",),
             )
         )

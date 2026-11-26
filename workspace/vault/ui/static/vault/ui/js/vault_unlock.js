@@ -27,7 +27,7 @@ window.vaultUnlockMixin = (function () {
     throttled: gettext('Too many unlock attempts from here. Nothing is wrong with your password - wait a minute and try again.'),
     'recovery-key': gettext('Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.'),
     unsupported: gettext('This vault was saved by a newer version of the app. Reload the page to update it. If this persists after reloading, contact your administrator.'),
-    'password-or-recovery-key': gettext('That did not open this account. Either the master password is wrong, or the recovery key remembered on this device belongs to another account - both fail the same way. Nothing was sent to the server.'),
+    'password-or-recovery-key': gettext('That did not open this account. Either the master password is wrong, or the recovery key remembered on this device is not the right one: it was replaced since, or it belongs to another account. Both fail the same way. Nothing was sent to the server.'),
   };
 
   return function vaultUnlockMixin() {
@@ -56,15 +56,21 @@ window.vaultUnlockMixin = (function () {
       // property, and onTick is what keeps it current.
       secondsLeft: 0,
 
-      initUnlock: function () {
+      // What this device remembers, as the gate should show it. Read at
+      // mount, and again when the key was replaced under an open session:
+      // the gate that follows must ask for the new key, or use the one the
+      // device was just given, never the one it held at page load.
+      readRememberedSecret: function () {
         const remembered = window.vaultSession.rememberedSecret();
-        if (remembered) {
-          this.secretText = remembered;
-          this.remember = true;
-        }
+        this.secretText = remembered || '';
+        this.remember = !!remembered;
         this.secretRequired = !remembered;
         this.secretRemembered = !!remembered;
         this.secretPanelOpen = !remembered;
+      },
+
+      initUnlock: function () {
+        this.readRememberedSecret();
         const self = this;
         window.vaultSession.onLock(function () {
           self.state = 'locked';

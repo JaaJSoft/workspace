@@ -194,6 +194,16 @@ window.vaultSession = (function () {
         // Nothing readable was stored either, so there is nothing to undo.
       }
     },
+    // For a key that changed outside an unlock: the one a replacement just
+    // put in place. A storage that refuses leaves the device asking for the
+    // key, which its owner has just saved.
+    rememberDevice: function (secretText) {
+      try {
+        localStorage.setItem(VAULT_SECRET_STORAGE_KEY, secretText);
+      } catch (err) {
+        // Best-effort only, as in unlock().
+      }
+    },
     onLock: function (callback) { lockCallbacks.push(callback); },
     // Fired from tick(), once a second, whether or not that tick locked the
     // session - the countdown display has no other reactive hook into this

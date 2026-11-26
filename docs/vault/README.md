@@ -37,7 +37,9 @@ off on a shared computer. The setup ends by creating a first vault called
   page is left or reloaded. The countdown sits beside *Lock* in the sidebar.
   Locking empties the screen and drops the keys from memory.
 - A remembered recovery key can be replaced or forgotten from the unlock
-  screen, or forgotten from Preferences (*Forget the key*).
+  screen, or forgotten from Preferences (*Forget the key*). That only changes
+  what the device remembers; the key itself is changed from the sidebar (see
+  *Replacing the recovery key*).
 - The command palette (Ctrl+K) offers *Vault*, *Lock vault* and *New entry*.
 
 ## Vaults
@@ -97,6 +99,24 @@ recovery key, unless this device remembers it) and a new one under the same
 rules as the setup. The recovery key does not change. The vault then locks and
 asks for the new password. Until the new password has been used once, the old
 one still opens the account, with a banner saying so.
+
+## Replacing the recovery key
+
+*Recovery key* in the sidebar replaces the key when someone else may have seen
+it: a lost emergency kit, a photo of it, a shared computer that remembered it.
+It is also the way back to an emergency kit when the sheet is lost and a device
+still remembers the key.
+
+It asks for the master password (and the current recovery key, unless this
+device remembers it), then shows the new key once, with a new emergency kit to
+download. Nothing changes until the key is confirmed as saved: closing the
+dialog before that leaves the old key in place, and a kit saved in the meantime
+opens nothing.
+
+The vault then locks and asks for the new key. Until the new key has been used
+once, the old one still opens the account, with a banner saying so. After that,
+a device that remembered the old key is asked for the new one. The master
+password does not change, and no vault is re-encrypted.
 
 ## Export
 

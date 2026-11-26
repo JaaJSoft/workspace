@@ -412,6 +412,15 @@ test('forgetting the device clears the stored recovery key', async () => {
   assert.equal(h.session.rememberedSecret(), null);
 });
 
+test('a device can be handed a key outside an unlock', () => {
+  // The key a replacement just put in place: no unlock has happened with it
+  // yet, and the next one must find it here.
+  const h = harness();
+  h.session.rememberDevice('NEW-KEY');
+  assert.deepEqual([...h.storage.keys()], ['vault.secret-key']);
+  assert.equal(h.session.rememberedSecret(), 'NEW-KEY');
+});
+
 test('unlocking again without remembering revokes a previously remembered key', async () => {
   const h = harness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: true });
@@ -623,6 +632,7 @@ test('a storage that refuses every access does not take the screen down with it'
   });
   assert.equal(session.rememberedSecret(), null);
   assert.doesNotThrow(() => session.forgetDevice());
+  assert.doesNotThrow(() => session.rememberDevice('NEW-KEY'));
 });
 
 // A metadata-key harness: the unlock path's hkdf stub returns a two-byte

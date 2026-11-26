@@ -287,6 +287,49 @@ A user opened by the previous envelope who has forgotten the current password
 cannot choose another through the dialog, which starts from the current
 envelope.
 
+### Replacing the recovery key
+
+The secret key only enters the derivation (*Key hierarchy*), so a new one is a
+new envelope and nothing else: same salt, same private keys, same vault key
+wraps. It goes through the same `rotate` endpoint, from a dialog in the sidebar,
+in two steps.
+
+1. **Prepare.** The client opens the envelope with the password and the current
+   secret key, falling back to the previous envelope as an unlock does: a key
+   that still opens the account is the one worth replacing. It draws 32 random
+   bytes, derives under the same password and the new key, seals both private
+   keys, **reopens and compares them**, and zeroes the raw material. The new
+   unwrap key is derived from the key as the kit spells it, decoded again, so
+   what the keys are sealed under is what the user will type back. Nothing is
+   sent.
+2. **Replace.** The new key is shown with a new emergency kit. Once the user
+   confirms it is saved, the client sends `rotate` with the envelope read in
+   step 1, after a `confirm` when that envelope opened as the current one and
+   still had a previous.
+
+Showing before sending is deliberate. A page lost between the two steps has
+changed nothing, and the next screen says that the key it showed opens nothing.
+The other way round, a page lost after the rotation would leave the current
+envelope under a key nobody ever saw.
+
+A 409 means the envelope moved since step 1: nothing was written, the key shown
+is withdrawn and the user starts again. Before reporting a refused or unanswered
+rotation, the client reads the envelope back: when it is the one it sent, the
+request landed and only its answer was lost, and the replacement completes.
+
+On success the key this device remembers is replaced or dropped, the session
+locks, and the next unlock opens the current envelope with the new key and sends
+`confirm`. The cost is the one a password change accepts: until that unlock, the
+previous envelope still opens with the **old** secret key. A device that
+remembers the old key keeps opening through it during that window, with the
+banner, and is asked for the new one afterwards.
+
+A replacement does not change the private keys. An envelope copied before it,
+from the database or through the account's own Workspace session, still opens
+with the old secret key and the password. What it ends is the use of a leaked
+key against the envelope the server holds from then on - and the master password
+stays the other half either way.
+
 ## The export archive
 
 `vault_archive.js` writes an archive and `tests/reference/archive.py` reads one.
@@ -349,9 +392,11 @@ WebAssembly is inlined into it deliberately: one artifact to verify in CI, and
 one fewer request at the most sensitive moment of the flow.
 
 The PDF generator and the password strength estimator would each break that
-budget on their own. They serve onboarding and password rotation only, never
-unlocking and never the entry pages. The PDF generator ships as a second
-bundle, `vault-onboarding.js`, for the screens that need it to load on demand.
+budget on their own. They serve onboarding, password rotation and recovery key
+replacement only, never unlocking and never the entry pages. The PDF generator
+ships as a second bundle, `vault-onboarding.js`: the onboarding page loads it
+with its other scripts, and the vault page fetches it when the recovery key
+dialog opens.
 The strength estimator is not the vault's alone - the account password form
 shows the same meter - so it lives in the shared `password-strength.js` bundle
 under `common`, which the onboarding page loads next to its own. The integrity

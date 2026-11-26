@@ -9,6 +9,31 @@ function settingsHeaders() {
   };
 }
 
+// A section's write, with `component.busy` up while it runs. A refusal throws
+// the server's `detail`, else the first error of one of `fields` (the ones the
+// section's forms send), else a generic message.
+async function settingsRequest(component, url, options, fields) {
+  component.busy = true;
+  component.error = '';
+  try {
+    const resp = await fetch(url, options);
+    if (!resp.ok) {
+      const data = await resp.json().catch(function () {
+        return {};
+      });
+      const field = fields.find(function (name) {
+        return data[name] && data[name][0];
+      });
+      throw new Error(
+        data.detail || (field && data[field][0]) || gettext('Request failed.')
+      );
+    }
+    return resp;
+  } finally {
+    component.busy = false;
+  }
+}
+
 // Preselect target for "delete column": nearest other column of the same
 // category (previous sibling wins over next), else null.
 function defaultMoveTarget(columns, uuid) {
@@ -437,23 +462,8 @@ function projectColumns(config) {
       });
     },
 
-    async request(url, options) {
-      this.busy = true;
-      this.error = '';
-      try {
-        const resp = await fetch(url, options);
-        if (!resp.ok) {
-          const data = await resp.json().catch(function () {
-            return {};
-          });
-          throw new Error(
-            data.detail || (data.name && data.name[0]) || gettext('Request failed.')
-          );
-        }
-        return resp;
-      } finally {
-        this.busy = false;
-      }
+    request(url, options) {
+      return settingsRequest(this, url, options, ['name']);
     },
 
     async addColumn() {
@@ -653,23 +663,8 @@ function projectLabels(config) {
       });
     },
 
-    async request(url, options) {
-      this.busy = true;
-      this.error = '';
-      try {
-        const resp = await fetch(url, options);
-        if (!resp.ok) {
-          const data = await resp.json().catch(function () {
-            return {};
-          });
-          throw new Error(
-            data.detail || (data.name && data.name[0]) || gettext('Request failed.')
-          );
-        }
-        return resp;
-      } finally {
-        this.busy = false;
-      }
+    request(url, options) {
+      return settingsRequest(this, url, options, ['name']);
     },
 
     async addLabel() {
@@ -824,26 +819,8 @@ function projectEpics(config) {
       });
     },
 
-    async request(url, options) {
-      this.busy = true;
-      this.error = '';
-      try {
-        const resp = await fetch(url, options);
-        if (!resp.ok) {
-          const data = await resp.json().catch(function () {
-            return {};
-          });
-          throw new Error(
-            data.detail ||
-              (data.name && data.name[0]) ||
-              (data.target_date && data.target_date[0]) ||
-              gettext('Request failed.')
-          );
-        }
-        return resp;
-      } finally {
-        this.busy = false;
-      }
+    request(url, options) {
+      return settingsRequest(this, url, options, ['name', 'target_date']);
     },
 
     progressPercent(epic) {
@@ -1117,26 +1094,8 @@ function projectSprints(config) {
       }
     },
 
-    async request(url, options) {
-      this.busy = true;
-      this.error = '';
-      try {
-        const resp = await fetch(url, options);
-        if (!resp.ok) {
-          const data = await resp.json().catch(function () {
-            return {};
-          });
-          throw new Error(
-            data.detail ||
-              (data.name && data.name[0]) ||
-              (data.end_date && data.end_date[0]) ||
-              gettext('Request failed.')
-          );
-        }
-        return resp;
-      } finally {
-        this.busy = false;
-      }
+    request(url, options) {
+      return settingsRequest(this, url, options, ['name', 'end_date']);
     },
 
     // List filter mirroring the sprint switcher: a query searches the
@@ -1329,21 +1288,8 @@ function projectMembers(config) {
       return refreshAssignableUsers(this, config.apiBase);
     },
 
-    async request(url, options) {
-      this.busy = true;
-      this.error = '';
-      try {
-        const resp = await fetch(url, options);
-        if (!resp.ok) {
-          const data = await resp.json().catch(function () {
-            return {};
-          });
-          throw new Error(data.detail || gettext('Request failed.'));
-        }
-        return resp;
-      } finally {
-        this.busy = false;
-      }
+    request(url, options) {
+      return settingsRequest(this, url, options, []);
     },
 
     async addMember(user) {

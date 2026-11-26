@@ -15,21 +15,7 @@
 {% endcomment %}
 <div
   class="{% if node.is_quarantined %}bg-error/10 data-selected:bg-base-100 border-error/40{% else %}bg-base-100 border-base-300{% endif %} border rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col data-selected:ring-2 data-selected:ring-module data-selected:border-module data-busy:opacity-50 data-busy:pointer-events-none"
-  id="node-{{ node.uuid }}"
-  data-uuid="{{ node.uuid }}"
-  data-name="{{ node.name|lower }}"
-  data-display-name="{{ node.name }}"
-  data-node-type="{{ node.node_type }}"
-  data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
-  data-viewable="{{ node.viewable|yesno:'1,0' }}"
-  data-file-type="{{ node.type }}"
-  data-viewer="{{ node.viewer_slug }}"
-  data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
-  data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
-  data-created="{{ node.created_at|date:'U' }}"
-  data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
-  {% if node.node_type == 'folder' and not is_trash_view %}draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}"{% endif %}
-  {% if node.node_type == 'shortcut' and node.shortcut_opens and not is_trash_view %}data-opens="{{ node.shortcut_opens }}" data-target-uuid="{{ node.resolved_target.uuid }}" data-target-name="{{ node.resolved_target.name }}" data-target-file-type="{{ node.resolved_target.type }}"{% endif %}
+  {% include "files/ui/partials/node_attrs.html" %}
 >
   <!-- Checkbox overlay (top-left) -->
   <div class="absolute top-2 left-2 z-10" data-stop-row-click>

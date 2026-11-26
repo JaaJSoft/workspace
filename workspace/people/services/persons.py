@@ -1,16 +1,11 @@
 from django.db import transaction
 
-from ..models import Person
+from ..models import Person, require_one_scope
 from ..queries import person_with_email, user_persons
 
 
-def _check_one_scope(owner, group):
-    if (owner is None) == (group is None):
-        raise ValueError("A person belongs to exactly one owner or one group.")
-
-
 def create_person(*, owner=None, group=None, **fields):
-    _check_one_scope(owner, group)
+    require_one_scope(owner, group)
     return Person.objects.create(owner=owner, group=group, **fields)
 
 
@@ -25,7 +20,7 @@ def update_person(person, **fields):
 @transaction.atomic
 def move_to_scope(person, *, owner=None, group=None):
     """Re-home a person and drop it from lists that no longer share its scope."""
-    _check_one_scope(owner, group)
+    require_one_scope(owner, group)
     person.owner = owner
     person.group = group
     person.save(update_fields=["owner", "group", "updated_at"])

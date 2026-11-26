@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 function loadNotes(reply = { ok: true, status: 200 }) {
   const puts = [];
@@ -20,7 +21,7 @@ function loadNotes(reply = { ok: true, status: 200 }) {
       if (options.method === 'PUT') puts.push({ url, body: JSON.parse(options.body) });
       return reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply);
     },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     addEventListener: () => {},
     dispatchEvent: () => {},
     CustomEvent: class {

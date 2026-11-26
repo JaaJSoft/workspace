@@ -35,6 +35,14 @@ window.folderNav = {
     this._clickNavLink(window.location.pathname + window.location.search, false);
   },
 
+  // Re-render that listing in place, writing no history. `ajax` is the
+  // caller's $ajax: alpine-ajax fires its ajax:* events on the element the
+  // magic was read from, and the caller's own listeners wait for them there.
+  refreshListing(ajax) {
+    if (!document.getElementById('folder-browser')) return;
+    ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+  },
+
   _clickNavLink(url, push) {
     const link = document.getElementById(push ? 'folder-nav-push' : 'folder-nav-replace');
     if (!link) return;

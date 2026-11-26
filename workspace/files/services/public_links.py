@@ -11,12 +11,11 @@ import posixpath
 import re
 
 from django.core import signing
-from django.db.models import Q
 
 from workspace.common.link_access import access_cookie_name, set_access_cookie
 from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import File
+from ..models import File, tree_q
 
 logger = logging.getLogger(__name__)
 
@@ -64,21 +63,6 @@ def access_token_opens(link, access_token):
     return value == link.token
 
 
-def scope_q(root):
-    """Rows sharing *root*'s name namespace, as ``names.sibling_nodes`` defines it.
-
-    A group folder's children each carry their creator as ``owner``, so scoping
-    a group root by owner would hide every file a second member added. Outside a
-    group, the namespace is one user's personal tree.
-
-    Both the resolver and the listing filter on this, so what a visitor can see
-    and what they can open cannot drift apart.
-    """
-    if root.group_id:
-        return Q(group_id=root.group_id)
-    return Q(owner_id=root.owner_id, group__isnull=True)
-
-
 def resolve_within(link, node_uuid):
     """The live node *node_uuid* names, if it is *link*'s root or below it.
 
@@ -97,7 +81,11 @@ def resolve_within(link, node_uuid):
     # A shortcut opens a node through its viewer's own access, and a visitor
     # has none: inside a share it is a dead end, so it is not there at all.
     node = (
-        File.objects.filter(scope_q(root), uuid=parsed, deleted_at__isnull=True)
+        File.objects.filter(
+            tree_q(root.owner_id, root.group_id),
+            uuid=parsed,
+            deleted_at__isnull=True,
+        )
         .exclude(node_type=File.NodeType.SHORTCUT)
         .first()
     )

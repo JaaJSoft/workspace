@@ -1,0 +1,56 @@
+{% comment %}
+  The expiry day and the password of a public link being created, inside a
+  component built on publicLinkFormMixin() (files/ui/js/share_modal.js).
+  with_generator adds the password generator's button and tracks edits for
+  it; the including modal draws the generator's panel.
+  password_input_id names the password field.
+{% endcomment %}
+{% load i18n %}
+{% translate "Hide password" as hide_password_label %}
+{% translate "Show password" as show_password_label %}
+<div class="fieldset">
+  <label class="fieldset-legend">
+    <span class="text-xs">{% translate "Expiration (optional)" %}</span>
+  </label>
+  <input type="date" class="input input-sm w-full" x-model="newLinkExpiry" />
+</div>
+<div class="fieldset">
+  <label class="fieldset-legend">
+    <span class="text-xs">{% translate "Password (optional)" %}</span>
+  </label>
+  <div class="flex items-center gap-1.5">
+    <input
+      {% if password_input_id %}id="{{ password_input_id }}"{% endif %}
+      :type="linkPasswordRevealed ? 'text' : 'password'"
+      class="input input-sm flex-1 min-w-0"
+      :class="linkPasswordRevealed && 'font-mono'"
+      autocomplete="new-password"
+      spellcheck="false"
+      x-model="newLinkPassword"
+      {% if with_generator %}@input="noteLinkPasswordEdited()"{% endif %}
+      placeholder="{% translate 'Leave empty for no password' %}"
+    />
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-square"
+      :title="linkPasswordRevealed ? '{{ hide_password_label|escapejs }}' : '{{ show_password_label|escapejs }}'"
+      :aria-label="linkPasswordRevealed ? '{{ hide_password_label|escapejs }}' : '{{ show_password_label|escapejs }}'"
+      @click="linkPasswordRevealed = !linkPasswordRevealed"
+    >
+      <i data-lucide="eye" class="w-4 h-4" x-show="!linkPasswordRevealed"></i>
+      <i data-lucide="eye-off" class="w-4 h-4" x-show="linkPasswordRevealed"></i>
+    </button>
+    {% if with_generator %}
+      <button
+        type="button"
+        class="btn btn-sm btn-square"
+        :class="linkGeneratorOpen ? 'btn-module' : 'btn-ghost'"
+        title="{% translate 'Generate a password' %}"
+        aria-label="{% translate 'Generate a password' %}"
+        @click="toggleLinkGenerator()"
+      >
+        <i data-lucide="dices" class="w-4 h-4"></i>
+      </button>
+    {% endif %}
+  </div>
+</div>

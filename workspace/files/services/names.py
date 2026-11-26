@@ -12,7 +12,7 @@ from django.utils.translation import gettext, gettext_lazy
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
-from ..models import File, canonical_name
+from ..models import File, canonical_name, tree_q
 from . import bucket_usage
 from .folder_dates import touch_folders
 from .storage_ops import blob_held_elsewhere, unique_copy_name
@@ -215,10 +215,11 @@ def sibling_nodes(owner, parent):
     <username>`` and ``files/groups`` - so a personal node never competes
     with a group root folder the same user happens to own.
     """
-    qs = File.objects.filter(parent=parent, deleted_at__isnull=True)
-    if parent and parent.group_id:
-        return qs.filter(group=parent.group)
-    return qs.filter(owner=owner, group__isnull=True)
+    owner_id = getattr(owner, "pk", owner)
+    group_id = parent.group_id if parent else None
+    return File.objects.filter(
+        tree_q(owner_id, group_id), parent=parent, deleted_at__isnull=True
+    )
 
 
 def sibling_files(owner, parent):

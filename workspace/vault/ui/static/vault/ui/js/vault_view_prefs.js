@@ -11,28 +11,40 @@
 //
 // Methods, never getters: object spread copies values, so a `get` here would
 // be evaluated once at composition and frozen.
-window.vaultViewPrefsMixin = function vaultViewPrefsMixin() {
-  const VIEW_MODE_KEY = 'vault.browser.viewMode';
-  const TILE_SIZE_KEY = 'vault.browser.tileSize';
 
-  function readPreference(key) {
+// The preferences this device keeps (the vault browser's last vault too).
+// Private browsing and a blocked-storage setting both throw on every call: a
+// screen that forgets a preference is a smaller loss than one that does not
+// mount, so a refused read is "nothing stored" and a refused write is lost.
+window.vaultDevicePrefs = {
+  read: function (key) {
     try {
       return window.localStorage.getItem(key);
     } catch (err) {
-      // Private browsing and a blocked-storage setting both throw on read. A
-      // screen that forgets how it was being looked at is a smaller loss than
-      // one that does not mount.
       return null;
     }
-  }
-
-  function writePreference(key, value) {
+  },
+  write: function (key, value) {
     try {
       window.localStorage.setItem(key, value);
     } catch (err) {
-      /* nothing to do: the preference does not survive the reload */
+      /* the preference does not survive the reload */
     }
-  }
+  },
+  remove: function (key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (err) {
+      /* the same blocked storage that refused the write */
+    }
+  },
+};
+
+window.vaultViewPrefsMixin = function vaultViewPrefsMixin() {
+  const VIEW_MODE_KEY = 'vault.browser.viewMode';
+  const TILE_SIZE_KEY = 'vault.browser.tileSize';
+  const readPreference = window.vaultDevicePrefs.read;
+  const writePreference = window.vaultDevicePrefs.write;
 
   return {
     // Called from the component's own init(), which is what knows whether the

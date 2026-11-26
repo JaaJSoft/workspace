@@ -166,7 +166,7 @@ def notify_due_tasks():
                         origin="projects",
                         title=task.title,
                         body=_reminder_body(task, project, kind),
-                        url=f"/projects/{task.project_id}?task={task.uuid}",
+                        url=task.get_absolute_url(),
                         priority_map={
                             uid: IN_APP_PRIORITY
                             for uid in group_ids

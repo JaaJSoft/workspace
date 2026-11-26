@@ -8,6 +8,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 const ACCOUNT = '11111111-1111-4111-8111-111111111111';
 const INBOX = '22222222-2222-4222-8222-222222222222';
@@ -58,7 +59,7 @@ function makeApp(search = '') {
       innerWidth: 390,
       document: { getElementById: () => null, addEventListener() {} },
       addEventListener(type, fn) { listeners[type] = fn; },
-      sidebarPreference: { initial: () => false, save: () => {} },
+      sidebarPreference: sidebarPreferenceStub({ narrow: true }),
       _mailPrefsCache: {},
     },
   );

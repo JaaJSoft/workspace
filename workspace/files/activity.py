@@ -6,7 +6,25 @@ from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider, UsageHeadline
 
 
-class FilesActivityProvider(ActivityProvider):
+class FileFeedActivityProvider(ActivityProvider):
+    """Activity of one half of the file event stream.
+
+    Notes (markdown files) form one half and every other file the other, so a
+    note edit is never counted twice. A subclass picks its half with
+    ``notes``, names its stat with ``stat_key`` and says where an event opens.
+    """
+
+    notes = False
+    stat_key = ""
+
+    def event_url(self, file):
+        raise NotImplementedError
+
+    def _in_feed(self, qs, prefix=""):
+        """Narrow *qs* to this provider's half; *prefix* is the path to the File."""
+        markdown = {f"{prefix}mime_type": "text/markdown"}
+        return qs.filter(**markdown) if self.notes else qs.exclude(**markdown)
+
     def _viewer_accessible_file_ids(self, viewer_id):
         """IDs of files the viewer can access (owned + group + shared).
 
@@ -61,13 +79,12 @@ class FilesActivityProvider(ActivityProvider):
         # by the time that event lands), and aligns this provider with the
         # per-file panel (events_for_file) and the REST endpoint, neither
         # of which filter on file__deleted_at.
-        # Markdown notes are surfaced by the notes provider; excluding them
-        # here keeps the two feeds disjoint so a note edit isn't counted twice.
         qs = FileEvent.objects.filter(
             file__node_type=File.NodeType.FILE,
             created_at__gte=start,
             created_at__lt=end,
-        ).exclude(file__mime_type="text/markdown")
+        )
+        qs = self._in_feed(qs, prefix="file__")
         if user_id is not None:
             qs = qs.filter(file__owner_id=user_id)
         qs = qs.filter(self._event_visibility_filter(user_id, viewer_id))
@@ -75,12 +92,9 @@ class FilesActivityProvider(ActivityProvider):
         rows = (
             qs.annotate(day=TruncDate("created_at"))
             .values("day")
-            .annotate(
-                count=Count("pk"),
-            )
+            .annotate(count=Count("pk"))
             .order_by("day")
         )
-
         return {row["day"]: row["count"] for row in rows}
 
     def get_recent_events(
@@ -88,14 +102,15 @@ class FilesActivityProvider(ActivityProvider):
     ):
         from django.contrib.auth import get_user_model
 
-        from workspace.files.models import FILE_FEED_Q
+        from workspace.files.models import FILE_FEED_Q, NOTE_FEED_Q
         from workspace.files.queries import owned_files_q
         from workspace.files.services.events import recent_feed_events
 
         # See get_daily_counts: events are not filtered by file__deleted_at
         # so the DELETED event itself is reachable from the feed and the
         # provider stays consistent with the per-file timeline.
-        feed_q, viewer = FILE_FEED_Q, None
+        feed_q = NOTE_FEED_Q if self.notes else FILE_FEED_Q
+        viewer = None
         if self._is_own_view(user_id, viewer_id):
             feed_q &= owned_files_q(user_id)
         elif viewer_id is not None:
@@ -115,7 +130,7 @@ class FilesActivityProvider(ActivityProvider):
             # sync soft-delete, ...). Reporting them as the file owner
             # would falsely attribute the action to a real user; emit a
             # null actor instead - the dashboard template already hides
-            # the actor block when it's missing.
+            # the actor block when it is missing.
             if ev.actor is not None:
                 actor_data = {
                     "id": ev.actor.pk,
@@ -124,22 +139,13 @@ class FilesActivityProvider(ActivityProvider):
                 }
             else:
                 actor_data = None
-            # Mirror the notes module's "Open in Files": land in the file's
-            # parent folder (/files/<folder>) with the viewer opened (?open=),
-            # falling back to the files root for top-level files.
-            parent_id = ev.file.parent_id
-            url = (
-                f"/files/{parent_id}?open={ev.file.pk}"
-                if parent_id
-                else f"/files?open={ev.file.pk}"
-            )
             events.append(
                 {
                     "icon": ev.icon,
                     "label": ev.short_label,
                     "description": ev.file.name,
                     "timestamp": ev.created_at,
-                    "url": url,
+                    "url": self.event_url(ev.file),
                     "actor": actor_data,
                 }
             )
@@ -148,17 +154,25 @@ class FilesActivityProvider(ActivityProvider):
     def get_stats(self, user_id, *, viewer_id=None):
         from workspace.files.models import File
 
-        # Notes are counted by the notes provider's total_notes stat; keep
-        # them out of total_files so a note isn't tallied in both cards.
-        qs = File.objects.filter(
-            deleted_at__isnull=True,
-            node_type=File.NodeType.FILE,
-        ).exclude(mime_type="text/markdown")
+        qs = self._in_feed(
+            File.objects.filter(deleted_at__isnull=True, node_type=File.NodeType.FILE)
+        )
         if user_id is not None:
             qs = qs.filter(owner_id=user_id)
         qs = qs.filter(self._file_visibility_filter(user_id, viewer_id))
 
-        return {"total_files": qs.count()}
+        return {self.stat_key: qs.count()}
+
+
+class FilesActivityProvider(FileFeedActivityProvider):
+    stat_key = "total_files"
+
+    def event_url(self, file):
+        # The file's parent folder with the viewer opened, or the files root
+        # for a top-level file.
+        if file.parent_id:
+            return f"/files/{file.parent_id}?open={file.pk}"
+        return f"/files?open={file.pk}"
 
     def get_headline(self, stats):
         return UsageHeadline(stats["total_files"], gettext("Files"))

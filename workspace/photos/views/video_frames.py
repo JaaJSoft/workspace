@@ -1,8 +1,7 @@
 """The picture of a video's key frame: what a ranking shows of the moment of
 the video that matched (services/photo_embeddings.py)."""
 
-from django.core.files.storage import default_storage
-from django.http import FileResponse, HttpResponse
+from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.views import APIView
@@ -12,6 +11,7 @@ from workspace.common.mixins import CacheControlMixin
 from ..models import PhotoEmbedding
 from ..queries import ALL, library_files
 from ..services.embedding.registry import embeddings_available
+from .faces import stored_webp_response
 
 
 @extend_schema(tags=["Photos - Search"])
@@ -38,10 +38,4 @@ class VideoFrameView(CacheControlMixin, APIView):
             .values_list("frame", flat=True)
             .first()
         )
-        if not frame:
-            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
-        try:
-            handle = default_storage.open(frame, "rb")
-        except FileNotFoundError:
-            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
-        return FileResponse(handle, content_type="image/webp")
+        return stored_webp_response(frame)

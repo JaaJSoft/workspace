@@ -127,20 +127,7 @@
     {% endif %}
   </div>
 
-  <!-- Lock banner -->
-  <div
-    x-show="lockOwner"
-    x-cloak
-    class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-base-content text-sm"
-  >
-    <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
-    <span class="flex-1">
-      {% blocktranslate trimmed with owner='<strong x-text="lockOwner"></strong>' %}
-        {{ owner }} is editing this file
-      {% endblocktranslate %}
-    </span>
-    <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">{% translate "Force unlock" %}</button>
-  </div>
+  {% include "files/ui/viewers/lock_banner.html" %}
 
   <!-- Stale buffer banner -->
   <div
@@ -211,13 +198,6 @@
     let _beforeUnloadHandler = null;
     let _noteLinkOver = null;
     let _noteLinkOut = null;
-
-    function getCSRFToken() {
-      const match = document.cookie.split('; ').find(function(row) {
-        return row.startsWith('csrftoken=');
-      });
-      return match ? match.split('=')[1] : '';
-    }
 
     async function _searchNotes(query) {
       const base = '/api/v1/files?type=markdown';

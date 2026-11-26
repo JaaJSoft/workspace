@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
@@ -315,7 +316,13 @@ class Sprint(models.Model):
         return f"{self.project}: {self.name}"
 
 
+def task_url(project_id, task_id):
+    """Where every link to a task lands: its project's board, panel open."""
+    return f"{reverse('projects_ui:board', args=[project_id])}?task={task_id}"
+
+
 class Task(models.Model):
+    # Declared from least to most urgent: PRIORITIES_BY_URGENCY reads this order.
     class Priority(models.TextChoices):
         LOW = "low", pgettext_lazy("task priority", "Low")
         MEDIUM = "medium", pgettext_lazy("task priority", "Medium")
@@ -411,6 +418,9 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+
+    def get_absolute_url(self):
+        return task_url(self.project_id, self.uuid)
 
     def clean(self):
         # Runs in ModelForm paths (the Django admin): the API scopes the

@@ -123,6 +123,19 @@ def _rule_error_response(exc):
     return Response({"detail": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
 
 
+def _unique_or_400(field, message, write, /, *args, **kwargs):
+    """Run ``write`` in a savepoint, answering 400 on ``field`` if a unique constraint trips.
+
+    The serializers check uniqueness first: this catches the writer that took
+    the value in between.
+    """
+    try:
+        with transaction.atomic():
+            return write(*args, **kwargs)
+    except IntegrityError:
+        return Response({field: [message]}, status=status.HTTP_400_BAD_REQUEST)
+
+
 @extend_schema(tags=["Projects"])
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
@@ -170,14 +183,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
         self._require_action(project, "rename")
         if "groups" in request.data:
             self._require_action(project, "attach_group")
-        try:
-            with transaction.atomic():
-                return super().partial_update(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {"key": [_("Another project already uses this key.")]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return _unique_or_400(
+            "key",
+            _("Another project already uses this key."),
+            super().partial_update,
+            request,
+            *args,
+            **kwargs,
+        )
 
     def destroy(self, request, *args, **kwargs):
         project = self.get_object()
@@ -520,25 +533,25 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         self._require_action("manage_labels", self.project)
-        try:
-            with transaction.atomic():
-                return super().create(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {"name": [_("A label with this name already exists in this project.")]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return _unique_or_400(
+            "name",
+            _("A label with this name already exists in this project."),
+            super().create,
+            request,
+            *args,
+            **kwargs,
+        )
 
     def partial_update(self, request, *args, **kwargs):
         self._require_action("manage_labels", self.project)
-        try:
-            with transaction.atomic():
-                return super().partial_update(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {"name": [_("A label with this name already exists in this project.")]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return _unique_or_400(
+            "name",
+            _("A label with this name already exists in this project."),
+            super().partial_update,
+            request,
+            *args,
+            **kwargs,
+        )
 
     def destroy(self, request, *args, **kwargs):
         self._require_action("manage_labels", self.project)
@@ -562,25 +575,25 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         self._require_action("manage_epics", self.project)
-        try:
-            with transaction.atomic():
-                return super().create(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {"name": [_("An epic with this name already exists in this project.")]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return _unique_or_400(
+            "name",
+            _("An epic with this name already exists in this project."),
+            super().create,
+            request,
+            *args,
+            **kwargs,
+        )
 
     def partial_update(self, request, *args, **kwargs):
         self._require_action("manage_epics", self.project)
-        try:
-            with transaction.atomic():
-                return super().partial_update(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {"name": [_("An epic with this name already exists in this project.")]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return _unique_or_400(
+            "name",
+            _("An epic with this name already exists in this project."),
+            super().partial_update,
+            request,
+            *args,
+            **kwargs,
+        )
 
     def destroy(self, request, *args, **kwargs):
         self._require_action("manage_epics", self.project)
@@ -623,34 +636,26 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         self._require_action("manage_sprints", self.project)
         self._require_scrum()
-        try:
-            with transaction.atomic():
-                return super().create(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {
-                    "name": [
-                        _("A sprint with this name already exists in this project.")
-                    ]
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return _unique_or_400(
+            "name",
+            _("A sprint with this name already exists in this project."),
+            super().create,
+            request,
+            *args,
+            **kwargs,
+        )
 
     def partial_update(self, request, *args, **kwargs):
         self._require_action("manage_sprints", self.project)
         self._require_scrum()
-        try:
-            with transaction.atomic():
-                return super().partial_update(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {
-                    "name": [
-                        _("A sprint with this name already exists in this project.")
-                    ]
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return _unique_or_400(
+            "name",
+            _("A sprint with this name already exists in this project."),
+            super().partial_update,
+            request,
+            *args,
+            **kwargs,
+        )
 
     def destroy(self, request, *args, **kwargs):
         self._require_action("manage_sprints", self.project)
@@ -711,18 +716,15 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         self._require_writable()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            with transaction.atomic():
-                status_obj = create_status(self.project, **serializer.validated_data)
-        except IntegrityError:
-            return Response(
-                {
-                    "name": [
-                        _("A column with this name already exists in this project.")
-                    ]
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return _unique_or_400(
+            "name",
+            _("A column with this name already exists in this project."),
+            self._create_status,
+            serializer.validated_data,
+        )
+
+    def _create_status(self, fields):
+        status_obj = create_status(self.project, **fields)
         return Response(
             self.get_serializer(status_obj).data, status=status.HTTP_201_CREATED
         )
@@ -730,18 +732,14 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         self._require_admin()
         self._require_writable()
-        try:
-            with transaction.atomic():
-                return super().partial_update(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {
-                    "name": [
-                        _("A column with this name already exists in this project.")
-                    ]
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return _unique_or_400(
+            "name",
+            _("A column with this name already exists in this project."),
+            super().partial_update,
+            request,
+            *args,
+            **kwargs,
+        )
 
     def destroy(self, request, *args, **kwargs):
         self._require_admin()

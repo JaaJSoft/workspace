@@ -5,7 +5,7 @@
   href="/calendar?event={{ item.uuid }}"
   class="flex items-center gap-3 py-2 group"
   onmouseenter="window.matchMedia('(hover: hover)').matches&&window._eventCardShow(this,'{{ item.uuid|escapejs }}')"
-  onmouseleave="window.matchMedia('(hover: hover)').matches&&window._cardPopoverScheduleHide(this)"
+  onmouseleave="window.matchMedia('(hover: hover)').matches&&window.calendarCard.scheduleHide(this)"
 >
   <span class="w-4 flex justify-center shrink-0">
     <i

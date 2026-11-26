@@ -3,7 +3,6 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Prefetch
 from django.utils import timezone
 from django.utils.translation import gettext
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -31,8 +30,13 @@ from ..serializers import (
     MessageEditSerializer,
     MessageSerializer,
     ReactionToggleSerializer,
+    with_message_relations,
 )
-from ..services.conversations import get_active_membership, user_conversation_ids
+from ..services.conversations import (
+    get_active_membership,
+    is_bot_conversation,
+    user_conversation_ids,
+)
 from ..services.deletion import soft_delete_message
 from ..services.editing import edit_message
 from ..services.message_lists import PAGE_SIZE
@@ -77,26 +81,9 @@ class MessageListView(CacheControlMixin, APIView):
         # Hiding them from the main flow is a UI presentation preference, and
         # a preference must not shrink an API response - the server-rendered
         # partial is where it applies.
-        messages = (
+        messages = with_message_relations(
             Message.objects.filter(conversation_id=conversation_id)
-            .select_related(
-                "author",
-                "author__bot_profile",
-                "reply_to",
-                "reply_to__author",
-                "interaction",
-                "interaction__interacted_by",
-            )
-            .prefetch_related(
-                Prefetch(
-                    "reactions",
-                    queryset=Reaction.objects.select_related("user"),
-                ),
-                "attachments",
-                "link_previews__preview",
-            )
-            .order_by("-created_at", "-uuid")
-        )
+        ).order_by("-created_at", "-uuid")
 
         paginator = OptInLimitOffsetPagination()
         # A conversation has no size limit: never serialize all of it.
@@ -295,12 +282,7 @@ class MessageListView(CacheControlMixin, APIView):
             )
 
         if created_attachments and any(a.is_image for a in created_attachments):
-            has_bot_member = ConversationMember.objects.filter(
-                conversation_id=conversation_id,
-                left_at__isnull=True,
-                user__bot_profile__isnull=False,
-            ).exists()
-            if has_bot_member:
+            if is_bot_conversation(conversation_id):
                 from workspace.ai.tasks.captions import enqueue_caption_if_image
 
                 for att in created_attachments:
@@ -324,26 +306,7 @@ class MessageListView(CacheControlMixin, APIView):
 
                 fetch_link_previews.delay(str(message.pk), urls)
 
-        msg = (
-            Message.objects.filter(pk=message.pk)
-            .select_related(
-                "author",
-                "author__bot_profile",
-                "reply_to",
-                "reply_to__author",
-                "interaction",
-                "interaction__interacted_by",
-            )
-            .prefetch_related(
-                Prefetch(
-                    "reactions",
-                    queryset=Reaction.objects.select_related("user"),
-                ),
-                "attachments",
-                "link_previews__preview",
-            )
-            .first()
-        )
+        msg = with_message_relations(Message.objects.filter(pk=message.pk)).first()
         return Response(
             MessageSerializer(msg).data,
             status=status.HTTP_201_CREATED,
@@ -401,26 +364,7 @@ class MessageDetailView(APIView):
         )
 
         # Refetch with prefetches for serialization
-        message = (
-            Message.objects.filter(pk=message.pk)
-            .select_related(
-                "author",
-                "author__bot_profile",
-                "reply_to",
-                "reply_to__author",
-                "interaction",
-                "interaction__interacted_by",
-            )
-            .prefetch_related(
-                Prefetch(
-                    "reactions",
-                    queryset=Reaction.objects.select_related("user"),
-                ),
-                "attachments",
-                "link_previews__preview",
-            )
-            .first()
-        )
+        message = with_message_relations(Message.objects.filter(pk=message.pk)).first()
         return Response(MessageSerializer(message).data)
 
     @extend_schema(summary="Delete a message (soft)")

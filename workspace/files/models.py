@@ -115,6 +115,19 @@ FILE_FEED_Q = Q(node_type="file") & ~Q(mime_type="text/markdown")
 NOTE_FEED_Q = Q(node_type="file", mime_type="text/markdown")
 
 
+def tree_q(owner_id, group_id):
+    """Rows of one tree: a group's, or a user's personal one.
+
+    ``path`` and names are only unique within a tree, so every path-prefix
+    or sibling query needs this next to it or it reaches into other trees.
+    A group's rows each carry their creator as ``owner``, so a group tree is
+    never narrowed by owner. Works on any model with ``owner`` and ``group``.
+    """
+    if group_id:
+        return Q(group_id=group_id)
+    return Q(owner_id=owner_id, group__isnull=True)
+
+
 class FileQuerySet(models.QuerySet):
     def name_ordered(self, *prefix_fields):
         """Sort by name case-insensitively, with optional leading fields.
@@ -541,7 +554,7 @@ class File(models.Model):
                     self._update_descendant_paths(
                         old_path,
                         new_path,
-                        self._namespace_q(old_data["owner_id"], old_data["group_id"]),
+                        tree_q(old_data["owner_id"], old_data["group_id"]),
                     )
                 return
 
@@ -570,17 +583,6 @@ class File(models.Model):
         cls.objects.filter(namespace, path__startswith=prefix).update(
             path=Concat(Value(f"{new_path}/"), Substr("path", start_pos))
         )
-
-    @staticmethod
-    def _namespace_q(owner_id, group_id):
-        """Rows of one tree: a group's, or a user's personal one.
-
-        ``path`` is only unique within a tree, so every path-prefix query
-        needs this next to it or it reaches into other trees.
-        """
-        if group_id:
-            return models.Q(group_id=group_id)
-        return models.Q(owner_id=owner_id, group__isnull=True)
 
     @classmethod
     def _build_path_for(cls, name, parent_id):
@@ -641,6 +643,10 @@ class File(models.Model):
             self.ProcessingStatus.PROCESSING,
         )
 
+    def version_tag(self):
+        """This version's entity tag, unquoted: the HTTP API and WebDAV share it."""
+        return f"{self.uuid}-{self.updated_at.timestamp()}"
+
     def is_locked(self):
         """Return True if this file has an active (non-expired) lock."""
         if self.locked_by_id is None:
@@ -653,7 +659,7 @@ class File(models.Model):
         path = self.path
         if self.node_type != self.NodeType.FOLDER or not path:
             return own if include_self else models.Q(pk__in=())
-        below = self._namespace_q(self.owner_id, self.group_id) & models.Q(
+        below = tree_q(self.owner_id, self.group_id) & models.Q(
             path__startswith=f"{path}/"
         )
         return own | below if include_self else below

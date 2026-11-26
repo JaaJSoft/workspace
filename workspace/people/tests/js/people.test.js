@@ -1,6 +1,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 // Each fetch call is captured as a deferred so tests control completion
 // order - the concurrency-guard races below depend on it.
@@ -29,7 +30,7 @@ function navStub({ returnsBack = false } = {}) {
 function load(fetchImpl, extra = {}) {
   return loadScript('workspace/people/ui/static/people/ui/js/people.js', {
     document: { getElementById: () => null },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     matchMedia: () => ({ matches: false }),
     navHistory: navStub(),
     URLSearchParams,

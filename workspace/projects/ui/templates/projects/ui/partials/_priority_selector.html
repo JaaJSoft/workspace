@@ -3,7 +3,7 @@
 Priority dropdown: styled replacement for the native <select>, visually in
 line with the user/label pickers. The trigger shows the current priority with
 its icon and colour (mirroring _priority_badge.html); the dropdown lists the
-four priorities as menu rows.
+priorities as menu rows. Both read priorities_data from the view context.
 
 Params:
   - model_expr: Alpine l-value holding the current priority slug (required),
@@ -49,38 +49,19 @@ createIcons time.
         <span class="truncate">{% translate "All priorities" %}</span>
       </span>
     {% endif %}
-    <span
-      x-show="{{ model_expr }} === 'urgent'"
-      x-cloak
-      class="flex items-center gap-2 min-w-0"
-    >
-      <i data-lucide="flame" class="w-4 h-4 text-error shrink-0"></i>
-      <span class="truncate">{% translate "Urgent" context "task priority" %}</span>
-    </span>
-    <span
-      x-show="{{ model_expr }} === 'high'"
-      x-cloak
-      class="flex items-center gap-2 min-w-0"
-    >
-      <i data-lucide="arrow-up" class="w-4 h-4 text-warning shrink-0"></i>
-      <span class="truncate">{% translate "High" context "task priority" %}</span>
-    </span>
-    <span
-      x-show="{{ model_expr }} === 'medium'"
-      x-cloak
-      class="flex items-center gap-2 min-w-0"
-    >
-      <i data-lucide="equal" class="w-4 h-4 text-info shrink-0"></i>
-      <span class="truncate">{% translate "Medium" context "task priority" %}</span>
-    </span>
-    <span
-      x-show="{{ model_expr }} === 'low'"
-      x-cloak
-      class="flex items-center gap-2 min-w-0"
-    >
-      <i data-lucide="arrow-down" class="w-4 h-4 opacity-60 shrink-0"></i>
-      <span class="truncate">{% translate "Low" context "task priority" %}</span>
-    </span>
+    {% for priority in priorities_data %}
+      <span
+        x-show="{{ model_expr }} === '{{ priority.value|escapejs }}'"
+        x-cloak
+        class="flex items-center gap-2 min-w-0"
+      >
+        <i
+          data-lucide="{{ priority.icon }}"
+          class="w-4 h-4 {{ priority.icon_class }} shrink-0"
+        ></i>
+        <span class="truncate">{{ priority.label }}</span>
+      </span>
+    {% endfor %}
     <i
       data-lucide="chevron-down"
       class="w-3.5 h-3.5 opacity-60 ml-auto shrink-0"
@@ -107,58 +88,24 @@ createIcons time.
           </button>
         </li>
       {% endif %}
-      <li role="none">
-        <button
-          type="button"
-          class="flex items-center gap-2 rounded-sm"
-          :class="{{ model_expr }} === 'urgent' ? 'menu-active' : ''"
-          role="menuitemradio"
-          :aria-checked="{{ model_expr }} === 'urgent'"
-          @click="{{ model_expr }} = 'urgent'; open = false; {{ on_change|default:'' }}"
-        >
-          <i data-lucide="flame" class="w-4 h-4 text-error"></i>
-          <span class="text-sm">{% translate "Urgent" context "task priority" %}</span>
-        </button>
-      </li>
-      <li role="none">
-        <button
-          type="button"
-          class="flex items-center gap-2 rounded-sm"
-          :class="{{ model_expr }} === 'high' ? 'menu-active' : ''"
-          role="menuitemradio"
-          :aria-checked="{{ model_expr }} === 'high'"
-          @click="{{ model_expr }} = 'high'; open = false; {{ on_change|default:'' }}"
-        >
-          <i data-lucide="arrow-up" class="w-4 h-4 text-warning"></i>
-          <span class="text-sm">{% translate "High" context "task priority" %}</span>
-        </button>
-      </li>
-      <li role="none">
-        <button
-          type="button"
-          class="flex items-center gap-2 rounded-sm"
-          :class="{{ model_expr }} === 'medium' ? 'menu-active' : ''"
-          role="menuitemradio"
-          :aria-checked="{{ model_expr }} === 'medium'"
-          @click="{{ model_expr }} = 'medium'; open = false; {{ on_change|default:'' }}"
-        >
-          <i data-lucide="equal" class="w-4 h-4 text-info"></i>
-          <span class="text-sm">{% translate "Medium" context "task priority" %}</span>
-        </button>
-      </li>
-      <li role="none">
-        <button
-          type="button"
-          class="flex items-center gap-2 rounded-sm"
-          :class="{{ model_expr }} === 'low' ? 'menu-active' : ''"
-          role="menuitemradio"
-          :aria-checked="{{ model_expr }} === 'low'"
-          @click="{{ model_expr }} = 'low'; open = false; {{ on_change|default:'' }}"
-        >
-          <i data-lucide="arrow-down" class="w-4 h-4 opacity-60"></i>
-          <span class="text-sm">{% translate "Low" context "task priority" %}</span>
-        </button>
-      </li>
+      {% for priority in priorities_data %}
+        <li role="none">
+          <button
+            type="button"
+            class="flex items-center gap-2 rounded-sm"
+            :class="{{ model_expr }} === '{{ priority.value|escapejs }}' ? 'menu-active' : ''"
+            role="menuitemradio"
+            :aria-checked="{{ model_expr }} === '{{ priority.value|escapejs }}'"
+            @click="{{ model_expr }} = '{{ priority.value|escapejs }}'; open = false; {{ on_change|default:'' }}"
+          >
+            <i
+              data-lucide="{{ priority.icon }}"
+              class="w-4 h-4 {{ priority.icon_class }}"
+            ></i>
+            <span class="text-sm">{{ priority.label }}</span>
+          </button>
+        </li>
+      {% endfor %}
     </ul>
   </div>
 </div>

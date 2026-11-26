@@ -53,6 +53,7 @@ from ..serializers import (
 )
 from ..services import face_batches, face_corrections, face_people
 from ..services.face_preferences import faces_available, faces_enabled
+from ..services.undo_tokens import UndoExpired
 
 
 def _require_faces():
@@ -354,6 +355,18 @@ class FaceViewSet(
         face_people.give_default_avatar(self.request.user, person, face.pk)
 
 
+def stored_webp_response(name):
+    """The WebP stored under *name*, or a 404 when the row has none or its
+    blob is gone."""
+    if not name:
+        return HttpResponse(status=status.HTTP_404_NOT_FOUND)
+    try:
+        handle = default_storage.open(name, "rb")
+    except FileNotFoundError:
+        return HttpResponse(status=status.HTTP_404_NOT_FOUND)
+    return FileResponse(handle, content_type="image/webp")
+
+
 @extend_schema(tags=["Photos - Faces"])
 class FaceCropView(CacheControlMixin, APIView):
     """The square WebP of a face.
@@ -376,13 +389,7 @@ class FaceCropView(CacheControlMixin, APIView):
             .values_list("crop", flat=True)
             .first()
         )
-        if not crop:
-            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
-        try:
-            handle = default_storage.open(crop, "rb")
-        except FileNotFoundError:
-            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
-        return FileResponse(handle, content_type="image/webp")
+        return stored_webp_response(crop)
 
 
 @extend_schema(tags=["Photos - Faces"])
@@ -616,7 +623,7 @@ class FaceUndoView(APIView):
             restored = face_batches.undo(
                 request.user, serializer.validated_data["token"]
             )
-        except face_batches.UndoExpired:
+        except UndoExpired:
             return Response(
                 {"detail": _("Too late to undo.")}, status=status.HTTP_410_GONE
             )

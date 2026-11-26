@@ -54,12 +54,13 @@ def _apply_grouped_counts(targets, group_key, grouped_qs, field_map):
     )
 
 
-def refresh_folder_counts(folder):
+def refresh_folder_counts(folder, *, also_save=()):
     """Recompute message_count and unread_count for a single folder.
 
     Single-folder fast path: 1 aggregate + 1 UPDATE via ``save()``. For N
     folders, prefer ``refresh_folders_counts_bulk`` which collapses the work
-    into 2 queries total regardless of N.
+    into 2 queries total regardless of N. ``also_save`` names other columns
+    the caller assigned on *folder*, written in the same UPDATE.
     """
     counts = MailMessage.objects.filter(
         folder=folder,
@@ -70,7 +71,9 @@ def refresh_folder_counts(folder):
     )
     folder.message_count = counts["message_count"]
     folder.unread_count = counts["unread_count"]
-    folder.save(update_fields=["message_count", "unread_count", "updated_at"])
+    folder.save(
+        update_fields=["message_count", "unread_count", *also_save, "updated_at"]
+    )
 
 
 def refresh_folders_counts_bulk(folder_ids):
@@ -134,10 +137,19 @@ def refresh_label_counts(labels):
     )
 
 
-def refresh_message_label_counts(message):
-    """Refresh unread counts for all labels attached to a message."""
-    label_ids = MailMessageLabel.objects.filter(message=message).values_list(
-        "label_id", flat=True
+def refresh_labels_for_messages(message_ids):
+    """Refresh unread_count for every label attached to any of these messages.
+
+    For any path that changes ``is_read`` or deletes messages: without it the
+    sidebar badges stay stale until another action forces a recompute.
+    """
+    if not message_ids:
+        return
+    label_ids = set(
+        MailMessageLabel.objects.filter(message_id__in=message_ids)
+        .values_list("label_id", flat=True)
+        .distinct()
     )
-    if label_ids:
-        refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))
+    if not label_ids:
+        return
+    refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))

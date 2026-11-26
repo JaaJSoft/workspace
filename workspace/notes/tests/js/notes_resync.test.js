@@ -8,6 +8,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 function makeApp(view) {
   const calls = { sidebar: 0, urls: [] };
@@ -20,7 +21,7 @@ function makeApp(view) {
         json: () => Promise.resolve([]),
       });
     },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     addEventListener: () => {},
     document: { getElementById: () => null },
     tagsMixin: () => ({}),

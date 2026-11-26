@@ -16,8 +16,6 @@
   actions=       a template rendered in the header, in the modal's scope,
                  for the module's own buttons: fileUuid names the item shown
 {% endcomment %}
-{% translate "Remove from favorites" as remove_favorite_label %}
-{% translate "Add to favorites" as add_favorite_label %}
 <div
   x-data="fileViewerModal({ event: '{{ event|escapejs }}', gallery: '{{ gallery|escapejs }}', viewerUrl: '{{ viewer_url|escapejs }}', downloadUrl: '{{ download_url|escapejs }}', files: {{ files|yesno:'true,false' }}, history: {{ history|yesno:'true,false' }}, panel: '{{ panel_id|default:"viewer-panel"|escapejs }}' })"
   data-file-viewer-modal
@@ -61,44 +59,7 @@
         <div
           class="flex items-center gap-2 self-start col-start-2 row-start-1 md:row-span-2"
         >
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm btn-square"
-            :class="{ 'text-warning [&_svg]:fill-current': isFavorite }"
-            @click="toggleFavorite()"
-            :disabled="!canFavorite"
-            :title="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
-            :aria-label="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
-            :aria-pressed="isFavorite ? 'true' : 'false'"
-            x-show="filesItem"
-            x-cloak
-            data-viewer-favorite
-          >
-            <i data-lucide="star" class="w-4 h-4"></i>
-          </button>
-          <a
-            :href="newTabHref()"
-            target="_blank"
-            rel="noopener"
-            class="btn btn-ghost btn-sm btn-square"
-            title="{% translate 'Open in new tab' %}"
-            aria-label="{% translate 'Open in new tab' %}"
-            x-show="newTabHref()"
-            x-cloak
-            data-viewer-new-tab-link
-          >
-            <i data-lucide="external-link" class="w-4 h-4"></i>
-          </a>
-          {# Hidden on a blocked file: the malware policy 403s the request anyway. #}
-          <a
-            :href="downloadOverride || downloadUrl"
-            download
-            class="btn btn-ghost btn-sm btn-square"
-            title="{% translate 'Download' %}"
-            x-show="downloadUrl && !viewerBlocked"
-          >
-            <i data-lucide="download" class="w-4 h-4"></i>
-          </a>
+          {% include "files/ui/partials/viewer_file_buttons.html" %}
           {% if actions %}
             {% include actions %}
           {% endif %}

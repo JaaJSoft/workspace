@@ -174,7 +174,7 @@ def links_for_task(user, task):
                     "title": other.title,
                     "project": str(other.project_id),
                     "is_done": other.status.category == TaskStatus.Category.DONE,
-                    "url": f"/projects/{other.project_id}?task={other.uuid}",
+                    "url": other.get_absolute_url(),
                 },
             }
         )

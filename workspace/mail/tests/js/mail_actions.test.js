@@ -7,6 +7,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 const MSG_A = '55555555-5555-4555-8555-555555555555';
 const MSG_B = '66666666-6666-4666-8666-666666666666';
@@ -51,7 +52,7 @@ function makeApp() {
       navHistory: { push() {}, replace() {}, returnTo() { return false; } },
       document: { getElementById: () => null, addEventListener() {} },
       addEventListener() {},
-      sidebarPreference: { initial: () => false, save: () => {} },
+      sidebarPreference: sidebarPreferenceStub(),
       _mailPrefsCache: {},
       getCSRFToken: () => 'token',
       AppDialog: { confirm: async () => true, error() {} },

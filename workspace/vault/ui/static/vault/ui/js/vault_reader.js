@@ -235,6 +235,29 @@ window.vaultReader = (function () {
       return readAll(rows, function (row) { return readTag(session, vault, row); });
     },
 
+    // Everything a vault holds, read: its folders, its tags and its entries,
+    // the trashed ones with the rest. `rows` is every entry row as listed.
+    // The trash is a view over rows the vault already holds: reaching for it
+    // must not cost a round trip, and restoring an entry must not have to
+    // reconcile two listings.
+    readContents: async function (session, vault) {
+      const api = window.vaultApi;
+      const reader = window.vaultReader;
+      const [folderRows, tagRows, liveRows, trashedRows] = await Promise.all([
+        api.listFolders(vault.uuid),
+        api.listTags(vault.uuid),
+        api.listEntries(vault.uuid),
+        api.listEntries(vault.uuid, { trashed: true }),
+      ]);
+      const rows = liveRows.concat(trashedRows);
+      return {
+        rows: rows,
+        folders: await reader.readFolders(session, vault, folderRows),
+        tags: await reader.readTags(session, vault, tagRows),
+        entries: await reader.readEntries(session, vault, rows),
+      };
+    },
+
     // The other half of lazy decryption: one field, opened when it is asked
     // for, handed straight to the caller. Nothing here stores it.
     openField: async function (session, vault, row, fieldId) {

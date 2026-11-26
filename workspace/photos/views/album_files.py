@@ -32,11 +32,9 @@ from workspace.files.services.thumbnails.generation import (
     thumbnail_variant_path,
 )
 
-from ..actions import AlbumActionRegistry
+from ..actions import album_action_allowed
 from ..queries import (
     album_files,
-    direct_share_album_ids,
-    get_album_role,
     reachable_album,
 )
 from ..services.album_renditions import (
@@ -173,16 +171,6 @@ def _album_and_file(request, uuid, file_uuid):
     return album, files.filter(uuid=file_uuid).first()
 
 
-def _may_download(user, album):
-    return AlbumActionRegistry.is_action_available(
-        "download",
-        user,
-        album,
-        role=get_album_role(user, album),
-        direct=bool(direct_share_album_ids(user, [album])),
-    )
-
-
 @extend_schema(tags=["Photos - Album files"])
 class AlbumFileThumbnailView(APIView):
     @extend_schema(
@@ -214,7 +202,7 @@ class AlbumFileContentView(APIView):
         album, file_obj = _album_and_file(request, uuid, file_uuid)
         if file_obj is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if not _may_download(request.user, album):
+        if not album_action_allowed("download", request.user, album):
             return rendition_response(request, file_obj)
         return content_response(request, file_obj)
 
@@ -230,7 +218,7 @@ class AlbumFileDownloadView(APIView):
         album, file_obj = _album_and_file(request, uuid, file_uuid)
         if file_obj is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if not _may_download(request.user, album):
+        if not album_action_allowed("download", request.user, album):
             return Response(status=status.HTTP_403_FORBIDDEN)
         return content_response(request, file_obj, attachment=True)
 
@@ -246,7 +234,7 @@ class AlbumDownloadView(APIView):
         album = reachable_album(request.user, uuid)
         if album is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if not _may_download(request.user, album):
+        if not album_action_allowed("download", request.user, album):
             return Response(status=status.HTTP_403_FORBIDDEN)
         return archive_response(album_files(request.user, album), album.title)
 
@@ -271,7 +259,7 @@ class AlbumDownloadView(APIView):
         album = reachable_album(request.user, uuid)
         if album is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if not _may_download(request.user, album):
+        if not album_action_allowed("download", request.user, album):
             return Response(status=status.HTTP_403_FORBIDDEN)
         try:
             uuids = set(

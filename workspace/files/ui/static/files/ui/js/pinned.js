@@ -95,7 +95,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         const pinned = await window.fileActions.setPinned([data.uuid], true);
         if (!pinned.length) throw new Error(gettext('This folder cannot be pinned'));
         window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-        this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+        window.folderNav.refreshListing(this.$ajax);
       } catch (error) {
         if (window.AppAlert) {
           window.AppAlert.show({ type: 'error', message: error.message || gettext('Failed to pin folder'), duration: 5000 });

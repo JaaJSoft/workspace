@@ -7,6 +7,7 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 
 const { loadScript } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 const JOURNAL = '22222222-2222-2222-2222-222222222222';
 const TODAY = '2026-11-24';
@@ -19,7 +20,7 @@ function makeApp(responses, extraGlobals = {}) {
       requests.push([init && init.method ? init.method : 'GET', url]);
       return responses.shift();
     },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     addEventListener: () => {},
     document: { getElementById: () => null },
     tagsMixin: () => ({}),

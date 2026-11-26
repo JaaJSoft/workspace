@@ -7,8 +7,6 @@
   once, as in Files.
 {% endcomment %}
 {% load i18n %}
-{% translate "Hide password" as hide_password_label %}
-{% translate "Show password" as show_password_label %}
 {% translate "Saving..." as saving_label %}
 {% translate "Save" as save_label %}
 <div x-data="albumShareModal()">
@@ -200,7 +198,7 @@
                 class="btn btn-ghost btn-xs btn-square"
                 title="{% translate 'Copy link' %}"
                 aria-label="{% translate 'Copy link' %}"
-                @click="copyLink(link.url)"
+                @click="copyLinkUrl(link.url)"
               >
                 <i data-lucide="copy" class="w-3.5 h-3.5"></i>
               </button>
@@ -228,38 +226,7 @@
             class="mt-2 p-3 bg-base-200 rounded-lg space-y-2"
             data-album-link-form
           >
-            <div class="fieldset">
-              <label class="fieldset-legend">
-                <span class="text-xs">{% translate "Expiration (optional)" %}</span>
-              </label>
-              <input type="date" class="input input-sm w-full" x-model="newLinkExpiry" />
-            </div>
-            <div class="fieldset">
-              <label class="fieldset-legend">
-                <span class="text-xs">{% translate "Password (optional)" %}</span>
-              </label>
-              <div class="flex items-center gap-1.5">
-                <input
-                  :type="linkPasswordRevealed ? 'text' : 'password'"
-                  class="input input-sm flex-1 min-w-0"
-                  :class="linkPasswordRevealed && 'font-mono'"
-                  autocomplete="new-password"
-                  spellcheck="false"
-                  x-model="newLinkPassword"
-                  placeholder="{% translate 'Leave empty for no password' %}"
-                />
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-sm btn-square"
-                  :title="linkPasswordRevealed ? '{{ hide_password_label|escapejs }}' : '{{ show_password_label|escapejs }}'"
-                  :aria-label="linkPasswordRevealed ? '{{ hide_password_label|escapejs }}' : '{{ show_password_label|escapejs }}'"
-                  @click="linkPasswordRevealed = !linkPasswordRevealed"
-                >
-                  <i data-lucide="eye" class="w-4 h-4" x-show="!linkPasswordRevealed"></i>
-                  <i data-lucide="eye-off" class="w-4 h-4" x-show="linkPasswordRevealed"></i>
-                </button>
-              </div>
-            </div>
+            {% include "files/ui/partials/public_link_fields.html" %}
             <label class="flex items-start gap-2 cursor-pointer">
               <input
                 type="checkbox"

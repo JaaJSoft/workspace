@@ -8,6 +8,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 const EVENT_A = '0190a2b4-0000-7000-8000-00000000000a';
 const EVENT_B = '0190a2b4-0000-7000-8000-00000000000b';
@@ -42,7 +43,7 @@ function makeApp(search = '?view=month') {
   ], {
     document: { getElementById: () => null, body: { dataset: { userId: '1' } } },
     localStorage: { getItem: () => null, setItem: () => {} },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     matchMedia: () => ({ matches: false, addEventListener: () => {} }),
     calendarCalendarsMixin: () => ({}),
     calendarTasksMixin: () => ({}),

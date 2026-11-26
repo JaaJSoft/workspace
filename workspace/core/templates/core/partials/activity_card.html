@@ -1,0 +1,96 @@
+{% comment %}
+  Activity feed card: source tabs, search, refresh, and a feed that loads
+  itself after paint.
+
+  Params (prefixed because the include cannot be `only`: the tabs read
+  activity_sources from the page context):
+    activity_prefix       id of the feed target, also the tabs' x-target
+    activity_title        card heading
+    activity_feed_url     endpoint rendering core/partials/activity_feed.html
+    activity_reload_url   page offered by the "Reload" link when a fetch fails
+    activity_initial_tab  source slug selected on load, default "all"
+    activity_card_size    "lg" on the dashboard: its cards' shadow, title scale
+                          and the wider breakpoint its larger title needs
+
+  The skeleton (feedSkeleton) is shown before every fetch - on first paint via
+  x-init, and on tab/search/refresh via the card's @ajax:before - then
+  alpine-ajax overwrites the target with the response. No loading flag to get
+  stuck; on failure the card's @ajax:error swaps in feedFailed instead.
+{% endcomment %}
+{% load i18n %}
+<div
+  class="card bg-base-100 border border-base-300 {% if activity_card_size == 'lg' %}shadow-sm{% else %}shadow-xs{% endif %}"
+  x-data="{
+     activityTab: '{{ activity_initial_tab|default:"all"|escapejs }}',
+     activitySearch: '',
+     searchOpen: false,
+     get feedUrl() {
+       let u = '{{ activity_feed_url|escapejs }}';
+       let p = [];
+       if (this.activityTab !== 'all') p.push('source=' + this.activityTab);
+       if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch));
+       return p.length ? u + '?' + p.join('&') : u;
+     }
+   }"
+  data-feed="{{ activity_prefix }}"
+  @ajax:before="$el.querySelector('#' + $el.dataset.feed).innerHTML = $refs.feedSkeleton.innerHTML"
+  @ajax:error="$el.querySelector('#' + $el.dataset.feed).innerHTML = $refs.feedFailed.innerHTML"
+>
+  <div class="card-body gap-4 p-4 sm:p-6">
+    <div
+      class="flex flex-col gap-4 {% if activity_card_size == 'lg' %}md:flex-row md:items-center md:justify-between{% else %}sm:flex-row sm:items-center sm:justify-between{% endif %}"
+    >
+      <h2
+        class="card-title gap-2 shrink-0 {% if activity_card_size == 'lg' %}text-xl{% else %}text-base{% endif %}"
+      >
+        <i data-lucide="activity" class="w-5 h-5"></i>
+        {{ activity_title }}
+      </h2>
+      <div class="flex items-center gap-2 min-w-0">
+        {% include "core/partials/activity_tabs.html" %}
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          :class="searchOpen && 'btn-active'"
+          title="{% translate 'Search' %}"
+          @click="searchOpen = !searchOpen; if (!searchOpen) { activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click()) } else { $nextTick(() => $refs.activitySearchInput.focus()) }"
+        >
+          <i data-lucide="search" class="w-4 h-4"></i>
+        </button>
+        {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target=activity_prefix loading_expr="false" %}
+      </div>
+    </div>
+
+    {% include "core/partials/activity_search.html" %}
+
+    <div x-ref="feedSkeleton" hidden>
+      <div class="animate-pulse">
+        <ul class="divide-y divide-base-200">
+          {% for _ in "12345" %}
+            <li class="py-3 flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-base-300 shrink-0"></div>
+              <div class="flex-1 min-w-0 space-y-2">
+                <div class="h-4 bg-base-300 rounded-sm w-3/4"></div>
+                <div class="h-3 bg-base-300 rounded-sm w-1/2"></div>
+              </div>
+              <div class="h-6 w-12 bg-base-300 rounded-sm hidden sm:block"></div>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <div
+      id="{{ activity_prefix }}"
+      x-init="$el.innerHTML = $refs.feedSkeleton.innerHTML; $ajax(feedUrl, { target: $el.id })"
+    ></div>
+
+    {# Error markup, copied into the feed target by the card's @ajax:error so the card is never left blank #}
+    <div x-ref="feedFailed" hidden>
+      <p class="py-3 text-sm text-base-content/60">
+        {% translate "Couldn't load activity." %}
+        <a href="{{ activity_reload_url }}" class="link link-hover">{% translate "Reload" %}</a>
+      </p>
+    </div>
+  </div>
+</div>

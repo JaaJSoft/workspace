@@ -11,7 +11,7 @@ from workspace.mail.models import (
     MailMessage,
     MailMessageLabel,
 )
-from workspace.mail.services.label_counts import refresh_labels_for_messages
+from workspace.mail.services.counts import refresh_labels_for_messages
 
 User = get_user_model()
 

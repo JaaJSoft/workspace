@@ -9,6 +9,7 @@ process.env.TZ = 'Europe/Paris';
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 const mixinStub = () => ({});
 
@@ -32,7 +33,7 @@ function makeApp(userTz, extraGlobals = {}) {
   ], {
     document: { getElementById: () => null },
     localStorage: { getItem: () => null, setItem: () => {} },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     matchMedia: () => ({ matches: false, addEventListener: () => {}, addListener: () => {} }),
     calendarCalendarsMixin: mixinStub,
     calendarTasksMixin: mixinStub,

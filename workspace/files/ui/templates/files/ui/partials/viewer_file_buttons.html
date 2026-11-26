@@ -1,0 +1,46 @@
+{% load i18n %}
+{% comment %}
+  What the header of either Files viewer (file_viewer_inline.html,
+  file_viewer_modal.html) offers on the file shown: its star, a new tab and
+  the download. Both spread fileViewerShellMixin(), whose state these read.
+{% endcomment %}
+{% translate "Remove from favorites" as remove_favorite_label %}
+{% translate "Add to favorites" as add_favorite_label %}
+<button
+  type="button"
+  class="btn btn-ghost btn-sm btn-square"
+  :class="{ 'text-warning [&_svg]:fill-current': isFavorite }"
+  @click="toggleFavorite()"
+  :disabled="!canFavorite"
+  :title="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
+  :aria-label="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
+  :aria-pressed="isFavorite ? 'true' : 'false'"
+  x-show="filesItem"
+  x-cloak
+  data-viewer-favorite
+>
+  <i data-lucide="star" class="w-4 h-4"></i>
+</button>
+<a
+  :href="newTabHref()"
+  target="_blank"
+  rel="noopener"
+  class="btn btn-ghost btn-sm btn-square"
+  title="{% translate 'Open in new tab' %}"
+  aria-label="{% translate 'Open in new tab' %}"
+  x-show="newTabHref()"
+  x-cloak
+  data-viewer-new-tab-link
+>
+  <i data-lucide="external-link" class="w-4 h-4"></i>
+</a>
+{# Hidden on a blocked file: the malware policy 403s the request anyway. #}
+<a
+  :href="downloadOverride || downloadUrl"
+  download
+  class="btn btn-ghost btn-sm btn-square"
+  title="{% translate 'Download' %}"
+  x-show="downloadUrl && !viewerBlocked"
+>
+  <i data-lucide="download" class="w-4 h-4"></i>
+</a>

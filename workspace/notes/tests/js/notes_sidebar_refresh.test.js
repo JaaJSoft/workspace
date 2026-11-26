@@ -11,13 +11,14 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 function makeApp({ ajaxFails = false } = {}) {
   const calls = { ajax: [], folderLoads: 0, order: [] };
 
   const ctx = loadScript('workspace/notes/ui/static/notes/ui/js/notes.js', {
     fetch: () => Promise.resolve({ ok: false }),
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     addEventListener: () => {},
     document: { getElementById: () => null },
     tagsMixin: () => ({}),

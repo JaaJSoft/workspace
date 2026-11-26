@@ -5,6 +5,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 function makeApp(reply = { ok: true, status: 200 }) {
   const puts = [];
@@ -22,7 +23,7 @@ function makeApp(reply = { ok: true, status: 200 }) {
     },
     document: { getElementById: () => null, body: { dataset: { userId: '1' } } },
     localStorage: { getItem: () => null, setItem: () => {} },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     matchMedia: () => ({ matches: false, addEventListener: () => {} }),
     calendarCalendarsMixin: () => ({}),
     calendarTasksMixin: () => ({}),

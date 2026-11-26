@@ -36,7 +36,7 @@ class ProjectsActivityProviderTests(ProjectTestMixin, TestCase):
         )
         self.assertEqual(event["icon"], "plus")
         self.assertEqual(
-            event["url"], f"/projects/{self.project.uuid}?task={self.task.uuid}"
+            event["url"], f"/projects/{self.project.uuid}/board?task={self.task.uuid}"
         )
         self.assertEqual(event["meta_icon"], "square-kanban")
         self.assertEqual(event["meta_text"], "Website")

@@ -2,7 +2,6 @@ import logging
 import time
 from datetime import timedelta
 
-from django.db.models import Prefetch
 from django.utils import timezone
 
 from workspace.common.uuids import parse_uuid_or_none
@@ -17,7 +16,11 @@ from .models import (
     PinnedMessage,
     Reaction,
 )
-from .serializers import MessageInteractionSerializer, MessageSerializer
+from .serializers import (
+    MessageInteractionSerializer,
+    MessageSerializer,
+    with_message_relations,
+)
 from .services.conversations import get_unread_counts, user_conversation_ids
 
 logger = logging.getLogger(__name__)
@@ -130,30 +133,15 @@ class ChatSSEProvider(SSEProvider):
 
         # New messages
         new_messages = list(
-            Message.objects.filter(
-                conversation_id__in=self._member_conv_ids,
-                created_at__gt=self._since,
-                deleted_at__isnull=True,
-            )
-            .exclude(author_id=user_id)
-            .exclude(uuid__in=self._seen_message_ids)
-            .select_related(
-                "author",
-                "author__bot_profile",
-                "reply_to",
-                "reply_to__author",
-                "interaction",
-                "interaction__interacted_by",
-            )
-            .prefetch_related(
-                Prefetch(
-                    "reactions",
-                    queryset=Reaction.objects.select_related("user"),
-                ),
-                "attachments",
-                "link_previews__preview",
-            )
-            .order_by("created_at")[:50]
+            with_message_relations(
+                Message.objects.filter(
+                    conversation_id__in=self._member_conv_ids,
+                    created_at__gt=self._since,
+                    deleted_at__isnull=True,
+                )
+                .exclude(author_id=user_id)
+                .exclude(uuid__in=self._seen_message_ids)
+            ).order_by("created_at")[:50]
         )
         for msg in new_messages:
             self._seen_message_ids.add(msg.uuid)

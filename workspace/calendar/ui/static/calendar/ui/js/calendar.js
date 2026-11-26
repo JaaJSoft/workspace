@@ -20,7 +20,7 @@ window.calendarApp = function calendarApp() {
     prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, defaultAllDay: false, showDeclined: false, notifyPollVotes: true, showTasks: true },
 
     // Sidebar
-    collapsed: window.sidebarPreference.initial(),
+    ...window.sidebarPreference.drawerMixin('calendar'),
     ownedCalendars: calendarsData?.owned || [],
     subscribedCalendars: calendarsData?.subscribed || [],
     visibleCalendars: {},  // { uuid: true } for reactive tracking
@@ -232,21 +232,6 @@ window.calendarApp = function calendarApp() {
     _saveVisibility() {
       const ids = Object.keys(this.visibleCalendars).filter(k => this.visibleCalendars[k]);
       localStorage.setItem('calendarVisible', JSON.stringify(ids));
-    },
-
-    // ── Sidebar ─────────────────────────────────────────────
-    isMobile() {
-      return window.matchMedia('(max-width: 1023px)').matches;
-    },
-
-    sidebarCollapsed() {
-      return this.isMobile() ? false : this.collapsed;
-    },
-
-    toggleCollapse() {
-      if (this.isMobile()) return;
-      this.collapsed = !this.collapsed;
-      window.sidebarPreference.save('calendar', this.collapsed);
     },
 
     toggleCalendarVisibility(uuid) {

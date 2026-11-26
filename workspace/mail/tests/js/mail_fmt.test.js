@@ -3,6 +3,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 const { clockGlobals } = require('../../../common/tests/js/clock');
 
 const mixinStub = () => ({});
@@ -10,7 +11,7 @@ const mixinStub = () => ({});
 function makeApp(userTz) {
   const ctx = loadScript('workspace/mail/ui/static/mail/ui/js/mail.js', {
 document: { getElementById: () => null },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     getUserLocale: () => 'en-US',
     ...clockGlobals(),
     // Domain mixins live in separate files; the formatters under test are

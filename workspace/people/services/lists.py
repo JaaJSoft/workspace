@@ -1,17 +1,12 @@
-from ..models import PersonList
+from ..models import PersonList, require_one_scope
 
 
 class ScopeMismatch(ValueError):
     """A member and its list must belong to the same owner or group."""
 
 
-def _check_one_scope(owner, group):
-    if (owner is None) == (group is None):
-        raise ValueError("A list belongs to exactly one owner or one group.")
-
-
 def create_list(*, owner=None, group=None, name):
-    _check_one_scope(owner, group)
+    require_one_scope(owner, group)
     return PersonList.objects.create(owner=owner, group=group, name=name)
 
 

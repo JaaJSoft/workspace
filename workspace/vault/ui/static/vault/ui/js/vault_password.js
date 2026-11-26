@@ -9,7 +9,7 @@
 //
 // Never name this mixin after a password: CodeQL (js/clear-text-storage)
 // treats whatever a call to such a name returns as a secret, and once it is
-// spread into the root every localStorage write in vault_browser.js is flagged.
+// spread into the root every localStorage write the vault browser makes is flagged.
 window.vaultResealDialogMixin = function vaultResealDialogMixin() {
   return {
     passwordDialogOpen: false,

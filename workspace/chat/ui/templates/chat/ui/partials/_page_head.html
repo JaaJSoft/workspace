@@ -1,0 +1,18 @@
+{% comment %}
+  Head assets shared by the chat page and the voice room.
+  conversation_avatar.js is in <head> and not deferred on purpose:
+  <conversation-avatar> must be defined before the parser reaches the markup
+  using it, or server-rendered avatars flash unstyled.
+{% endcomment %}
+{% load static %}
+<script src="{% static 'chat/ui/js/conversation_avatar.js' %}"></script>
+<link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}" />
+<link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}" />
+<link
+  rel="stylesheet"
+  href="{% static 'users/ui/css/vendor/cropper/cropper.css' %}"
+/>
+<script
+  type="module"
+  src="{% static 'chat/ui/js/vendor/emoji-picker/emoji-picker.js' %}"
+></script>

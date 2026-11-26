@@ -6,13 +6,15 @@ from django.utils import timezone
 
 from .models import Project, ProjectMember, Task, TaskEvent, TaskStatus
 
+PRIORITIES_BY_URGENCY = list(reversed(Task.Priority))
+
 # CharField priorities don't sort by urgency ('high' < 'urgent' alphabetically),
 # so ordering needs an explicit rank. Lower rank = more urgent.
-_PRIORITY_RANK = Case(
-    When(priority=Task.Priority.URGENT, then=Value(0)),
-    When(priority=Task.Priority.HIGH, then=Value(1)),
-    When(priority=Task.Priority.MEDIUM, then=Value(2)),
-    default=Value(3),
+PRIORITY_RANK = Case(
+    *(
+        When(priority=priority, then=Value(rank))
+        for rank, priority in enumerate(PRIORITIES_BY_URGENCY)
+    ),
     output_field=IntegerField(),
 )
 
@@ -136,7 +138,7 @@ def assigned_open_tasks(user):
         )
         .exclude(status__category=TaskStatus.Category.DONE)
         .select_related("project", "status")
-        .annotate(priority_rank=_PRIORITY_RANK)
+        .annotate(priority_rank=PRIORITY_RANK)
         .order_by(F("due_date").asc(nulls_last=True), "priority_rank", "created_at")
     )
 

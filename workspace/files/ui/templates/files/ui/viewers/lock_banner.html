@@ -1,0 +1,15 @@
+{% load i18n %}
+{# Shown while lockOwner names another user editing the file; the including editor defines lockOwner and forceUnlock(). #}
+<div
+  x-show="lockOwner"
+  x-cloak
+  class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-base-content text-sm"
+>
+  <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
+  <span class="flex-1">
+    {% blocktranslate trimmed with owner='<strong x-text="lockOwner"></strong>' %}
+      {{ owner }} is editing this file
+    {% endblocktranslate %}
+  </span>
+  <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">{% translate "Force unlock" %}</button>
+</div>

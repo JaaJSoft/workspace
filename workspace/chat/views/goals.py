@@ -11,25 +11,9 @@ from workspace.ai.services.agent_goals import close_goal, update_open_goal
 
 from ..serializers import AgentGoalCreateSerializer, AgentGoalSerializer
 from ..services.bot_tasks import can_manage_bot_task
-from ..services.conversations import get_active_membership
+from ..services.conversations import conversation_bot, get_active_membership
 
 logger = logging.getLogger(__name__)
-
-
-def _get_bot_member(conversation_id):
-    """Return the first bot User active in the conversation, or None."""
-    from ..models import ConversationMember
-
-    member = (
-        ConversationMember.objects.filter(
-            conversation_id=conversation_id,
-            left_at__isnull=True,
-            user__bot_profile__isnull=False,
-        )
-        .select_related("user")
-        .first()
-    )
-    return member.user if member else None
 
 
 @extend_schema(tags=["Chat - Conversations"])
@@ -75,7 +59,7 @@ class AgentGoalListView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        bot_user = _get_bot_member(conversation_id)
+        bot_user = conversation_bot(conversation_id)
         if bot_user is None:
             return Response(
                 {"detail": gettext("This conversation has no AI bot.")},

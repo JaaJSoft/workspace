@@ -87,11 +87,6 @@ window.chatCallMixin = function chatCallMixin() {
     _iceServers: [],
     _heartbeatTimer: null,
 
-    _csrf() {
-      return (typeof getCSRFToken === 'function') ? getCSRFToken()
-        : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
-    },
-
     _loadIceServers() {
       if (this._iceServers.length) return this._iceServers;
       const el = document.getElementById('call-ice-servers-data');
@@ -141,7 +136,7 @@ window.chatCallMixin = function chatCallMixin() {
       try {
         resp = await fetch(`/api/v1/chat/conversations/${convId}/call/join`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         });
       } catch (e) {
         this._teardownLocal();
@@ -207,7 +202,7 @@ window.chatCallMixin = function chatCallMixin() {
         try {
           await fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
             method: 'POST',
-            headers: { 'X-CSRFToken': this._csrf() },
+            headers: { 'X-CSRFToken': getCSRFToken() },
             keepalive: true,
           });
         } catch (e) { /* best effort */ }
@@ -260,7 +255,7 @@ window.chatCallMixin = function chatCallMixin() {
       try {
         fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           keepalive: true,
         });
       } catch (e) { /* page is going away */ }
@@ -393,7 +388,7 @@ window.chatCallMixin = function chatCallMixin() {
       try {
         await fetch(`/api/v1/chat/conversations/${convId}/call/heartbeat`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ media_state: this._mediaState() }),
         });
       } catch (e) { /* transient */ }
@@ -524,7 +519,7 @@ window.chatCallMixin = function chatCallMixin() {
       try {
         await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call/signal`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ to_user_id: toUserId, signal }),
         });
       } catch (e) { /* transient */ }

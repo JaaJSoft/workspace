@@ -20,11 +20,10 @@ from .avatar import avatar_jpeg, delete_avatar, save_avatar_from_card
 from .lists import create_list
 from .persons import create_person, delete_person, update_person
 from .vcard import (
+    card_uid,
     list_to_vcard,
-    list_uid,
     own_uuid,
     person_to_vcard,
-    person_uid,
     uid_key,
 )
 
@@ -76,10 +75,6 @@ def book_cards(book, uuids=None):
         *persons.order_by("uuid"),
         *lists.prefetch_related("members").order_by("uuid"),
     ]
-
-
-def card_uid(card):
-    return list_uid(card) if isinstance(card, PersonList) else person_uid(card)
 
 
 def render_card(card, version):
@@ -216,7 +211,7 @@ def _store_list(book, name, parsed, existing):
 
 def _resolve_pending_members(book, person):
     """Add a new person to the lists that named it before it existed."""
-    uid = person_uid(person)
+    uid = card_uid(person)
     key = uid_key(uid)
     for person_list in book.lists().exclude(pending_member_uids=[]):
         still_pending = [

@@ -3,6 +3,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 const { clockGlobals } = require('../../../common/tests/js/clock');
 
 const mixinStub = () => ({});
@@ -47,7 +48,7 @@ function makeCalendarApp(userTz) {
   ], {
     document: { getElementById: () => null },
 localStorage: { getItem: () => null, setItem: () => {} },
-    sidebarPreference: { initial: () => false, save: () => {} },
+    sidebarPreference: sidebarPreferenceStub(),
     matchMedia: () => ({ matches: false, addEventListener: () => {}, addListener: () => {} }),
     calendarCalendarsMixin: mixinStub,
     calendarEventsMixin: mixinStub,

@@ -1,7 +1,6 @@
 import logging
 
 from django.db import transaction
-from django.db.models import Prefetch
 from django.utils import timezone
 from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema
@@ -10,8 +9,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..models import Message, MessageInteraction, Reaction
-from ..serializers import MessageSerializer
+from ..models import Message, MessageInteraction
+from ..serializers import MessageSerializer, with_message_relations
 from ..services.conversations import get_active_membership
 from ..services.posting import post_message
 from ..services.rendering import render_message_body
@@ -21,23 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def _refetch_for_serialization(message_pk):
-    return (
-        Message.objects.filter(pk=message_pk)
-        .select_related(
-            "author",
-            "author__bot_profile",
-            "reply_to",
-            "reply_to__author",
-            "interaction",
-            "interaction__interacted_by",
-        )
-        .prefetch_related(
-            Prefetch("reactions", queryset=Reaction.objects.select_related("user")),
-            "attachments",
-            "link_previews__preview",
-        )
-        .first()
-    )
+    return with_message_relations(Message.objects.filter(pk=message_pk)).first()
 
 
 @extend_schema(tags=["Chat - Messages"])

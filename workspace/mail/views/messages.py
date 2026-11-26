@@ -441,8 +441,10 @@ class MailBatchActionView(APIView):
                             scrub(e),
                         )
 
-        from ..services.counts import refresh_folders_counts_bulk
-        from ..services.label_counts import refresh_labels_for_messages
+        from ..services.counts import (
+            refresh_folders_counts_bulk,
+            refresh_labels_for_messages,
+        )
 
         with transaction.atomic():
             if to_bulk_update:

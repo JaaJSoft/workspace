@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
 from workspace.ai.models import AITask, BotProfile
@@ -98,3 +99,17 @@ class BotReplyDispatchTests(APITestCase):
 
         self.assertFalse(AITask.objects.exists())
         mock_delay.assert_not_called()
+
+    def test_a_bot_that_has_left_gets_no_task(self, mock_delay, _push, _sse):
+        ConversationMember.objects.filter(user=self.bot).update(left_at=timezone.now())
+
+        self._send()
+
+        self.assertFalse(AITask.objects.exists())
+
+    def test_a_bot_does_not_answer_its_own_message(self, mock_delay, _push, _sse):
+        self.client.force_authenticate(self.bot)
+
+        self.assertEqual(self._send().status_code, 201)
+
+        self.assertFalse(AITask.objects.exists())

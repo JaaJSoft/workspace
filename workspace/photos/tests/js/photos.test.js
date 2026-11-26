@@ -1,6 +1,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 function load({ mobile = false, collapsed = false, observers = [], ...extra } = {}) {
   const saved = [];
@@ -30,7 +31,7 @@ function load({ mobile = false, collapsed = false, observers = [], ...extra } = 
       'workspace/files/ui/static/files/ui/js/file_operations.js',
     ],
     {
-      sidebarPreference: { initial: () => collapsed, save: (m, v) => saved.push([m, v]) },
+      sidebarPreference: sidebarPreferenceStub({ initial: collapsed, save: (m, v) => saved.push([m, v]), narrow: mobile }),
       matchMedia: () => ({ matches: mobile }),
       document: { getElementById: () => null, querySelector: () => null },
       IntersectionObserver: FakeObserver,

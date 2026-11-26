@@ -168,10 +168,7 @@ window.storageAnalysis = function storageAnalysis() {
     afterMutation() {
       this.reload();
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-      const browser = document.getElementById('folder-browser');
-      if (browser) {
-        this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
-      }
+      window.folderNav.refreshListing(this.$ajax);
     },
   };
 };

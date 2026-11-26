@@ -9,7 +9,6 @@ Credentials travel base64-encoded, not encrypted, so /metrics must only be
 reached over TLS or from inside a trusted network.
 """
 
-import base64
 import logging
 from functools import wraps
 from hmac import compare_digest
@@ -17,23 +16,10 @@ from hmac import compare_digest
 from django.conf import settings
 from django.http import HttpResponse
 
+from workspace.common.basic_auth import basic_credentials
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
-
-
-def _submitted(request):
-    """Return the ``(user, password)`` carried by the Authorization header."""
-    scheme, _, payload = request.META.get("HTTP_AUTHORIZATION", "").partition(" ")
-    if scheme.lower() != "basic":
-        return None
-    try:
-        # binascii.Error and UnicodeDecodeError are both ValueError subclasses.
-        decoded = base64.b64decode(payload.strip(), validate=True).decode("utf-8")
-    except ValueError:
-        return None
-    user, separator, password = decoded.partition(":")
-    return (user, password) if separator else None
 
 
 def _matches(submitted, expected):
@@ -56,7 +42,9 @@ def metrics_basic_auth(view):
             logger.error(
                 "/metrics refused a caller: METRICS_USER and METRICS_PASSWORD are unset"
             )
-        elif _matches(_submitted(request), expected):
+        elif _matches(
+            basic_credentials(request.headers.get("Authorization")), expected
+        ):
             return view(request, *args, **kwargs)
         else:
             logger.warning(

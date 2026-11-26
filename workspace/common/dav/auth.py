@@ -10,8 +10,6 @@ password hash on its own. The flip side is that a revoked token keeps working
 on a worker that cached it until its entry expires.
 """
 
-import base64
-import binascii
 import hashlib
 import os
 import threading
@@ -30,25 +28,6 @@ _CACHE_KEY_SECRET = os.urandom(32)
 _SCRYPT_N = 2**10
 _SCRYPT_R = 8
 _SCRYPT_P = 1
-
-
-def basic_credentials(authorization):
-    """Split an ``Authorization: Basic ...`` header into ``(username, password)``.
-
-    None for a missing header, another scheme, or a payload that does not
-    decode to ``user:password``.
-    """
-    scheme, _, payload = (authorization or "").partition(" ")
-    if scheme.lower() != "basic" or not payload:
-        return None
-    try:
-        decoded = base64.b64decode(payload.strip(), validate=True).decode("utf-8")
-    except binascii.Error, UnicodeDecodeError:
-        return None
-    user_name, sep, password = decoded.partition(":")
-    if not sep:
-        return None
-    return user_name, password
 
 
 def authenticate_basic(user_name, password):

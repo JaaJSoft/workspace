@@ -33,7 +33,22 @@ class ProfileAsyncFeedTests(TestCase):
     def test_renders_async_feed_loader(self):
         resp = self.client.get(reverse("users_ui:profile"))
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "$ajax(feedUrl, { target: 'profile-activity' })")
+        self.assertContains(resp, 'id="profile-activity"')
+        self.assertContains(resp, "$ajax(feedUrl, { target: $el.id })")
+
+    def test_activity_card_reads_the_profile_feed(self):
+        resp = self.client.get(reverse("users_ui:profile"))
+        feed_url = reverse(
+            "users_ui:profile_activity_feed", kwargs={"username": "profuser"}
+        )
+        reload_url = reverse(
+            "users_ui:profile_by_username", kwargs={"username": "profuser"}
+        )
+        self.assertContains(resp, f"let u = '{feed_url}';")
+        self.assertContains(resp, "activityTab: 'all'")
+        self.assertRegex(
+            resp.content.decode(), rf'(?s)x-ref="feedFailed".*?href="{reload_url}"'
+        )
 
 
 class ProfileActivityVisibilityTests(TestCase):

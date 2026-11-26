@@ -441,7 +441,7 @@ window.fileTableControls = function fileTableControls() {
     },
 
     reloadListing() {
-      this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+      window.folderNav.refreshListing(this.$ajax);
     },
 
     // alpine-ajax swapped a refreshed item for a new element (ajax:merged on
@@ -1590,7 +1590,7 @@ window.viewToggle = function viewToggle() {
       this.viewMode = mode;
       window.updateFilePrefs({ defaultViewMode: mode });
       if (await window.saveFilePrefs()) {
-        this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+        window.folderNav.refreshListing(this.$ajax);
         return;
       }
       this.viewMode = previous;

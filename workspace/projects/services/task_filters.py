@@ -4,13 +4,14 @@ Shared by the REST task list endpoint and the board/backlog/all-tasks UI
 views so both surfaces accept the same URL-shareable filter state.
 """
 
-from django.db.models import Case, F, IntegerField, Q, Value, When
+from django.db.models import F, Q
 from django.utils.dateparse import parse_date
 
 from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import Task, TaskStatus
+from ..queries import PRIORITY_RANK
 from .search import fts_tasks
 
 
@@ -22,15 +23,6 @@ class TaskFilterError(Exception):
         self.field = field
         self.message = message
 
-
-# Rank so that ascending `ordering=priority` puts the most important first.
-PRIORITY_RANK = Case(
-    When(priority=Task.Priority.URGENT, then=Value(0)),
-    When(priority=Task.Priority.HIGH, then=Value(1)),
-    When(priority=Task.Priority.MEDIUM, then=Value(2)),
-    When(priority=Task.Priority.LOW, then=Value(3)),
-    output_field=IntegerField(),
-)
 
 ORDERABLE_FIELDS = frozenset(
     {"position", "priority", "due_date", "estimate", "created_at", "updated_at"}

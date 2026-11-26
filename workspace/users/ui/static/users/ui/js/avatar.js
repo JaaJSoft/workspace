@@ -5,7 +5,7 @@
  *
  * The avatar itself is the <user-avatar> element (ui/js/user_avatar.js); it
  * calls _userCardShow/_userCardScheduleHide from here when given the `card`
- * attribute.
+ * attribute. The fetch, cache and timers are ui/js/card_popover.js.
  */
 
 /* ── Patch user card status from Alpine presence store ────────── */
@@ -55,121 +55,18 @@ function _patchCardStatus(container) {
   }
 }
 
-/* ── User card popover (global cache with 30s TTL) ────────────── */
-const _userCardCache = {};
-const _userCardCacheTimes = {};
-const _USER_CARD_CACHE_TTL = 30000; // 30 seconds
+/* ── User card popover ─────────────────────────────────────────── */
+const _userCard = window.createHoverCard({ className: 'user-card-popover', onRender: _patchCardStatus });
 
-/**
- * Show the user card popover for a wrapper element.
- * Waits 500ms before showing to avoid accidental triggers.
- * The popover is appended to document.body with position:fixed to avoid overflow clipping.
- */
 window._userCardShow = function(wrapper, userId) {
-  window._userCardCancelHide(wrapper);
-
-  const existing = wrapper._userCardPopover;
-  if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') {
-    return;
-  }
-
-  // Cancel any existing show timeout (re-entry)
-  if (wrapper._showTimeout) clearTimeout(wrapper._showTimeout);
-
-  wrapper._showTimeout = setTimeout(function() {
-    wrapper._showTimeout = null;
-
-    let popover = wrapper._userCardPopover;
-    if (!popover) {
-      popover = document.createElement('div');
-      popover.className = 'user-card-popover fixed z-9999 bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
-      popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
-      popover.style.opacity = '0';
-      const spinWrap = document.createElement('div');
-      spinWrap.className = 'p-4 flex justify-center';
-      const spinner = document.createElement('span');
-      spinner.className = 'loading loading-spinner loading-sm';
-      spinWrap.appendChild(spinner);
-      popover.appendChild(spinWrap);
-      popover.addEventListener('mouseenter', function() { window._userCardCancelHide(wrapper); });
-      popover.addEventListener('mouseleave', function() { window._userCardScheduleHide(wrapper); });
-      document.body.appendChild(popover);
-      wrapper._userCardPopover = popover;
-    }
-
-    const pos = _computePopoverPosition(wrapper);
-    popover.style.left = pos.left + 'px';
-    popover.style.top = pos.top + 'px';
-    wrapper._placement = pos.placement;
-
-    // Slide+fade in - set initial state without transition, then animate
-    popover.style.display = '';
-    popover.style.transition = 'none';
-    _applyPopoverTransform(popover, pos.placement, false);
-    void popover.offsetHeight;
-    popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
-    _applyPopoverTransform(popover, pos.placement, true);
-
-    // Fetch content if not cached (or cache expired)
-    const cached = _userCardCache[userId];
-    const cacheValid = cached && (_userCardCacheTimes[userId] || 0) + _USER_CARD_CACHE_TTL > Date.now();
-    if (cacheValid) {
-      _setPopoverContent(popover, cached);
-      _patchCardStatus(popover);
-    } else if (!wrapper._fetching) {
-      wrapper._fetching = true;
-      fetch('/users/' + userId + '/card', { credentials: 'same-origin' })
-        .then(function(r) { return r.ok ? r.text() : ''; })
-        .then(function(html) {
-          _userCardCache[userId] = html;
-          _userCardCacheTimes[userId] = Date.now();
-          wrapper._fetching = false;
-          if (wrapper._userCardPopover) {
-            _setPopoverContent(wrapper._userCardPopover, html);
-            _patchCardStatus(wrapper._userCardPopover);
-          }
-        })
-        .catch(function() { wrapper._fetching = false; });
-    }
-  }, 500);
+  _userCard.show(wrapper, '/users/' + userId + '/card');
 };
 
-/**
- * Schedule hiding the user card popover with a 200ms delay.
- * Also cancels any pending show timeout.
- */
 window._userCardScheduleHide = function(wrapper) {
-  // Cancel pending show if user leaves before the 500ms delay
-  if (wrapper._showTimeout) {
-    clearTimeout(wrapper._showTimeout);
-    wrapper._showTimeout = null;
-  }
-
-  wrapper._hideTimeout = setTimeout(function() {
-    const popover = wrapper._userCardPopover;
-    if (popover) {
-      _applyPopoverTransform(popover, wrapper._placement || 'bottom', false);
-      wrapper._closeTimeout = setTimeout(function() { popover.style.display = 'none'; }, 150);
-    }
-  }, 200);
+  _userCard.scheduleHide(wrapper);
 };
 
-/**
- * Cancel a pending hide for the user card popover.
- */
-window._userCardCancelHide = function(wrapper) {
-  if (wrapper._hideTimeout) {
-    clearTimeout(wrapper._hideTimeout);
-    wrapper._hideTimeout = null;
-  }
-  if (wrapper._closeTimeout) {
-    clearTimeout(wrapper._closeTimeout);
-    wrapper._closeTimeout = null;
-  }
-  // Restore visible state if popover was fading out
-  const popover = wrapper._userCardPopover;
-  if (popover && popover.style.display !== 'none') {
-    _applyPopoverTransform(popover, wrapper._placement || 'bottom', true);
-  }
+/** Tear down the card of an avatar leaving the page: the popover lives on <body>. */
+window._userCardDetach = function(wrapper) {
+  _userCard.detach(wrapper);
 };
-

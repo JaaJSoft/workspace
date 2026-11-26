@@ -1,7 +1,5 @@
 """The people found by their body: their crops, and the answers to who they are."""
 
-from django.core.files.storage import default_storage
-from django.http import FileResponse, HttpResponse
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -13,7 +11,8 @@ from workspace.common.mixins import CacheControlMixin
 from ..queries import user_appearances
 from ..serializers import AppearanceBatchSerializer, FaceUndoSerializer
 from ..services import appearance_review
-from .faces import _person, _require_faces
+from ..services.undo_tokens import UndoExpired
+from .faces import _person, _require_faces, stored_webp_response
 
 
 @extend_schema(tags=["Photos - Faces"])
@@ -38,13 +37,7 @@ class AppearanceCropView(CacheControlMixin, APIView):
             .values_list("crop", flat=True)
             .first()
         )
-        if not crop:
-            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
-        try:
-            handle = default_storage.open(crop, "rb")
-        except FileNotFoundError:
-            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
-        return FileResponse(handle, content_type="image/webp")
+        return stored_webp_response(crop)
 
 
 @extend_schema(tags=["Photos - Faces"])
@@ -126,7 +119,7 @@ class AppearanceUndoView(APIView):
             restored = appearance_review.undo(
                 request.user, serializer.validated_data["token"]
             )
-        except appearance_review.UndoExpired:
+        except UndoExpired:
             return Response(
                 {"detail": _("Too late to undo.")}, status=status.HTTP_410_GONE
             )

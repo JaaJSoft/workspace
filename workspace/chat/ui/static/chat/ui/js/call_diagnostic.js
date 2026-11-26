@@ -378,7 +378,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
       try {
         await fetch('/api/v1/chat/call/diagnostic/signal', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ lane, signal, run_id: this.diagRunId }),
         });
       } catch (e) { /* the loopback timeout reports the failure */ }

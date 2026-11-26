@@ -218,22 +218,9 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
     disconnectedCallback() {
       instances.delete(this);
       // The card popover is appended to <body>, so it outlives the avatar
-      // unless it is torn down here (alpine-ajax swaps, x-if teardown).
-      // Cancel the pending timers FIRST: _userCardShow runs on a delay, and a
-      // timer that fires after the avatar is gone would build a fresh popover
-      // and append it to <body> with nothing left to dismiss it.
-      if (this._showTimeout) {
-        clearTimeout(this._showTimeout);
-        this._showTimeout = null;
-      }
-      if (this._hideTimeout) {
-        clearTimeout(this._hideTimeout);
-        this._hideTimeout = null;
-      }
-      const popover = this._userCardPopover;
-      if (popover && popover.parentNode) popover.parentNode.removeChild(popover);
-      this._userCardPopover = null;
-      this._fetching = false;
+      // unless it is torn down here (alpine-ajax swaps, x-if teardown). That
+      // includes a pending show: it would build a popover nothing dismisses.
+      window._userCardDetach(this);
     }
 
     attributeChangedCallback() {

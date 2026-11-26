@@ -1,0 +1,25 @@
+{% comment %}
+  The attributes table.js reads off a listing item, included inside the
+  opening tag of its list row (node_row.html) and of its mosaic tile
+  (node_card.html): both views select, sort, filter and open through them.
+
+  Context: node and is_trash_view, as for node_row.html.
+{% endcomment %}
+{# Outside a tag the formatter takes these for text and rewrites their quotes - hence the off region. #}
+{# djlint:off #}
+id="node-{{ node.uuid }}"
+data-uuid="{{ node.uuid }}"
+data-name="{{ node.name|lower }}"
+data-display-name="{{ node.name }}"
+data-node-type="{{ node.node_type }}"
+data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
+data-viewable="{{ node.viewable|yesno:'1,0' }}"
+data-file-type="{{ node.type }}"
+data-viewer="{{ node.viewer_slug }}"
+data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
+data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
+data-created="{{ node.created_at|date:'U' }}"
+data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
+{% if node.node_type == 'folder' and not is_trash_view %}draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}"{% endif %}
+{% if node.node_type == 'shortcut' and node.shortcut_opens and not is_trash_view %}data-opens="{{ node.shortcut_opens }}" data-target-uuid="{{ node.resolved_target.uuid }}" data-target-name="{{ node.resolved_target.name }}" data-target-file-type="{{ node.resolved_target.type }}"{% endif %}
+{# djlint:on #}

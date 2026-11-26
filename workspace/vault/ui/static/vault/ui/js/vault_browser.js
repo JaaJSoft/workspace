@@ -71,33 +71,7 @@ window.vaultBrowser = (function () {
   // server resolves no vault, and a stored setting would tell it which one is
   // in use.
   const LAST_VAULT_KEY = 'vault.lastVault';
-
-  function readPreference(key) {
-    try {
-      return window.localStorage.getItem(key);
-    } catch (err) {
-      // Private browsing and a blocked-storage setting both throw on read. A
-      // page that forgets which vault was last open is a smaller loss than one
-      // that does not mount.
-      return null;
-    }
-  }
-
-  function writePreference(key, value) {
-    try {
-      window.localStorage.setItem(key, value);
-    } catch (err) {
-      /* nothing to do: the choice does not survive the reload */
-    }
-  }
-
-  function removePreference(key) {
-    try {
-      window.localStorage.removeItem(key);
-    } catch (err) {
-      /* the same blocked storage that refused the write */
-    }
-  }
+  const devicePrefs = window.vaultDevicePrefs;
 
   // Its own title and a red button, so an irreversible question does not read
   // like a reversible one.
@@ -461,7 +435,7 @@ window.vaultBrowser = (function () {
         }
         if (this.openVault) {
           this.vaultUuid = this.openVault.uuid;
-          writePreference(LAST_VAULT_KEY, arriving);
+          devicePrefs.write(LAST_VAULT_KEY, arriving);
           this.syncEntry();
         } else if (!this.vaultUuid) {
           this.forgetVault();
@@ -476,7 +450,7 @@ window.vaultBrowser = (function () {
           return !(vault.tampered || vault.unopenable || vault.unreadable || vault.unsupported);
         });
         if (!openable.length) return null;
-        const remembered = String(readPreference(LAST_VAULT_KEY) || '');
+        const remembered = String(devicePrefs.read(LAST_VAULT_KEY) || '');
         return (
           openable.find((vault) => String(vault.uuid) === remembered) ||
           openable.find((vault) => vault.is_favorite) ||
@@ -488,7 +462,7 @@ window.vaultBrowser = (function () {
       // address bar would hand out a link that opens a banner, and a device
       // pointing at one costs the next visit a fallback it need not make.
       forgetVault: function () {
-        removePreference(LAST_VAULT_KEY);
+        devicePrefs.remove(LAST_VAULT_KEY);
         window.navHistory.replace('/vault', this.navEntry());
       },
 
@@ -574,21 +548,8 @@ window.vaultBrowser = (function () {
 
       loadContents: async function () {
         const vault = this.openVault;
-        // The trash is a view over rows this vault already holds, so they
-        // travel with the rest: reaching for it must not cost a round trip,
-        // and restoring an entry must not have to reconcile two listings.
-        const [folderRows, tagRows, liveRows, trashedRows] = await Promise.all([
-          window.vaultApi.listFolders(vault.uuid),
-          window.vaultApi.listTags(vault.uuid),
-          window.vaultApi.listEntries(vault.uuid),
-          window.vaultApi.listEntries(vault.uuid, { trashed: true }),
-        ]);
         const session = window.vaultSession;
-        const reader = window.vaultReader;
-        const folders = await reader.readFolders(session, vault, folderRows);
-        const tags = await reader.readTags(session, vault, tagRows);
-        const rows = [...liveRows, ...trashedRows];
-        const entries = await reader.readEntries(session, vault, rows);
+        const { rows, folders, tags, entries } = await window.vaultReader.readContents(session, vault);
         // Neither await is atomic with the lock: an idle timeout can fire in
         // between, and by then onLocked has already emptied the store.
         // Assigning anyway would put opened names back into a locked page.

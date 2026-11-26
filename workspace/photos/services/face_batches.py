@@ -11,10 +11,8 @@ under a token kept a few minutes in the cache. Undoing puts them back, a
 cluster the batch emptied (and so deleted) included.
 """
 
-import secrets
 from dataclasses import dataclass, field
 
-from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
 from workspace.people.models import Person
@@ -26,9 +24,9 @@ from . import face_corrections, face_people
 from .face_corrections import CorrectionError, PhotoAlreadyInCluster
 from .face_followups import names_changed
 from .face_grouping import photo_clusters, refresh_clusters
+from .undo_tokens import drop_state, save_state, take_state
 
-UNDO_TTL = 10 * 60
-_UNDO_KEY = "photos:faces:undo:{}:{}"
+_UNDO_KIND = "faces"
 
 CONFIRM = "confirm"
 REJECT = "reject"
@@ -39,10 +37,6 @@ ASSIGN = "assign"
 # Why a face was left as it was.
 UNAVAILABLE = "unavailable"
 ALREADY_IN_PHOTO = "already_in_photo"
-
-
-class UndoExpired(Exception):
-    """The token names nothing: too old, already used, or someone else's."""
 
 
 @dataclass
@@ -82,7 +76,7 @@ def apply(user, action, faces, target=None):
         _run(user, action, applicable, target, result, touched)
     refresh_clusters(touched)
     if not result.done:
-        cache.delete(_UNDO_KEY.format(user.pk, result.undo))
+        drop_state(_UNDO_KIND, user, result.undo)
         result.undo = None
     return result
 
@@ -210,9 +204,7 @@ def _save_undo(user, faces):
         ],
         "clusters": clusters,
     }
-    token = secrets.token_urlsafe(16)
-    cache.set(_UNDO_KEY.format(user.pk, token), state, UNDO_TTL)
-    return token
+    return save_state(_UNDO_KIND, user, state)
 
 
 def undo(user, token):
@@ -221,11 +213,7 @@ def undo(user, token):
     Returns how many faces went back. A face that can no longer go back (its
     photo gained another face of that person since) stays where it is.
     """
-    key = _UNDO_KEY.format(user.pk, token)
-    state = cache.get(key)
-    if state is None:
-        raise UndoExpired
-    cache.delete(key)
+    state = take_state(_UNDO_KIND, user, token)
     saved = {row["uuid"]: row for row in state["faces"]}
     faces = list(Face.objects.filter(owner=user, pk__in=list(saved)))
     touched = {f.cluster_id for f in faces} - {None}

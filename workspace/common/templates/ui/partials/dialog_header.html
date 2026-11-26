@@ -10,6 +10,10 @@
                               are only known at runtime; replaces icon_class
     icon_style_expr           optional Alpine object bound with :style on the square
                               (a colour picked by the user, e.g. a tag colour)
+    icon_id                   optional id on the square, for a dialog whose script
+                              fills it at runtime (no icon param then: no <i> rendered)
+    image_expr                optional Alpine expression returning an image URL shown
+                              in the square instead of the icon while it is truthy
     title / title_expr        text, or an Alpine expression
     title_id                  optional id on the <h3> (aria-labelledby, JS that rewrites it)
     subtitle / subtitle_expr  optional line under the title; the expression form is
@@ -32,14 +36,27 @@
 >
   <div class="flex items-center gap-3 min-w-0">
     <div
-      class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center{% if not icon_class_expr %} {{ icon_class|default:'bg-module/15 text-module' }}{% endif %}"
+      {% if icon_id %}id="{{ icon_id }}"{% endif %}
+      class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center{% if image_expr %} overflow-hidden{% endif %}{% if not icon_class_expr %} {{ icon_class|default:'bg-module/15 text-module' }}{% endif %}"
       {% if icon_class_expr %}:class="{{ icon_class_expr }}"{% endif %}
       {% if icon_style_expr %}:style="{{ icon_style_expr }}"{% endif %}
     >
-      <i
-        {% if icon_expr %}:data-lucide="{{ icon_expr }}"{% else %}data-lucide="{{ icon }}"{% endif %}
-        class="w-5 h-5"
-      ></i>
+      {% if image_expr %}
+        <img
+          :src="{{ image_expr }}"
+          x-show="{{ image_expr }}"
+          alt=""
+          class="w-full h-full object-cover"
+        />
+        {# The wrapper carries x-show: Lucide swaps the <i> for an svg, which would drop a directive bound on it. #}
+        <span x-show="!({{ image_expr }})">
+          <i data-lucide="{{ icon }}" class="w-5 h-5"></i>
+        </span>
+      {% elif icon_expr %}
+        <i :data-lucide="{{ icon_expr }}" class="w-5 h-5"></i>
+      {% elif icon %}
+        <i data-lucide="{{ icon }}" class="w-5 h-5"></i>
+      {% endif %}
     </div>
     <div class="min-w-0">
       <h3

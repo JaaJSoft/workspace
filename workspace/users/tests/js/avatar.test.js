@@ -14,6 +14,8 @@ function patchWithStatus(status, lastSeen, extraGlobals = {}) {
     [
       'workspace/common/static/ui/js/zoned_formatter.js',
       'workspace/common/static/ui/js/timeago.js',
+      'workspace/common/static/ui/js/popover.js',
+      'workspace/common/static/ui/js/card_popover.js',
       'workspace/users/ui/static/users/ui/js/avatar.js',
     ],
     { Alpine: { store: () => ({ statusOf: () => status }) }, ...extraGlobals },

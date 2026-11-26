@@ -336,7 +336,7 @@ One contract for the whole API, so a client that learned one module can guess th
 | Update | `PATCH` (partial) on every updatable resource. `PUT` (full replacement) is added next to it where a route has a use for one, never instead of it | 200, the full object |
 | Delete | `DELETE`; a simple parameter goes in the query (`?move_to=<uuid>`) | 204 |
 | State that is one field | `PATCH` that field | 200, the full object |
-| Action with side effects (send, sync, complete a sprint) | `POST /{uuid}/<verb>` | 204, or 200 with the resource when it changed |
+| Action with side effects (send, sync, complete a sprint) | `POST /{uuid}/<verb>`, or `POST /<collection>/<verb>` when it acts on the collection as a whole (`/notifications/mark-all-read`) | 204, or 200 with the resource when it changed |
 | Yes/no link between the caller and a resource (pin, favorite, watch, reaction) | `PUT` sets it, `DELETE` removes it, both idempotent - never a toggle | 204 |
 | Batch | `POST /<resources>/batch` with `{"action", "uuids", "data"}`, all or nothing | 200 with the bare array of changed resources, 204 for a delete. One unknown or unreachable uuid: 400 naming it, nothing applied |
 | Reorder | `POST /<collection>/reorder` with `{"uuids": [...]}`, the full ordered list | 204 |
@@ -350,7 +350,7 @@ Never `{"ok": true}` or `{"status": "done"}`: an answer is a resource, an array 
 - A collection answers a bare array, and nothing rides along: what used to sit next to the rows gets its own endpoint (`/activity/sources`). A computed view that is not a collection (counts, stats, a graph) answers an object with a declared schema and is never paginated.
 - `limit` (default 50, maximum 1000) and `offset`. The `X-Has-More: true|false` header says whether a next page exists, and an empty array is always the end. `count=true` adds `X-Total-Count`; no `COUNT` runs otherwise.
 - A collection small by nature declares itself unpaginated and returns everything: a project's statuses and labels, calendars, mail accounts, tags.
-- A feed whose rows arrive while it is paged (chat messages, upcoming events, notifications) takes a cursor instead of `offset`: `after=<uuid>` or `before=<uuid>` of a row already received, with the same `limit` and `X-Has-More`.
+- A list whose rows arrive while it is paged still pages by `offset`, and its client drops the rows it already holds (the notifications store). Never a row's uuid as a cursor: the row is looked up again on the next page, and by then it may be deleted or may have moved up the list - a notification merged by a new message does. Notifications shipped that cursor once and came back from it; `core/tests/e2e/test_notifications_store.py` holds the cases.
 
 **Query parameters**
 
@@ -390,12 +390,24 @@ An invalid value answers 400 naming the parameter: a bad integer, UUID, date, en
 
 **In the code**
 
-- **Written once, in `common`.** What the standard says of every endpoint is code of `workspace/common/` (`pagination.py`, `filters.py`, `serializers.py`, `views.py`), never of a module: the paginator and its headers, the filter types (several values, `none`, three-state booleans, date ranges, ordering), the relation field, and one base view per repeated pattern (batch, reorder, available actions, yes/no link). A module subclasses and declares only what is its own: its visible queryset, its registry, its actions. Before writing one of these in a module, look there; when the piece is missing, add it there.
-- **A resource is DRF generic views** (`ListCreateAPIView`, `RetrieveUpdateDestroyAPIView`) or a ViewSet, so the lookup, the 404 with a body, the 201 with the full object, pagination and filtering are DRF's. `APIView` is for what is not a resource (an action, a computed view), and still declares its serializers.
+- **Written once, in `common`.** What the standard says of every endpoint is code of `workspace/common/`, never of a module. A module declares only what is its own: its visible queryset, its fields, its actions.
+
+  | Piece | Where | What it carries |
+  |---|---|---|
+  | `ListPagination` | `common/pagination.py` | `limit`, `offset`, `count`, the two headers. The default of every generic view; a list small by nature sets `pagination_class = None` |
+  | `BooleanFilter`, `MultiValueFilter`, `TextSearchFilter` | `common/filters.py` | Three states, several values with `none`, `q`. A date range is django-filter's own `DateFromToRangeFilter` |
+  | `ApiModelSerializer`, `InstantField` | `common/serializers.py` | Instants in UTC with `Z`. Every model serializer of the API extends the first |
+  | `Conflict` | `common/exceptions.py` | The 409 DRF has no class for |
+  | `UserSummarySerializer` | `users/serializers.py` | The one small object a user is shown as |
+
+  The relation field (small object on read, identifier on write) and the base views of the repeated patterns (batch, reorder, available actions, yes/no link) are not written yet: the first module that needs one writes it in `common`, not at home.
+- **A resource is DRF generic views** (`ListCreateAPIView`, `RetrieveUpdateDestroyAPIView`) or a ViewSet, so the lookup, the 404 with a body, the 201 with the full object, pagination and filtering are DRF's. `APIView` is for what is not a resource (an action, a computed view), and still declares its serializers. A generic view names its model with `queryset = Model.objects.none()`, which is all the schema reads, and narrows it in `get_queryset()` through the module's access helper: no `swagger_fake_view` guard. `notifications/views.py` is the worked example.
 - **One serializer per resource.** The shared relation field renders the small object on read and takes the identifier on write, so a second write serializer exists only when the write shape really differs (a password, fields that cannot be read back). A user is always the one summary serializer of `users` (`id`, `username`, `first_name`, `last_name`, `avatar_url`), never a module's own.
 - **Every answer has a `Serializer` class**, in the module's `serializers.py`, a count or a stats object included: no hand-built dict, no inline declaration, no free-form object. The service returns objects or dicts, the serializer is the contract, and the OpenAPI schema generates without a warning.
 - **The serializer validates, the service acts.** A serializer checks the shape and that each identifier it is handed is one the caller can reach (rule 1 of *Authorization rules*); the view hands the validated data to the service. No business logic in `create()` or `update()`: the same service serves the API, an AI tool and a Celery task.
 - **Every list filter is a `FilterSet`**, in the module's `filters.py`, wired with `filterset_class`. A view never reads `request.query_params` for a filter; a page view sharing the same filters reuses the `FilterSet`.
+
+`core/tests/test_api_standard.py` holds the mechanical half: path and parameter names, nesting, a schema that generates without a complaint, no query parameter read by hand, no error without a body, no paginator but `ListPagination`. Endpoints older than the standard are listed in `core/tests/api_standard_gaps.py`, one entry per debt. The test fails on a gap outside that list and on an entry that is no longer a gap, so a module brought in line deletes its own and nothing is ever added to get an endpoint through.
 
 ### Models
 

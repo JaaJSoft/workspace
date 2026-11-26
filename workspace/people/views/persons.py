@@ -1,6 +1,7 @@
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 
 from workspace.common.text import fold_text
 from workspace.common.uuids import UUID_PATTERN, parse_uuid_or_none
@@ -8,6 +9,10 @@ from workspace.common.uuids import UUID_PATTERN, parse_uuid_or_none
 from ..queries import user_persons
 from ..serializers import PersonSerializer, parse_scope
 from ..services.persons import delete_person
+
+
+class PersonPagination(PageNumberPagination):
+    page_size = 50
 
 
 @extend_schema_view(
@@ -27,6 +32,7 @@ from ..services.persons import delete_person
 )
 class PersonViewSet(viewsets.ModelViewSet):
     serializer_class = PersonSerializer
+    pagination_class = PersonPagination
     lookup_field = "uuid"
     lookup_value_regex = UUID_PATTERN
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]

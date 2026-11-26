@@ -16,6 +16,7 @@ from workspace.core.context_processors import workspace_modules
 from workspace.core.module_registry import (
     ModuleInfo,
     ModuleRegistry,
+    SearchAnswer,
     SearchProviderInfo,
     SearchResult,
     SearchScope,
@@ -81,7 +82,7 @@ class RegistryScopeTests(TestCase):
         self.assertEqual(self.scopes, [SearchScope.ALL])
 
     def test_an_unscoped_provider_answers_the_same_under_mine(self):
-        hits = self.reg.search("doc", user=None, scope=SearchScope.MINE)
+        hits = self.reg.search("doc", user=None, scope=SearchScope.MINE).hits
         self.assertEqual({h["name"] for h in hits}, {"scoped", "unscoped"})
 
 
@@ -95,7 +96,8 @@ class UnifiedSearchScopeParamTests(TestCase):
 
     def _scope_for(self, query_string):
         with patch(
-            "workspace.core.services.search.search_modules", return_value=[]
+            "workspace.core.services.search.search_modules",
+            return_value=SearchAnswer(),
         ) as search_modules:
             resp = self.client.get(f"/api/v1/search?q=doc{query_string}")
         self.assertEqual(resp.status_code, 200)

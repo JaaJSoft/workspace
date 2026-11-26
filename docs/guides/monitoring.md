@@ -109,8 +109,12 @@ Beyond the standard `django_prometheus` series (HTTP requests by view, method an
 | `sse_provider_poll_duration_seconds`          | histogram | `provider`            | Time spent inside one provider poll              |
 | `sse_forced_reconnects_total`                 | counter   | `transport`           | Streams closed on the connection budget          |
 | `sse_pubsub_messages_total`                   | counter   | -                     | Provider notifications a stream acted on, several for one provider counting once |
+| `search_provider_duration_seconds`            | histogram | `provider`            | Time one search provider took to answer a unified search |
+| `search_provider_failures_total`              | counter   | `provider`, `reason`  | Providers left out of a search answer: `error` or `timeout` |
 
 `celery_queue_length` requires Redis as the broker; it reports nothing with the in-memory broker.
+
+The unified search (the command palette, `/api/v1/search`) asks every module's provider in turn. A provider gets one second of database work per search: past it, its query is interrupted and the answer goes out without that provider's hits, counted under `reason="timeout"`. An answer missing a provider says so (`is_partial`) and is not cached. `search_provider_duration_seconds` tells which provider is slow; a provider stuck in Python code rather than in the database is not interrupted, and shows up there as a long duration with no timeout.
 
 Series recorded inside Celery tasks stay in the worker process, which serves no `/metrics` of its own: `celery_task_duration_seconds`, `celery_tasks_total`, `ai_agent_checkins_total`, the thumbnail and malware scan series, and whatever share of the AI series a background task produces. They are exported by the web process, but only with the values the web process recorded itself.
 

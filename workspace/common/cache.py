@@ -58,7 +58,8 @@ def cached_response(timeout=300, per_user=True):
 
     Stores ``response.data`` (a Python dict/list) under a predictable key
     built from the view class name, user id, and query parameters.
-    Only caches successful (2xx) GET responses.
+    Only caches successful (2xx) GET responses, and never one the view
+    marked ``Cache-Control: no-store`` (an incomplete answer, for instance).
     """
 
     def decorator(method):
@@ -72,7 +73,8 @@ def cached_response(timeout=300, per_user=True):
             if cached is not None:
                 return Response(cached)
             response = method(self, request, *args, **kwargs)
-            if 200 <= response.status_code < 300:
+            no_store = "no-store" in response.get("Cache-Control", "")
+            if 200 <= response.status_code < 300 and not no_store:
                 cache.set(key, response.data, timeout)
             return response
 

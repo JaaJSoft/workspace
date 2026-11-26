@@ -11,8 +11,18 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from workspace.core.module_registry import CommandInfo, ModuleInfo, SearchScope
-from workspace.core.services.search import search_commands, search_modules
+from workspace.core.module_registry import (
+    CommandInfo,
+    ModuleInfo,
+    SearchAnswer,
+    SearchProviderInfo,
+    SearchScope,
+)
+from workspace.core.services.search import (
+    PROVIDER_BUDGET_SECONDS,
+    search_commands,
+    search_modules,
+)
 
 User = get_user_model()
 
@@ -47,28 +57,53 @@ class SearchModulesTests(TestCase):
 
     @patch("workspace.core.services.search.registry")
     def test_short_query_never_reaches_the_providers(self, mock_registry):
-        self.assertEqual(search_modules("a", self.user), [])
-        self.assertEqual(search_modules("  ", self.user), [])
+        self.assertEqual(search_modules("a", self.user), SearchAnswer())
+        self.assertEqual(search_modules("  ", self.user), SearchAnswer())
         mock_registry.search.assert_not_called()
 
     @patch("workspace.core.services.search.registry")
     def test_query_is_stripped_and_limit_forwarded_per_provider(self, mock_registry):
-        mock_registry.search.return_value = []
+        mock_registry.search.return_value = SearchAnswer()
 
         search_modules("  alpha  ", self.user, limit=4)
 
         mock_registry.search.assert_called_once_with(
-            "alpha", self.user, 4, scope=SearchScope.ALL
+            "alpha", self.user, 4, scope=SearchScope.ALL, budget=PROVIDER_BUDGET_SECONDS
         )
+
+    @override_settings(PREVIEW_VISIBILITY="none")
+    @patch("workspace.core.services.module_visibility.registry")
+    @patch("workspace.core.services.search.registry")
+    def test_only_a_missing_provider_the_user_can_see_makes_the_answer_partial(
+        self, mock_registry, mock_visibility_registry
+    ):
+        def provider(slug):
+            return SearchProviderInfo(slug=slug, module_slug=slug, search_fn=None)
+
+        mock_registry.refinements.return_value = {}
+        mock_registry.search.return_value = SearchAnswer(
+            missing=(provider("files"), provider("lab"))
+        )
+        mock_visibility_registry.get.side_effect = lambda slug: _module(
+            slug, preview=slug == "lab"
+        )
+
+        answer = search_modules("alpha", self.user)
+
+        self.assertEqual([p.slug for p in answer.missing], ["files"])
 
     @patch("workspace.core.services.search.registry")
     def test_scope_is_forwarded_to_the_providers(self, mock_registry):
-        mock_registry.search.return_value = []
+        mock_registry.search.return_value = SearchAnswer()
 
         search_modules("alpha", self.user, scope=SearchScope.MINE)
 
         mock_registry.search.assert_called_once_with(
-            "alpha", self.user, 10, scope=SearchScope.MINE
+            "alpha",
+            self.user,
+            10,
+            scope=SearchScope.MINE,
+            budget=PROVIDER_BUDGET_SECONDS,
         )
 
     @override_settings(PREVIEW_VISIBILITY="none")
@@ -78,25 +113,27 @@ class SearchModulesTests(TestCase):
         self, mock_registry, mock_visibility_registry
     ):
         mock_registry.refinements.return_value = {}
-        mock_registry.search.return_value = [
-            {
-                "uuid": "u1",
-                "provider_slug": "files",
-                "module_slug": "files",
-                "name": "doc",
-            },
-            {
-                "uuid": "u2",
-                "provider_slug": "lab",
-                "module_slug": "lab",
-                "name": "secret",
-            },
-        ]
+        mock_registry.search.return_value = SearchAnswer(
+            hits=[
+                {
+                    "uuid": "u1",
+                    "provider_slug": "files",
+                    "module_slug": "files",
+                    "name": "doc",
+                },
+                {
+                    "uuid": "u2",
+                    "provider_slug": "lab",
+                    "module_slug": "lab",
+                    "name": "secret",
+                },
+            ]
+        )
         mock_visibility_registry.get.side_effect = lambda slug: _module(
             slug, preview=slug == "lab"
         )
 
-        hits = search_modules("alpha", self.user)
+        hits = search_modules("alpha", self.user).hits
 
         self.assertEqual([h["name"] for h in hits], ["doc"])
 
@@ -155,27 +192,33 @@ class SearchModulesRefinementTests(TestCase):
     @patch("workspace.core.services.search.registry")
     def test_the_refining_provider_supersedes_the_one_it_refines(self, mock_registry):
         mock_registry.refinements.return_value = {"notes": frozenset({"files"})}
-        mock_registry.search.return_value = [_hit("u1", "files"), _hit("u1", "notes")]
+        mock_registry.search.return_value = SearchAnswer(
+            hits=[_hit("u1", "files"), _hit("u1", "notes")]
+        )
 
-        hits = search_modules("alpha", self.user)
+        hits = search_modules("alpha", self.user).hits
 
         self.assertEqual([h["provider_slug"] for h in hits], ["notes"])
 
     @patch("workspace.core.services.search.registry")
     def test_the_same_uuid_from_unrelated_providers_is_left_alone(self, mock_registry):
         mock_registry.refinements.return_value = {"notes": frozenset({"files"})}
-        mock_registry.search.return_value = [_hit("u1", "mail"), _hit("u1", "chat")]
+        mock_registry.search.return_value = SearchAnswer(
+            hits=[_hit("u1", "mail"), _hit("u1", "chat")]
+        )
 
-        hits = search_modules("alpha", self.user)
+        hits = search_modules("alpha", self.user).hits
 
         self.assertEqual([h["provider_slug"] for h in hits], ["mail", "chat"])
 
     @patch("workspace.core.services.search.registry")
     def test_a_row_only_the_refined_provider_answers_with_is_kept(self, mock_registry):
         mock_registry.refinements.return_value = {"notes": frozenset({"files"})}
-        mock_registry.search.return_value = [_hit("u1", "files"), _hit("u2", "notes")]
+        mock_registry.search.return_value = SearchAnswer(
+            hits=[_hit("u1", "files"), _hit("u2", "notes")]
+        )
 
-        hits = search_modules("alpha", self.user)
+        hits = search_modules("alpha", self.user).hits
 
         self.assertEqual([h["uuid"] for h in hits], ["u1", "u2"])
 
@@ -185,9 +228,11 @@ class SearchModulesRefinementTests(TestCase):
         self, mock_registry, mock_visible
     ):
         mock_registry.refinements.return_value = {"notes": frozenset({"files"})}
-        mock_registry.search.return_value = [_hit("u1", "files"), _hit("u1", "notes")]
+        mock_registry.search.return_value = SearchAnswer(
+            hits=[_hit("u1", "files"), _hit("u1", "notes")]
+        )
         mock_visible.side_effect = lambda user, slug: slug != "notes"
 
-        hits = search_modules("alpha", self.user)
+        hits = search_modules("alpha", self.user).hits
 
         self.assertEqual([h["provider_slug"] for h in hits], ["files"])

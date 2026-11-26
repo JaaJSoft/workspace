@@ -360,3 +360,32 @@ class CachedTests(TestCase):
     def test_invalidate_unknown_tag_is_safe(self):
         # No entries with this tag - should not error
         invalidate_tags("never-used")
+
+
+class NoStoreView(APIView):
+    call_count = 0
+
+    @cached_response(300)
+    def get(self, request):
+        NoStoreView.call_count += 1
+        response = Response({"value": NoStoreView.call_count})
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+class CacheResponseNoStoreTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        NoStoreView.call_count = 0
+        self.user = User.objects.create_user(username="nostore", password="pass")
+
+    def test_a_no_store_response_is_computed_again(self):
+        view = NoStoreView.as_view()
+        request = factory.get("/")
+        request.user = self.user
+
+        view(request)
+        second = view(request)
+
+        self.assertEqual(second.data, {"value": 2})
+        self.assertIsNone(cache.get(_build_key("NoStoreView", request, per_user=True)))

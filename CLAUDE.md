@@ -314,6 +314,85 @@ All API endpoints must be prefixed with `/api/` and have no trailing slashes.
 - An endpoint that is badly designed (it duplicates another, takes an awkward shape, names things the UI no longer does) gets redesigned, not dropped: the capability stays reachable through the API after the change.
 - A new feature ships its API alongside its UI, under the same access helpers and action registries (see *Authorization rules* below).
 
+#### API standard - the shape every endpoint takes
+
+One contract for the whole API, so a client that learned one module can guess the next. It is the target: endpoints written before it are brought in line one module per PR (breaking, no alias kept), and a new or modified endpoint follows it now. Never copy the shape of a neighbouring endpoint without checking it against this section.
+
+**Paths**
+
+- The first segment after `/api/v1` is the module (`/mail/...`, `/calendar/polls`, `/files/tags`). At the root: `/events`, `/calendars`, `/groups`, and what spans modules (`/search`, `/settings`, `/activity`, `/modules`, `/stream`, `/auth`).
+- Kebab-case plural nouns. No verb for what an HTTP method already says: never `delete`, `remove`, `clear`, `list` or `search` in a path.
+- The resource a path addresses is `{uuid}`, a parent before it is `{<resource>_uuid}`. An integer id keeps `{user_id}`, a public link is `{token}`.
+- One parent at most. A resource with its own UUID is addressed without its ancestors: list and create under the parent (`/projects/{project_uuid}/tasks`), read, update and delete at `/projects/tasks/{uuid}`. A link identified by the pair keeps both (`/chat/conversations/{conversation_uuid}/members/{user_id}`).
+- A collection is the caller's own without saying so (`/notifications`, `/auth/tokens`). `/users/me` is the profile and its attributes only (`/users/me/groups`); someone else's rows are a `?user=` filter.
+
+**Methods and answers**
+
+| Need | Shape | Answer |
+|---|---|---|
+| List | `GET` on the collection | 200, a bare array |
+| Read | `GET /{uuid}` | 200, the object |
+| Create | `POST` on the collection | 201, the full object, as `GET` returns it |
+| Update | `PATCH` (partial) and `PUT` (full), both on every updatable resource | 200, the full object |
+| Delete | `DELETE`; a simple parameter goes in the query (`?move_to=<uuid>`) | 204 |
+| State that is one field | `PATCH` that field | 200, the full object |
+| Action with side effects (send, sync, complete a sprint) | `POST /{uuid}/<verb>` | 204, or 200 with the resource when it changed |
+| Yes/no link between the caller and a resource (pin, favorite, watch, reaction) | `PUT` sets it, `DELETE` removes it, both idempotent - never a toggle | 204 |
+| Batch | `POST /<resources>/batch` with `{"action", "uuids", "data"}`, all or nothing | 200 with the bare array of changed resources, 204 for a delete. One unknown or unreachable uuid: 400 naming it, nothing applied |
+| Reorder | `POST /<collection>/reorder` with `{"uuids": [...]}`, the full ordered list | 204 |
+| Which actions are available | `POST /<resources>/available-actions` with `{"uuids": [...]}` | 200, an object keyed by uuid |
+| Long job (import, copy, archive) | `POST` creates a tracking resource, read with `GET` | 202 with `{"uuid", "status", "progress", "error"}`; `status` is `pending`, `running`, `completed`, `failed` or `cancelled`. A bare "wake the sync" answers 202 with no body |
+
+Never `{"ok": true}` or `{"status": "done"}`: an answer is a resource, an array of them, or nothing.
+
+**Lists**
+
+- A collection answers a bare array, and nothing rides along: what used to sit next to the rows gets its own endpoint (`/activity/sources`). A computed view that is not a collection (counts, stats, a graph) answers an object with a declared schema and is never paginated.
+- `limit` (default 50, maximum 1000) and `offset`. The `X-Has-More: true|false` header says whether a next page exists, and an empty array is always the end. `count=true` adds `X-Total-Count`; no `COUNT` runs otherwise.
+- A collection small by nature declares itself unpaginated and returns everything: a project's statuses and labels, calendars, mail accounts, tags.
+- A feed whose rows arrive while it is paged (chat messages, upcoming events, notifications) takes a cursor instead of `offset`: `after=<uuid>` or `before=<uuid>` of a row already received, with the same `limit` and `X-Has-More`.
+
+**Query parameters**
+
+| Need | Parameter |
+|---|---|
+| Text search | `q` on the list, combined with its other filters. A dedicated path only where there is no list to filter (global `/search`, an autocomplete) |
+| Relation | The bare name, the value is the identifier: `account=`, `calendar=`, `assignee=`. Never `_id`, `_ids` or `_uuid` |
+| Several values | Singular name, repeated (`tag=a&tag=b`) or comma-separated (`tag=a,b`), both accepted. Values of one filter are OR, distinct filters are AND |
+| No value | The reserved word `none`: `assignee=none`, `parent=none` |
+| Boolean | Three states: absent is no filter, `true`, `false`. Named after the JSON field without `is_`, same polarity (`read=false`, never `unread=true`); `has_x` for "holds at least one"; `include_x` to add rows left out by default. Never `show_` |
+| Date range | `<field>_after` and `<field>_before`, inclusive. A calendar window keeps `start` and `end` |
+| Kind of thing | `type`. Another word only for a second axis on the same resource (`node_type` next to `type` on a file) |
+| Sort | `ordering=<field>` or `-<field>`, one field. The server appends a stable tie-break |
+| Space | `scope`, only for "whose rows": `mine`, `shared`, `all`, a group. `filter` is never a parameter name |
+
+An invalid value answers 400 naming the parameter: a bad integer, UUID, date, enum, boolean or ordering field, a `limit` past the maximum. An unknown parameter is ignored.
+
+**JSON**
+
+- The identifier is `uuid`; `id` is the integer of a user or a group.
+- A relation is a small object on read (identifier plus what displaying it takes: name, color, avatar) and its identifier on write, under the same field name.
+- A resource always carries the same keys: `null`, `[]` or `""` for an empty one, never a missing key.
+- A write names a field the way the read returns it. Booleans are `is_x` or `has_x`.
+- An instant is UTC with `Z`. A calendar day (a due date, an all-day event) is a date alone.
+- An enum value is a lowercase snake_case singular string, the same on read, on write and as a filter. Never an integer or a translated label.
+- A link to another endpoint is a path without host in a field ending in `_url`. A bare `url` is the resource's page in the web app.
+
+**Errors**
+
+- `{"detail": "..."}` for the request as a whole, `{"<field>": ["..."]}` for validation: what DRF produces. Every error has a body, and `detail` is translated to the caller's language - a script relies on the status code.
+- 400: malformed or invalid. 404: absent or not visible to the caller. 403: visible, action refused. 409: valid, refused by the current state (a sprint already active, a name taken). 423 and 412 stay with file locks and conditional writes. Never 422.
+
+**Binary content**
+
+- A resource's path answers JSON. Its bytes are at `/content` (inline), `/download` (attachment) and `/thumbnail?size=`. An image that is the resource itself (an avatar) is served at its path.
+- An upload is `multipart/form-data` with the bytes in a field named `file`; large files go through `/files/uploads`. Replacing the content of an existing resource is a `PUT` of the raw bytes on `/content`. Never base64 inside JSON.
+
+**In the code**
+
+- Every list filter is declared in a django-filter `FilterSet`, in the module's `filters.py`, wired with `filterset_class`. A view never reads `request.query_params` for a filter; a page view sharing the same filters reuses the `FilterSet`.
+- Every operation declares a serializer for its request and one for its response: no hand-built dict, no free-form object. The OpenAPI schema generates without a warning.
+
 ### Models
 
 Every model must use a UUID primary key with the `uuid_v7_or_v4` helper as default. Never use Django's auto-incremented `id` or `uuid.uuid4` directly.
@@ -868,7 +947,7 @@ if is_truthy(request.query_params.get('unread')):
     qs = qs.filter(is_read=False)
 ```
 
-Accepted true values: `true`, `1`, `yes`, `on`, `t`, `y` (case-insensitive). Everything else - including unknown strings, empty, `None`, and the false values - yields `False`. Permissive on purpose: a malformed boolean shouldn't 400 a search endpoint.
+Accepted true values: `true`, `1`, `yes`, `on`, `t`, `y` (case-insensitive). Everything else - including unknown strings, empty, `None`, and the false values - yields `False`. That is for a flag read outside a list filter. A boolean list filter is a `BooleanFilter` of the module's `FilterSet`: three states, and a malformed value answers 400 (see *API standard*).
 
 **Rules:**
 

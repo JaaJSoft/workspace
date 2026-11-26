@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db.models import Q
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
@@ -67,12 +68,40 @@ def _validate_hex_color(value):
     return value
 
 
-class ProjectSerializer(serializers.ModelSerializer):
+def _of_the_project(queryset, context):
+    return queryset.filter(project=context["project"])
+
+
+def _assignable(queryset, context):
+    return project_users_qs(context["project"])
+
+
+def _open_sprints(queryset, context):
+    # Closed sprints are history: tasks can only join open ones.
+    return _of_the_project(queryset, context).exclude(state=Sprint.State.CLOSED)
+
+
+def _anyone(queryset, context):
+    """Every row may be named: who may write the field is the action's rule."""
+    return queryset
+
+
+class GroupSummarySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+
+
+class ProjectSerializer(ApiModelSerializer):
     # Without this DRF would require key on create; create() auto-generates it.
     key = serializers.CharField(required=False)
-    groups = serializers.PrimaryKeyRelatedField(
-        queryset=Group.objects.all(), many=True, required=False
+    groups = SummaryField(
+        GroupSummarySerializer,
+        queryset=Group.objects.all(),
+        narrow=_anyone,
+        many=True,
+        required=False,
     )
+    is_archived = serializers.BooleanField(required=False)
     done_retention_days = serializers.IntegerField(
         required=False, allow_null=True, min_value=1, max_value=365
     )
@@ -94,6 +123,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "groups",
             "done_retention_days",
             "estimate_unit",
+            "is_archived",
             "archived_at",
             "my_role",
             "created_at",
@@ -147,23 +177,28 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         groups = validated_data.pop("groups", None)
+        if "is_archived" in validated_data:
+            archived = validated_data.pop("is_archived")
+            if archived != instance.is_archived:
+                validated_data["archived_at"] = timezone.now() if archived else None
         save_written_columns(instance, validated_data, also=["updated_at"])
         if groups is not None:
             instance.groups.set(groups)
         return instance
 
 
-class MemberSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(read_only=True)
-    username = serializers.CharField(source="user.username", read_only=True)
-    display_name = serializers.SerializerMethodField()
+class MemberSerializer(ApiModelSerializer):
+    user = SummaryField(
+        UserSummarySerializer, queryset=User.objects.all(), narrow=_anyone
+    )
+    role = serializers.ChoiceField(
+        choices=ProjectMember.Role.choices, default=ProjectMember.Role.MEMBER
+    )
 
     class Meta:
         model = ProjectMember
-        fields = ["uuid", "user", "username", "display_name", "role", "joined_at"]
-
-    def get_display_name(self, member) -> str:
-        return member.user.get_full_name() or member.user.username
+        fields = ["uuid", "user", "role", "joined_at"]
+        read_only_fields = ["joined_at"]
 
 
 class ProjectUserSerializer(serializers.Serializer):
@@ -176,14 +211,7 @@ class ProjectUserSerializer(serializers.Serializer):
     last_name = serializers.CharField(read_only=True)
 
 
-class MemberWriteSerializer(serializers.Serializer):
-    user = serializers.IntegerField()
-    role = serializers.ChoiceField(
-        choices=ProjectMember.Role.choices, default=ProjectMember.Role.MEMBER
-    )
-
-
-class MemberRoleSerializer(serializers.Serializer):
+class ProjectMemberRoleSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=ProjectMember.Role.choices)
 
 
@@ -195,7 +223,7 @@ class TaskWatchSerializer(serializers.Serializer):
     state = serializers.ChoiceField(choices=["watching", "muted"])
 
 
-class LabelSerializer(serializers.ModelSerializer):
+class LabelSerializer(ApiModelSerializer):
     class Meta:
         model = Label
         fields = ["uuid", "name", "color"]
@@ -215,8 +243,8 @@ class LabelSerializer(serializers.ModelSerializer):
         return _validate_hex_color(value)
 
 
-class EpicSerializer(serializers.ModelSerializer):
-    closed = serializers.BooleanField(source="is_closed", required=False)
+class EpicSerializer(ApiModelSerializer):
+    is_closed = serializers.BooleanField(required=False)
     # Progress rollup, annotated by the viewset; absent on unannotated
     # instances (create/update responses return 0s there).
     task_count = serializers.IntegerField(read_only=True, default=0)
@@ -230,7 +258,7 @@ class EpicSerializer(serializers.ModelSerializer):
             "color",
             "description",
             "target_date",
-            "closed",
+            "is_closed",
             "task_count",
             "done_task_count",
         ]
@@ -250,7 +278,7 @@ class EpicSerializer(serializers.ModelSerializer):
         return _validate_hex_color(value)
 
 
-class SprintSerializer(serializers.ModelSerializer):
+class SprintSerializer(ApiModelSerializer):
     # Progress rollup, annotated by the viewset; absent on unannotated
     # instances (create/update responses return 0s there).
     task_count = serializers.IntegerField(read_only=True, default=0)
@@ -298,7 +326,7 @@ class SprintSerializer(serializers.ModelSerializer):
         return save_written_columns(instance, validated_data)
 
 
-class TaskStatusSerializer(serializers.ModelSerializer):
+class TaskStatusSerializer(ApiModelSerializer):
     class Meta:
         model = TaskStatus
         fields = ["uuid", "name", "category", "color", "position"]
@@ -322,19 +350,6 @@ class TaskStatusSerializer(serializers.ModelSerializer):
 
     def validate_color(self, value):
         return _validate_hex_color(value)
-
-
-def _of_the_project(queryset, context):
-    return queryset.filter(project=context["project"])
-
-
-def _assignable(queryset, context):
-    return project_users_qs(context["project"])
-
-
-def _open_sprints(queryset, context):
-    # Closed sprints are history: tasks can only join open ones.
-    return _of_the_project(queryset, context).exclude(state=Sprint.State.CLOSED)
 
 
 class ProjectSummarySerializer(serializers.Serializer):
@@ -508,28 +523,6 @@ class TaskCalendarSerializer(serializers.ModelSerializer):
         return reverse("projects_ui:task_card", args=[obj.project_id, obj.uuid])
 
 
-def _parse_uuid_list(value, field_name):
-    """Manual UUID parsing instead of ListField(child=UUIDField): the orjson
-    renderer used project-wide cannot serialize the int-keyed error dicts
-    that per-item child validation produces (PinnedReorderSerializer
-    precedent)."""
-    import uuid as uuid_module
-
-    parsed = []
-    for item in value:
-        if not isinstance(item, str):
-            raise serializers.ValidationError(
-                f"{field_name} items must be UUID strings."
-            )
-        try:
-            parsed.append(uuid_module.UUID(item))
-        except ValueError:
-            raise serializers.ValidationError(f"Invalid UUID: {item}") from None
-    if len(set(parsed)) != len(parsed):
-        raise serializers.ValidationError(f"Duplicate UUIDs in {field_name}.")
-    return parsed
-
-
 class _InProject(serializers.PrimaryKeyRelatedField):
     """A row of the project at hand, named by its identifier."""
 
@@ -638,22 +631,25 @@ class ProjectConvertSerializer(serializers.Serializer):
 class SprintCompleteSerializer(serializers.Serializer):
     """Completion payload; a null/absent move_to sends tasks to the backlog."""
 
-    move_to = serializers.UUIDField(required=False, allow_null=True, default=None)
+    move_to = _InProject(
+        queryset=Sprint.objects.all(), required=False, allow_null=True, default=None
+    )
 
 
-class ReorderSerializer(serializers.Serializer):
-    """Full-order payload shared by the status and subtask reorder endpoints."""
+class StatusDeleteQuerySerializer(serializers.Serializer):
+    """``?move_to=``: the column that takes the tasks of the one deleted."""
 
-    order = serializers.ListField()
+    move_to = _InProject(
+        queryset=TaskStatus.objects.all(), required=False, allow_null=True, default=None
+    )
 
-    def validate_order(self, value):
-        return _parse_uuid_list(value, "order")
 
+class SubtaskSerializer(ApiModelSerializer):
+    is_done = serializers.BooleanField(source="done", required=False)
 
-class SubtaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subtask
-        fields = ["uuid", "title", "done", "position", "created_at"]
+        fields = ["uuid", "title", "is_done", "position", "created_at"]
         read_only_fields = ["position", "created_at"]
 
     def validate_title(self, value):

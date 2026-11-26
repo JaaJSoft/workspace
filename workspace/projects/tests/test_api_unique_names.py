@@ -87,7 +87,7 @@ class DuplicateNameRaceTests(ProjectTestMixin, APITestCase):
                 other = self._create(project, collection, "Renamed").data["uuid"]
                 with self._without_validation(serializer):
                     response = self.client.patch(
-                        f"/api/v1/projects/{project.uuid}/{collection}/{other}",
+                        f"/api/v1/projects/{collection}/{other}",
                         {"name": "Kept"},
                         format="json",
                     )

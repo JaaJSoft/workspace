@@ -60,7 +60,10 @@ BANNED_SEGMENTS = {
     "pin-reorder",
 }
 BANNED_QUERY_NAMES = {"search", "page", "page_size", "filter"}
-BANNED_QUERY_AFFIXES = re.compile(r"^show_|_ids?$|_uuid$|_from$|_to$")
+BANNED_QUERY_AFFIXES = re.compile(r"^show_|_ids?$|_uuid$")
+# A range filter is <field>_after and <field>_before. Only on a read: the
+# target of a delete is legitimately named move_to.
+BANNED_RANGE_AFFIXES = re.compile(r"_from$|_to$")
 
 HAND_READ_QUERY = re.compile(r"query_params\s*(?:\.get(?:list)?\(|\[)")
 BODILESS_ERROR = re.compile(r"Response\(\s*status=status\.HTTP_4\d\d")
@@ -112,7 +115,9 @@ def _path_gaps(path, operations, gaps):
         for parameter in operations.get(method, {}).get("parameters", []):
             name = parameter["name"]
             if parameter["in"] == "query" and (
-                name in BANNED_QUERY_NAMES or BANNED_QUERY_AFFIXES.search(name)
+                name in BANNED_QUERY_NAMES
+                or BANNED_QUERY_AFFIXES.search(name)
+                or (method == "get" and BANNED_RANGE_AFFIXES.search(name))
             ):
                 gaps["query parameter"].add(f"{path} ?{name}")
 

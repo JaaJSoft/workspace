@@ -10,7 +10,6 @@ from rest_framework.generics import (
 )
 from rest_framework.response import Response
 
-from workspace.common.exceptions import Conflict
 from workspace.common.views import BatchView, LinkView, ReorderView, unknown_rows
 
 from ..filters import AllTasksFilter, TaskListFilter
@@ -28,7 +27,6 @@ from ..services.assignments import notify_assigned
 from ..services.bulk import UNSET, bulk_update_tasks, delete_tasks
 from ..services.estimates import format_estimate
 from ..services.events import record_task_event
-from ..services.members import ProjectRuleError
 from ..services.sprints import assign_tasks_to_sprint
 from ..services.tasks import (
     change_task_status,
@@ -40,7 +38,7 @@ from ..services.tasks import (
     settle_moved_due_dates,
 )
 from ..services.watchers import auto_watch, clear_watch_state, set_watch_state
-from .viewsets import ProjectContextMixin
+from .context import ProjectContextMixin
 
 
 def _with_relations(tasks):
@@ -291,15 +289,12 @@ class TaskBatchView(TaskLotMixin, ProjectContextMixin, BatchView):
 
     def perform_set_sprint(self, tasks, data):
         self._require_action("move")
-        try:
-            planned = assign_tasks_to_sprint(
-                self.project,
-                data["sprint"],
-                [task.uuid for task in tasks],
-                actor=self.request.user,
-            )
-        except ProjectRuleError as exc:
-            raise Conflict(exc.detail) from exc
+        planned = assign_tasks_to_sprint(
+            self.project,
+            data["sprint"],
+            [task.uuid for task in tasks],
+            actor=self.request.user,
+        )
         return self._changed(tasks, planned)
 
     def perform_edit(self, tasks, data):

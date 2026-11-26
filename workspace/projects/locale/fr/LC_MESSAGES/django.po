@@ -2385,41 +2385,29 @@ msgstr "j N"
 msgid "No viewer available for %(type)s"
 msgstr "Aucune visionneuse disponible pour %(type)s"
 
-#: views/viewsets.py
+#: views/context.py views/projects.py
 msgid "Project is archived."
 msgstr "Le projet est archivé."
 
-#: views/viewsets.py
+#: views/projects.py
 msgid "Personal projects cannot be deleted."
 msgstr "Un projet personnel ne peut pas être supprimé."
 
-#: views/viewsets.py
+#: views/projects.py
 msgid "Personal projects cannot be archived."
 msgstr "Un projet personnel ne peut pas être archivé."
 
-#: views/viewsets.py
+#: views/context.py views/projects.py
 msgid "Admin role required."
 msgstr "Rôle d’administrateur requis."
 
-#: views/viewsets.py
+#: views/context.py
 msgid "This action is not available on this project."
 msgstr "Cette action n’est pas disponible sur ce projet."
 
-#: views/viewsets.py
-msgid "User not found."
-msgstr "Utilisateur introuvable."
-
-#: views/viewsets.py
+#: views/sprints.py
 msgid "Sprints require a scrum project."
 msgstr "Les sprints nécessitent un projet Scrum."
-
-#: views/viewsets.py
-msgid "Unknown target sprint for this project."
-msgstr "Sprint cible inconnu pour ce projet."
-
-#: views/viewsets.py
-msgid "Unknown target column for this project."
-msgstr "Colonne cible inconnue pour ce projet."
 
 #: views/tasks.py
 #, python-format
@@ -2471,10 +2459,6 @@ msgstr "Une colonne cible est requise tant qu’il reste des tâches."
 #: services/statuses.py
 msgid "Target column must be a different column of this project."
 msgstr "La colonne cible doit être une autre colonne de ce projet."
-
-#: views/viewsets.py
-msgid "Malformed move_to UUID."
-msgstr "UUID move_to mal formé."
 
 #: views/viewsets.py
 msgid "Provide files or file_uuids."

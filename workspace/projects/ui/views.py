@@ -299,14 +299,14 @@ def _base_context(request, project, role, view):
 
 
 def _epics_data(project):
-    # closed rides along so the pickers can offer open epics only while
+    # is_closed rides along so the pickers can offer open epics only while
     # closed ones still resolve to a name and color on cards and chips.
     return [
         {
             "uuid": str(epic.uuid),
             "name": epic.name,
             "color": epic.color,
-            "closed": epic.is_closed,
+            "is_closed": epic.is_closed,
             "target_date": epic.target_date.isoformat() if epic.target_date else "",
             "display_date": _epic_target_label(epic.target_date)
             if epic.target_date
@@ -434,12 +434,10 @@ def _task_panel_context(user, project, role, task, *, members=None):
             "labels": [str(label.uuid) for label in task.labels.all()],
             "epic": str(task.epic_id) if task.epic_id else "",
             "subtasks": [
-                {"uuid": str(s.uuid), "title": s.title, "done": s.done}
+                {"uuid": str(s.uuid), "title": s.title, "is_done": s.done}
                 for s in task.subtasks.all()
             ],
-            "subtasks_url": reverse(
-                "project-task-subtasks", args=[project.uuid, task.uuid]
-            ),
+            "subtasks_url": reverse("project-task-subtasks", args=[task.uuid]),
         },
     }
 

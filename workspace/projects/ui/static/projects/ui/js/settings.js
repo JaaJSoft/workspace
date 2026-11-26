@@ -366,9 +366,10 @@ function projectSettingsDanger(config) {
       this.busy = true;
       this.error = '';
       try {
-        const resp = await fetch(config.apiBase + '/' + action, {
-          method: 'POST',
+        const resp = await fetch(config.apiBase, {
+          method: 'PATCH',
           headers: settingsHeaders(),
+          body: JSON.stringify({ is_archived: action === 'archive' }),
         });
         if (!resp.ok) {
           throw new Error(
@@ -463,7 +464,7 @@ function projectColumns(config) {
     },
 
     request(url, options) {
-      return settingsRequest(this, url, options, ['name']);
+      return settingsRequest(this, url, options, ['name', 'move_to']);
     },
 
     async addColumn() {
@@ -505,7 +506,7 @@ function projectColumns(config) {
         return;
       }
       try {
-        await this.request(config.apiBase + '/statuses/' + column.uuid, {
+        await this.request(projectRowUrl('statuses', column.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ name: name }),
@@ -520,7 +521,7 @@ function projectColumns(config) {
 
     async setColor(column, color) {
       try {
-        await this.request(config.apiBase + '/statuses/' + column.uuid, {
+        await this.request(projectRowUrl('statuses', column.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ color: color }),
@@ -555,7 +556,7 @@ function projectColumns(config) {
           method: 'POST',
           headers: settingsHeaders(),
           body: JSON.stringify({
-            order: this.columns.map(function (c) {
+            uuids: this.columns.map(function (c) {
               return c.uuid;
             }),
           }),
@@ -613,7 +614,7 @@ function projectColumns(config) {
         });
         if (!ok) return;
       }
-      let url = config.apiBase + '/statuses/' + column.uuid;
+      let url = projectRowUrl('statuses', column.uuid);
       if (moveTarget) {
         url += '?move_to=' + moveTarget;
       }
@@ -703,7 +704,7 @@ function projectLabels(config) {
         return;
       }
       try {
-        await this.request(config.apiBase + '/labels/' + label.uuid, {
+        await this.request(projectRowUrl('labels', label.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ name: name }),
@@ -718,7 +719,7 @@ function projectLabels(config) {
 
     async setColor(label, color) {
       try {
-        await this.request(config.apiBase + '/labels/' + label.uuid, {
+        await this.request(projectRowUrl('labels', label.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ color: color }),
@@ -745,7 +746,7 @@ function projectLabels(config) {
       });
       if (!ok) return;
       try {
-        await this.request(config.apiBase + '/labels/' + label.uuid, {
+        await this.request(projectRowUrl('labels', label.uuid), {
           method: 'DELETE',
           headers: settingsHeaders(),
         });
@@ -807,7 +808,7 @@ function projectEpics(config) {
           uuid: e.uuid,
           name: e.name,
           color: e.color,
-          closed: e.closed,
+          is_closed: e.is_closed,
           target_date: e.target_date || null,
           display_date: e.target_date
             ? new Date(e.target_date + 'T00:00:00').toLocaleDateString(window.getUserLocale(), {
@@ -833,7 +834,7 @@ function projectEpics(config) {
     // server judges overdue tasks in.
     isOverdue(epic) {
       const today = config.today || window.userTzDayKey(new Date());
-      return !epic.closed && !!epic.target_date && epic.target_date < today;
+      return !epic.is_closed && !!epic.target_date && epic.target_date < today;
     },
 
     // List filter: quick name search + "open only" switch. Purely visual -
@@ -842,7 +843,7 @@ function projectEpics(config) {
       const needle = this.query.trim().toLowerCase();
       return this.items.filter(
         (e) =>
-          (!this.openOnly || !e.closed) &&
+          (!this.openOnly || !e.is_closed) &&
           (!needle || e.name.toLowerCase().includes(needle))
       );
     },
@@ -891,7 +892,7 @@ function projectEpics(config) {
         return;
       }
       try {
-        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+        await this.request(projectRowUrl('epics', epic.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ name: name }),
@@ -918,7 +919,7 @@ function projectEpics(config) {
         return;
       }
       try {
-        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+        await this.request(projectRowUrl('epics', epic.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ description: description }),
@@ -934,7 +935,7 @@ function projectEpics(config) {
 
     async setColor(epic, color) {
       try {
-        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+        await this.request(projectRowUrl('epics', epic.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ color: color }),
@@ -948,12 +949,12 @@ function projectEpics(config) {
 
     async toggleClosed(epic) {
       try {
-        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+        await this.request(projectRowUrl('epics', epic.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
-          body: JSON.stringify({ closed: !epic.closed }),
+          body: JSON.stringify({ is_closed: !epic.is_closed }),
         });
-        epic.closed = !epic.closed;
+        epic.is_closed = !epic.is_closed;
         this.syncBoardEpics();
       } catch (e) {
         this.error = e.message;
@@ -966,7 +967,7 @@ function projectEpics(config) {
       const targetDate = value || null;
       if (targetDate === epic.target_date) return;
       try {
-        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+        await this.request(projectRowUrl('epics', epic.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ target_date: targetDate }),
@@ -994,7 +995,7 @@ function projectEpics(config) {
       });
       if (!ok) return;
       try {
-        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+        await this.request(projectRowUrl('epics', epic.uuid), {
           method: 'DELETE',
           headers: settingsHeaders(),
         });
@@ -1165,7 +1166,7 @@ function projectSprints(config) {
         return;
       }
       try {
-        await this.request(config.apiBase + '/sprints/' + sprint.uuid, {
+        await this.request(projectRowUrl('sprints', sprint.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ name: name }),
@@ -1190,7 +1191,7 @@ function projectSprints(config) {
         return;
       }
       try {
-        await this.request(config.apiBase + '/sprints/' + sprint.uuid, {
+        await this.request(projectRowUrl('sprints', sprint.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ goal: goal }),
@@ -1206,7 +1207,7 @@ function projectSprints(config) {
 
     async setDate(sprint, field, value) {
       try {
-        await this.request(config.apiBase + '/sprints/' + sprint.uuid, {
+        await this.request(projectRowUrl('sprints', sprint.uuid), {
           method: 'PATCH',
           headers: settingsHeaders(),
           body: JSON.stringify({ [field]: value || null }),
@@ -1235,7 +1236,7 @@ function projectSprints(config) {
       });
       if (!ok) return;
       try {
-        await this.request(config.apiBase + '/sprints/' + sprint.uuid, {
+        await this.request(projectRowUrl('sprints', sprint.uuid), {
           method: 'DELETE',
           headers: settingsHeaders(),
         });
@@ -1289,13 +1290,19 @@ function projectMembers(config) {
     },
 
     request(url, options) {
-      return settingsRequest(this, url, options, []);
+      return settingsRequest(this, url, options, ['user']);
+    },
+
+    // The name people know a member by; the username for one who gave none.
+    memberName(member) {
+      const user = member.user;
+      return [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username;
     },
 
     async addMember(user) {
       // The shared user selector does not know who is already a member.
       const already = this.items.some(function (m) {
-        return String(m.user) === String(user.id);
+        return String(m.user.id) === String(user.id);
       });
       if (already) return;
       try {
@@ -1313,14 +1320,11 @@ function projectMembers(config) {
 
     async changeRole(member, role) {
       try {
-        const resp = await this.request(
-          config.apiBase + '/members/' + member.uuid,
-          {
-            method: 'PATCH',
-            headers: settingsHeaders(),
-            body: JSON.stringify({ role: role }),
-          }
-        );
+        const resp = await this.request(projectRowUrl('members', member.uuid), {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ role: role }),
+        });
         const updated = await resp.json();
         member.role = updated.role;
       } catch (e) {
@@ -1336,7 +1340,7 @@ function projectMembers(config) {
         title: gettext('Remove member'),
         message: interpolate(
           gettext('Remove %(username)s from this project?'),
-          { username: member.username },
+          { username: member.user.username },
           true
         ),
         okLabel: pgettext('project member', 'Remove'),
@@ -1346,7 +1350,7 @@ function projectMembers(config) {
       });
       if (!ok) return;
       try {
-        await this.request(config.apiBase + '/members/' + member.uuid, {
+        await this.request(projectRowUrl('members', member.uuid), {
           method: 'DELETE',
           headers: settingsHeaders(),
         });

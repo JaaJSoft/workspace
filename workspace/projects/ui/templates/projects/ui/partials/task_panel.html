@@ -449,7 +449,7 @@
               <input
                 type="checkbox"
                 class="checkbox checkbox-sm shrink-0"
-                :checked="st.done"
+                :checked="st.is_done"
                 @change="toggleSubtask(st)"
                 :aria-label="st.title"
                 {% if "edit" not in panel_action_ids %}disabled{% endif %}
@@ -457,7 +457,7 @@
               <template x-if="editingSubtask !== st.uuid">
                 <span
                   class="flex-1 min-w-0 text-sm wrap-break-word"
-                  :class="st.done && 'line-through text-base-content/50'"
+                  :class="st.is_done && 'line-through text-base-content/50'"
                   {% if "edit" in panel_action_ids %}@click="startSubtaskEdit(st)"{% endif %}
                   x-text="st.title"
                 ></span>

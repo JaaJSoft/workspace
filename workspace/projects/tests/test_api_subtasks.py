@@ -15,12 +15,10 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
     def setUp(self):
         super().setUp()
         self.task = create_task(self.project, self.admin, title="Ship the thing")
-        self.base_url = (
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/subtasks"
-        )
+        self.base_url = f"/api/v1/projects/tasks/{self.task.uuid}/subtasks"
 
     def _detail_url(self, subtask):
-        return f"{self.base_url}/{subtask.uuid}"
+        return f"/api/v1/projects/subtasks/{subtask.uuid}"
 
     # ── List ──────────────────────────────────────────────
 
@@ -33,7 +31,7 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual([s["title"] for s in response.data], ["first", "second"])
         self.assertEqual(
             set(response.data[0].keys()),
-            {"uuid", "title", "done", "position", "created_at"},
+            {"uuid", "title", "is_done", "position", "created_at"},
         )
 
     def test_outsider_gets_404(self):
@@ -41,13 +39,11 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
         response = self.client.get(self.base_url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_task_from_another_project_is_404(self):
+    def test_task_of_a_project_out_of_reach_is_404(self):
         other_project = create_project(self.admin, name="Other")
         other_task = create_task(other_project, self.admin, title="Elsewhere")
         self.client.force_authenticate(self.member)
-        response = self.client.get(
-            f"/api/v1/projects/{self.project.uuid}/tasks/{other_task.uuid}/subtasks"
-        )
+        response = self.client.get(f"/api/v1/projects/tasks/{other_task.uuid}/subtasks")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     # ── Create ────────────────────────────────────────────
@@ -59,7 +55,7 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["title"], "New item")
         self.assertEqual(response.data["position"], 1)
-        self.assertFalse(response.data["done"])
+        self.assertFalse(response.data["is_done"])
 
     def test_title_is_trimmed(self):
         self.client.force_authenticate(self.member)
@@ -84,7 +80,7 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
     def test_member_toggles_done(self):
         subtask = create_subtask(self.task, "item")
         self.client.force_authenticate(self.member)
-        response = self.client.patch(self._detail_url(subtask), {"done": True})
+        response = self.client.patch(self._detail_url(subtask), {"is_done": True})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         subtask.refresh_from_db()
         self.assertTrue(subtask.done)
@@ -110,15 +106,30 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
         self.project.archived_at = timezone.now()
         self.project.save(update_fields=["archived_at"])
         self.client.force_authenticate(self.member)
-        response = self.client.patch(self._detail_url(subtask), {"done": True})
+        response = self.client.patch(self._detail_url(subtask), {"is_done": True})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_subtask_of_another_task_is_404(self):
-        other_task = create_task(self.project, self.admin, title="Other")
-        foreign = create_subtask(other_task, "foreign")
+    def test_member_reads_one_subtask(self):
+        subtask = create_subtask(self.task, "item")
         self.client.force_authenticate(self.member)
-        response = self.client.patch(self._detail_url(foreign), {"done": True})
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = self.client.get(self._detail_url(subtask))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["title"], "item")
+
+    def test_subtask_out_of_reach_answers_like_one_that_does_not_exist(self):
+        subtask = create_subtask(self.task, "item")
+        absent = f"/api/v1/projects/subtasks/{uuid_module.uuid4()}"
+        self.client.force_authenticate(self.outsider)
+        for method in ("get", "patch", "delete"):
+            with self.subTest(method=method):
+                hidden = getattr(self.client, method)(self._detail_url(subtask))
+                unknown = getattr(self.client, method)(absent)
+                self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+                self.assertEqual(
+                    (hidden.status_code, hidden.content),
+                    (unknown.status_code, unknown.content),
+                )
+        self.assertTrue(self.task.subtasks.filter(pk=subtask.pk).exists())
 
     # ── Delete ────────────────────────────────────────────
 
@@ -146,9 +157,9 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.member)
         response = self.client.post(
             f"{self.base_url}/reorder",
-            {"order": [str(c.uuid), str(a.uuid), str(b.uuid)]},
+            {"uuids": [str(c.uuid), str(a.uuid), str(b.uuid)]},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         titles = [
             s.title for s in self.task.subtasks.order_by("position", "created_at")
         ]
@@ -157,7 +168,7 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
     def test_reorder_malformed_uuid_is_400(self):
         self.client.force_authenticate(self.member)
         response = self.client.post(
-            f"{self.base_url}/reorder", {"order": ["not-a-uuid"]}
+            f"{self.base_url}/reorder", {"uuids": ["not-a-uuid"]}
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -165,15 +176,34 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
         a = create_subtask(self.task, "a")
         self.client.force_authenticate(self.member)
         response = self.client.post(
-            f"{self.base_url}/reorder", {"order": [str(a.uuid), str(a.uuid)]}
+            f"{self.base_url}/reorder", {"uuids": [str(a.uuid), str(a.uuid)]}
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reorder_refuses_an_item_of_another_task_like_an_unknown_one(self):
+        mine = create_subtask(self.task, "mine")
+        other_task = create_task(self.project, self.admin, title="Other")
+        foreign = create_subtask(other_task, "foreign")
+        absent = uuid_module.uuid4()
+        self.client.force_authenticate(self.member)
+
+        def reorder(extra):
+            response = self.client.post(
+                f"{self.base_url}/reorder", {"uuids": [str(extra), str(mine.uuid)]}
+            )
+            return response.status_code, response.content.replace(
+                str(extra).encode(), b"<uuid>"
+            )
+
+        refused = reorder(foreign.uuid)
+        self.assertEqual(refused[0], status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(refused, reorder(absent))
 
     def test_archived_project_rejects_reorder(self):
         self.project.archived_at = timezone.now()
         self.project.save(update_fields=["archived_at"])
         self.client.force_authenticate(self.member)
         response = self.client.post(
-            f"{self.base_url}/reorder", {"order": [str(uuid_module.uuid4())]}
+            f"{self.base_url}/reorder", {"uuids": [str(uuid_module.uuid4())]}
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

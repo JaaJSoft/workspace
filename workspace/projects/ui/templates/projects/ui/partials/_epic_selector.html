@@ -61,7 +61,7 @@ Params:
       ></span>
       <span
         class="truncate"
-        :class="(epicById({{ model_expr }}) || {}).closed ? 'line-through' : ''"
+        :class="(epicById({{ model_expr }}) || {}).is_closed ? 'line-through' : ''"
         x-text="epicName({{ model_expr }})"
       ></span>
     </span>

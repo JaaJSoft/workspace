@@ -184,13 +184,13 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(
             data["subtasks"],
             [
-                {"uuid": str(first.uuid), "title": "Write the code", "done": False},
-                {"uuid": str(done.uuid), "title": "Review it", "done": True},
+                {"uuid": str(first.uuid), "title": "Write the code", "is_done": False},
+                {"uuid": str(done.uuid), "title": "Review it", "is_done": True},
             ],
         )
         self.assertEqual(
             data["subtasks_url"],
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/subtasks",
+            f"/api/v1/projects/tasks/{self.task.uuid}/subtasks",
         )
 
     def test_panel_shows_the_task_reference(self):

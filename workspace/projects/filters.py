@@ -1,4 +1,4 @@
-"""The filters of a task list, for the API and for the pages alike.
+"""The filters of the module's lists.
 
 A board, a backlog and ``GET /projects/tasks`` read the same query string, so
 a filtered page is a link that can be shared and the API takes what the page
@@ -14,9 +14,10 @@ from workspace.common.filters import (
     KeyFilter,
     MultiValueFilter,
     OrderingFilter,
+    TextSearchFilter,
 )
 
-from .models import Task, TaskStatus
+from .models import Project, Task, TaskStatus
 from .queries import PRIORITY_RANK
 from .services.search import fts_tasks, reference_q
 
@@ -27,6 +28,31 @@ class InvalidTaskFilter(Exception):
     def __init__(self, field):
         super().__init__(field)
         self.field = field
+
+
+class ProjectFilter(filters.FilterSet):
+    q = TextSearchFilter(fields=("name", "key", "description"))
+    type = MultiValueFilter(child=forms.ChoiceField(choices=Project.Type.choices))
+    archived = BooleanFilter(
+        field_name="archived_at", lookup_expr="isnull", exclude=True
+    )
+    group = MultiValueFilter(
+        field_name="groups", child=forms.IntegerField(), distinct=True
+    )
+    group_name = KeyFilter(field_name="groups__name", distinct=True)
+    ordering = OrderingFilter(
+        fields={
+            "name": "name",
+            "key": "key",
+            "created_at": "created_at",
+            "updated_at": "updated_at",
+        },
+        tie_break=("uuid",),
+    )
+
+    class Meta:
+        model = Project
+        fields = []
 
 
 class TaskFilter(filters.FilterSet):

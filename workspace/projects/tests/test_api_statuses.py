@@ -1,8 +1,13 @@
+import uuid as uuid_module
+
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.projects.services.projects import get_or_create_personal_project
+from workspace.projects.services.projects import (
+    create_project,
+    get_or_create_personal_project,
+)
 from workspace.projects.services.tasks import create_task
 
 from .base import ProjectTestMixin
@@ -107,7 +112,7 @@ class StatusUpdateApiTests(ProjectTestMixin, APITestCase):
         self.todo = self.project.statuses.get(name="To do")
 
     def _url(self, uuid):
-        return f"/api/v1/projects/{self.project.uuid}/statuses/{uuid}"
+        return f"/api/v1/projects/statuses/{uuid}"
 
     def test_admin_renames_and_recolors(self):
         self.client.force_authenticate(self.admin)
@@ -142,6 +147,24 @@ class StatusUpdateApiTests(ProjectTestMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_member_reads_one_column(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.get(self._url(self.todo.uuid))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["name"], "To do")
+
+    def test_column_out_of_reach_answers_like_one_that_does_not_exist(self):
+        self.client.force_authenticate(self.outsider)
+        for method in ("get", "patch", "delete"):
+            with self.subTest(method=method):
+                hidden = getattr(self.client, method)(self._url(self.todo.uuid))
+                unknown = getattr(self.client, method)(self._url(uuid_module.uuid4()))
+                self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+                self.assertEqual(
+                    (hidden.status_code, hidden.content),
+                    (unknown.status_code, unknown.content),
+                )
+
 
 class StatusDeleteApiTests(ProjectTestMixin, APITestCase):
     def setUp(self):
@@ -151,7 +174,7 @@ class StatusDeleteApiTests(ProjectTestMixin, APITestCase):
         self.backlog = self.project.statuses.get(name="Backlog")
 
     def _url(self, uuid, move_to=None):
-        url = f"/api/v1/projects/{self.project.uuid}/statuses/{uuid}"
+        url = f"/api/v1/projects/statuses/{uuid}"
         if move_to is not None:
             url += f"?move_to={move_to}"
         return url
@@ -161,25 +184,42 @@ class StatusDeleteApiTests(ProjectTestMixin, APITestCase):
         response = self.client.delete(self._url(self.todo.uuid))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
-    def test_delete_with_tasks_requires_move_to(self):
+    def test_delete_with_tasks_and_no_move_to_is_409(self):
         create_task(self.project, self.admin, title="A", status=self.todo)
         self.client.force_authenticate(self.admin)
         response = self.client.delete(self._url(self.todo.uuid))
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(self.project.statuses.filter(pk=self.todo.pk).exists())
 
     def test_malformed_move_to_is_400(self):
         self.client.force_authenticate(self.admin)
         response = self.client.delete(self._url(self.todo.uuid, move_to="not-a-uuid"))
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(response.data), ["move_to"])
 
     def test_unknown_move_to_is_400(self):
-        import uuid as uuid_module
-
         self.client.force_authenticate(self.admin)
         response = self.client.delete(
             self._url(self.todo.uuid, move_to=uuid_module.uuid4())
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(response.data), ["move_to"])
+
+    def test_move_to_of_another_project_answers_like_an_unknown_one(self):
+        create_task(self.project, self.admin, title="A", status=self.todo)
+        elsewhere = create_project(self.outsider, name="Elsewhere").statuses.first()
+        absent = uuid_module.uuid4()
+        self.client.force_authenticate(self.admin)
+
+        def delete_into(target):
+            response = self.client.delete(self._url(self.todo.uuid, move_to=target))
+            return response.status_code, response.content.replace(
+                str(target).encode(), b"<uuid>"
+            )
+
+        refused = delete_into(elsewhere.uuid)
+        self.assertEqual(refused[0], status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(refused, delete_into(absent))
 
     def test_delete_moves_tasks_to_target(self):
         task = create_task(self.project, self.admin, title="A", status=self.todo)
@@ -191,10 +231,10 @@ class StatusDeleteApiTests(ProjectTestMixin, APITestCase):
         task.refresh_from_db()
         self.assertEqual(task.status, self.in_progress)
 
-    def test_last_category_column_is_400(self):
+    def test_last_category_column_is_409(self):
         self.client.force_authenticate(self.admin)
         response = self.client.delete(self._url(self.backlog.uuid))
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertIn("last", response.data["detail"])
 
     def test_member_cannot_delete(self):
@@ -213,7 +253,7 @@ class StatusReorderApiTests(ProjectTestMixin, APITestCase):
         response = self.client.post(
             self._url(),
             {
-                "order": [
+                "uuids": [
                     str(statuses["Done"].uuid),
                     str(statuses["Backlog"].uuid),
                     str(statuses["To do"].uuid),
@@ -222,7 +262,8 @@ class StatusReorderApiTests(ProjectTestMixin, APITestCase):
             },
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.content, b"")
         names = list(
             self.project.statuses.order_by("position", "created_at").values_list(
                 "name", flat=True
@@ -230,14 +271,52 @@ class StatusReorderApiTests(ProjectTestMixin, APITestCase):
         )
         self.assertEqual(names, ["Done", "Backlog", "To do", "In progress"])
 
-    def test_invalid_uuid_in_order_is_400(self):
+    def test_columns_left_out_keep_their_order_after_the_listed_ones(self):
+        done = self.project.statuses.get(name="Done")
         self.client.force_authenticate(self.admin)
-        response = self.client.post(self._url(), {"order": ["nope"]}, format="json")
+        response = self.client.post(
+            self._url(), {"uuids": [str(done.uuid)]}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        names = list(
+            self.project.statuses.order_by("position", "created_at").values_list(
+                "name", flat=True
+            )
+        )
+        self.assertEqual(names, ["Done", "Backlog", "To do", "In progress"])
+
+    def test_invalid_uuid_is_400(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(self._url(), {"uuids": ["nope"]}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_column_of_another_project_refuses_the_order_like_an_unknown_one(self):
+        mine = self.project.statuses.get(name="Done")
+        elsewhere = create_project(self.outsider, name="Elsewhere").statuses.first()
+        absent = uuid_module.uuid4()
+        self.client.force_authenticate(self.admin)
+
+        def reorder(extra):
+            response = self.client.post(
+                self._url(), {"uuids": [str(extra), str(mine.uuid)]}, format="json"
+            )
+            return response.status_code, response.content.replace(
+                str(extra).encode(), b"<uuid>"
+            )
+
+        refused = reorder(elsewhere.uuid)
+        self.assertEqual(refused[0], status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(refused, reorder(absent))
+        self.assertEqual(
+            self.project.statuses.order_by("position").first().name, "Backlog"
+        )
+
     def test_member_cannot_reorder(self):
+        done = self.project.statuses.get(name="Done")
         self.client.force_authenticate(self.member)
-        response = self.client.post(self._url(), {"order": []}, format="json")
+        response = self.client.post(
+            self._url(), {"uuids": [str(done.uuid)]}, format="json"
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 

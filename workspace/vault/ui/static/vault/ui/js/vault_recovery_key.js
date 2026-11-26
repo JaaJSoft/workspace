@@ -12,6 +12,8 @@
 // The server keeps the envelope this one replaces until an unlock proves the
 // new one: that is why a success locks the session and asks for the new key
 // straight away, and why the old key goes on opening the account until then.
+// The reading, sealing and sending are envelope_rotation.js's, as for the
+// password change; this file is the dialog around them.
 //
 // Never name the root mixin after a secret, for the reason vault_password.js
 // gives for its own: CodeQL would flag every localStorage write of the page.
@@ -73,8 +75,8 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
     // The new key, as crockfordEncode drew it. On screen from the kit step
     // until the dialog goes away, and nowhere else.
     nextSecretText: '',
-    // What prepare() built and replace() sends: the two sealed keys and the
-    // envelope they replace. Ciphertext only - nothing raw waits here.
+    // The rotation prepare() built and replace() sends: the two sealed keys
+    // and the envelope they replace. Ciphertext only - nothing raw waits here.
     pending: null,
     acknowledged: false,
     remember: false,
@@ -121,7 +123,6 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
     async prepare() {
       if (!this.canPrepare()) return;
       const V = window.vaultCrypto;
-      const E = window.vaultEnvelope;
       const life = this.life;
       // Read once, before the first await: destroy() empties the fields, and
       // a flow that read them afterwards would seal the keys under an empty
@@ -132,48 +133,29 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
       const gone = () => life !== this.life;
       this.busy = true;
       this.error = '';
-      let secretBytes = null;
-      let nextSecretBytes = null;
-      let oldKey = null;
-      let newKey = null;
-      let keys = null;
-      const zeroAll = function () {
-        [secretBytes, nextSecretBytes, oldKey, newKey, keys && keys.kexPriv, keys && keys.sigSeed]
-          .forEach(function (b) {
-            if (b && typeof b.fill === 'function') b.fill(0);
-          });
-      };
       try {
-        // As in the password change: the unlock's own confirm and re-wrap
-        // must have landed before the envelope is read, or the rotation
-        // names a stale one.
-        await window.vaultSession.envelopeWrites();
-        if (gone()) return;
-        const envelope = await window.vaultApi.fetchEnvelope();
-        if (gone()) return;
+        const drawn = V.randomBytes(32);
+        const nextSecretText = V.crockfordEncode(drawn);
+        drawn.fill(0);
+        let rotation;
         try {
-          secretBytes = V.crockfordDecode(secretText);
+          // The new key goes in as the kit spells it, not as the bytes it was
+          // drawn as: the keys are sealed under what the user will type back.
+          rotation = await window.vaultEnvelopeRotation.prepare(
+            { password: currentPassword, secretText: secretText },
+            { password: currentPassword, secretText: window.vaultEmergencyKit.grouped(nextSecretText) },
+            gone
+          );
         } catch (err) {
           if (gone()) return;
-          this.error = gettext('Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.');
-          // A remembered key that does not decode is no use hidden: the
-          // field comes back, empty, for the emergency kit.
-          this.secretText = '';
-          this.secretRemembered = false;
-          return;
-        }
-        const salt = V.fromBase64Url(envelope.kdf_salt);
-        // The previous envelope is tried too: an old key that still opens
-        // the account is exactly the one worth replacing. The rotation then
-        // replaces the current envelope and leaves the occupied previous
-        // slot as it is.
-        let opened;
-        try {
-          ({ opened, unwrapKey: oldKey, keys } = await E.openWithFallback(
-            envelope, currentPassword, secretBytes, salt
-          ));
-        } catch (err) {
-          if (gone()) return;
+          if (err && err.name === 'VaultRecoveryKeyUnreadable') {
+            this.error = gettext('Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.');
+            // A remembered key that does not decode is no use hidden: the
+            // field comes back, empty, for the emergency kit.
+            this.secretText = '';
+            this.secretRemembered = false;
+            return;
+          }
           if (err && err.name === 'VaultEnvelopeWrongPassword') {
             // The same tag fails for a wrong password and a wrong recovery
             // key; only a key the user typed here can be the culprit.
@@ -186,37 +168,14 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
             this.error = gettext('This vault was saved by a newer version of the app. Reload the page to update it.');
             return;
           }
+          if (err && err.name === 'VaultEnvelopeResealFailed') {
+            this.error = gettext('The new recovery key could not be applied.');
+            return;
+          }
           throw err;
         }
-        if (gone()) return;
-        const drawn = V.randomBytes(32);
-        const nextSecretText = V.crockfordEncode(drawn);
-        drawn.fill(0);
-        // Derived from the key as the kit spells it, not from the bytes it
-        // was drawn as: what gets sealed under is, by construction, what the
-        // user is about to save and type back.
-        nextSecretBytes = V.crockfordDecode(window.vaultEmergencyKit.grouped(nextSecretText));
-        const current = V.CURRENT_SUITE.kdf;
-        newKey = await E.deriveUnwrapKey(
-          { kdf_algo: current.algo, kdf_params: current.params }, currentPassword, nextSecretBytes, salt
-        );
-        if (gone()) return;
-        let sealed;
-        try {
-          sealed = await E.sealAndReread(newKey, keys, envelope.uuid);
-        } catch (err) {
-          if (!gone()) this.error = gettext('The new recovery key could not be applied.');
-          return;
-        }
-        if (gone()) return;
-        this.pending = {
-          sealed: sealed,
-          expected: envelope.wrapped_kex_priv,
-          // Opening the current envelope just proved it, as an unlock would:
-          // confirmed first, it is what the previous slot keeps through the
-          // rotation, rather than an older envelope still waiting there.
-          confirmFirst: opened === 'current' && E.previousOf(envelope) !== null,
-        };
+        if (!rotation || gone()) return;
+        this.pending = rotation;
         this.nextSecretText = nextSecretText;
         this.currentPassword = '';
         if (!secretRemembered) this.secretText = '';
@@ -226,7 +185,6 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
       } catch (err) {
         if (!gone()) this.error = gettext('Your recovery key could not be replaced. Try again.');
       } finally {
-        zeroAll();
         this.busy = false;
       }
     },
@@ -274,7 +232,6 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
 
     async replace() {
       if (!this.canReplace()) return;
-      const E = window.vaultEnvelope;
       const life = this.life;
       const pending = this.pending;
       const remember = this.remember;
@@ -283,17 +240,8 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
       this.busy = true;
       this.error = '';
       try {
-        if (pending.confirmFirst) {
-          try {
-            await window.vaultApi.confirmEnvelope(pending.expected);
-          } catch (err) {
-            if (!gone()) this.error = gettext('Your recovery key could not be replaced. Try again.');
-            return;
-          }
-          if (gone()) return;
-        }
         try {
-          await window.vaultApi.rotateEnvelope(E.rotateBody(pending.sealed, pending.expected));
+          if (!(await window.vaultEnvelopeRotation.commit(pending, gone))) return;
         } catch (err) {
           if (!(await this.rotationLanded(pending))) {
             if (gone()) return;

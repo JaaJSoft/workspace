@@ -291,17 +291,18 @@ envelope.
 
 The secret key only enters the derivation (*Key hierarchy*), so a new one is a
 new envelope and nothing else: same salt, same private keys, same vault key
-wraps. It goes through the same `rotate` endpoint, from a dialog in the sidebar,
-in two steps.
+wraps. It is the password change with the other half of the credentials
+replaced, and both run the one sequence in `envelope_rotation.js` against the
+same `rotate` endpoint. From a dialog in the sidebar, in two steps.
 
-1. **Prepare.** The client opens the envelope with the password and the current
-   secret key, falling back to the previous envelope as an unlock does: a key
-   that still opens the account is the one worth replacing. It draws 32 random
-   bytes, derives under the same password and the new key, seals both private
-   keys, **reopens and compares them**, and zeroes the raw material. The new
-   unwrap key is derived from the key as the kit spells it, decoded again, so
-   what the keys are sealed under is what the user will type back. Nothing is
-   sent.
+1. **Prepare.** The client draws 32 random bytes for the new key and opens the
+   envelope with the password and the current secret key, falling back to the
+   previous envelope as an unlock does: a key that still opens the account is
+   the one worth replacing. It derives under the same password and the new key,
+   seals both private keys, **reopens and compares them**, and zeroes the raw
+   material. The new unwrap key is derived from the key as the kit spells it,
+   decoded again, so what the keys are sealed under is what the user will type
+   back. Nothing is sent.
 2. **Replace.** The new key is shown with a new emergency kit. Once the user
    confirms it is saved, the client sends `rotate` with the envelope read in
    step 1, after a `confirm` when that envelope opened as the current one and

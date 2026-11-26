@@ -398,12 +398,12 @@ msgid "The new password could not be applied."
 msgstr "Le nouveau mot de passe n’a pas pu être appliqué."
 
 #: ui/static/vault/ui/js/vault_password.js
-msgid "The password could not be changed. Try again."
-msgstr "Le mot de passe n’a pas pu être changé. Réessayez."
-
-#: ui/static/vault/ui/js/vault_password.js
 msgid "Your account changed in another tab. Reload and try again."
 msgstr "Votre compte a changé dans un autre onglet. Rechargez et réessayez."
+
+#: ui/static/vault/ui/js/vault_password.js
+msgid "The password could not be changed. Try again."
+msgstr "Le mot de passe n’a pas pu être changé. Réessayez."
 
 #: ui/static/vault/ui/js/vault_prefs.js
 msgid "That preference could not be saved. Try again."

@@ -5,7 +5,8 @@
 // on purpose - so the envelope is opened again from the current password.
 // Nothing is sent before the new envelope has been opened back here, and the
 // server keeps the old one until an unlock proves the new one: that is why a
-// success locks the session and asks for the new password straight away.
+// success locks the session and asks for the new password straight away. The
+// steps themselves are envelope_rotation.js's; this file is the dialog.
 //
 // Never name this mixin after a password: CodeQL (js/clear-text-storage)
 // treats whatever a call to such a name returns as a secret, and once it is
@@ -108,8 +109,6 @@ window.vaultPasswordChange = function vaultPasswordChange() {
 
     async submit() {
       if (!this.canSubmit()) return;
-      const V = window.vaultCrypto;
-      const E = window.vaultEnvelope;
       const life = this.life;
       // Read once, before the first await: destroy() empties the fields, and
       // a flow that read them afterwards would seal the keys under an empty
@@ -121,45 +120,24 @@ window.vaultPasswordChange = function vaultPasswordChange() {
       const gone = () => life !== this.life;
       this.busy = true;
       this.error = '';
-      let secretBytes = null;
-      let oldKey = null;
-      let newKey = null;
-      let keys = null;
-      const zeroAll = function () {
-        [secretBytes, oldKey, newKey, keys && keys.kexPriv, keys && keys.sigSeed].forEach(function (b) {
-          if (b && typeof b.fill === 'function') b.fill(0);
-        });
-      };
       try {
-        // The unlock's confirm and re-wrap run in the background: read before
-        // they land, the envelope is already stale when the rotation names it,
-        // and the server answers a 409 that blames another tab.
-        await window.vaultSession.envelopeWrites();
-        if (gone()) return;
-        const envelope = await window.vaultApi.fetchEnvelope();
-        if (gone()) return;
+        let rotation;
         try {
-          secretBytes = V.crockfordDecode(secretText);
+          rotation = await window.vaultEnvelopeRotation.prepare(
+            { password: currentPassword, secretText: secretText },
+            { password: newPassword, secretText: secretText },
+            gone
+          );
         } catch (err) {
           if (gone()) return;
-          this.error = gettext('Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.');
-          // A remembered key that does not decode is no use hidden: the
-          // field comes back, empty, for the emergency kit.
-          this.secretText = '';
-          this.secretRemembered = false;
-          return;
-        }
-        const salt = V.fromBase64Url(envelope.kdf_salt);
-        // The rotation that follows replaces only the current envelope, even
-        // when the previous one is what opened: the server keeps an occupied
-        // previous slot as it is.
-        let opened;
-        try {
-          ({ opened, unwrapKey: oldKey, keys } = await E.openWithFallback(
-            envelope, currentPassword, secretBytes, salt
-          ));
-        } catch (err) {
-          if (gone()) return;
+          if (err && err.name === 'VaultRecoveryKeyUnreadable') {
+            this.error = gettext('Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.');
+            // A remembered key that does not decode is no use hidden: the
+            // field comes back, empty, for the emergency kit.
+            this.secretText = '';
+            this.secretRemembered = false;
+            return;
+          }
           if (err && err.name === 'VaultEnvelopeWrongPassword') {
             // The same tag fails for a wrong password and a wrong recovery
             // key; only a key the user typed here can be the culprit.
@@ -174,42 +152,15 @@ window.vaultPasswordChange = function vaultPasswordChange() {
             this.error = gettext('This vault was saved by a newer version of the app. Reload the page to update it.');
             return;
           }
-          throw err;
-        }
-        if (gone()) return;
-        const current = V.CURRENT_SUITE.kdf;
-        newKey = await E.deriveUnwrapKey(
-          { kdf_algo: current.algo, kdf_params: current.params }, newPassword, secretBytes, salt
-        );
-        if (gone()) return;
-        let sealed;
-        try {
-          sealed = await E.sealAndReread(newKey, keys, envelope.uuid);
-        } catch (err) {
-          if (!gone()) this.error = gettext('The new password could not be applied.');
-          return;
-        }
-        // Nothing raw rides along with the request: only the two sealed
-        // ciphertexts are needed from here on.
-        zeroAll();
-        if (gone()) return;
-        // Opening the current envelope just proved it, as an unlock would: it
-        // is what the previous slot should keep through this rotation. Left
-        // unconfirmed (the unlock's confirm lost to a throttle or a closed
-        // tab), the slot would keep a password the user changed away from two
-        // rotations ago - so a refused confirm stops here rather than rotate
-        // away the password being replaced and keep that older one.
-        if (opened === 'current' && E.previousOf(envelope)) {
-          try {
-            await window.vaultApi.confirmEnvelope(envelope.wrapped_kex_priv);
-          } catch (err) {
-            if (!gone()) this.error = gettext('The password could not be changed. Try again.');
+          if (err && err.name === 'VaultEnvelopeResealFailed') {
+            this.error = gettext('The new password could not be applied.');
             return;
           }
-          if (gone()) return;
+          throw err;
         }
+        if (!rotation || gone()) return;
         try {
-          await window.vaultApi.rotateEnvelope(E.rotateBody(sealed, envelope.wrapped_kex_priv));
+          if (!(await window.vaultEnvelopeRotation.commit(rotation, gone))) return;
         } catch (err) {
           if (gone()) return;
           this.error = err && err.status === 409
@@ -223,7 +174,6 @@ window.vaultPasswordChange = function vaultPasswordChange() {
       } catch (err) {
         if (!gone()) this.error = gettext('The password could not be changed. Try again.');
       } finally {
-        zeroAll();
         this.busy = false;
       }
     },

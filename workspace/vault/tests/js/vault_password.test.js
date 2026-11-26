@@ -22,6 +22,7 @@ function harness(overrides = {}) {
   const fresh = (n) => { const b = Uint8Array.from({ length: 4 }, () => n); buffers.push(b); return b; };
   const ctx = loadScripts(
     [
+      'workspace/vault/ui/static/vault/ui/js/envelope_rotation.js',
       'workspace/vault/ui/static/vault/ui/js/vault_password_floor.js',
       'workspace/vault/ui/static/vault/ui/js/vault_password.js',
     ],

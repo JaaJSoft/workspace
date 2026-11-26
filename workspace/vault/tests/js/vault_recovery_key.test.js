@@ -20,8 +20,9 @@ const NEW_KEY = 'NEWKEY0123';
 const NEW_KEY_GROUPED = 'NEWK-EY01-23';
 
 // The envelope helper and the crypto are stubbed - their own behaviour is
-// pinned by account_envelope.test.js and the vector suites. What is under
-// test is the dialog's order of steps: what it shows, and what it sends when.
+// pinned by account_envelope.test.js and the vector suites - and the rotation
+// sequence runs for real, as in vault_password.test.js. What is under test is
+// the dialog around it: what it shows, and what it sends when.
 function harness(overrides = {}) {
   const posts = [];
   const derived = [];
@@ -34,6 +35,7 @@ function harness(overrides = {}) {
   const fresh = (n) => { const b = Uint8Array.from({ length: 4 }, () => n); buffers.push(b); return b; };
   const ctx = loadScripts(
     [
+      'workspace/vault/ui/static/vault/ui/js/envelope_rotation.js',
       'workspace/vault/ui/static/vault/ui/js/emergency_kit.js',
       'workspace/vault/ui/static/vault/ui/js/vault_recovery_key.js',
     ],
@@ -337,13 +339,16 @@ test('an account the previous envelope opened is rotated without a confirm', asy
 });
 
 test('a refused confirm stops before the rotation and keeps the key on screen', async () => {
-  const h = await shown({ envelope: WITH_PREVIOUS, confirmEnvelope: async () => { throw gone(429); } });
-  h.component.acknowledged = true;
-  await h.component.replace();
-  assert.deepStrictEqual(h.posts, []);
-  assert.equal(h.session.locks, 0);
-  assert.equal(h.component.error, 'Your recovery key could not be replaced. Try again.');
-  assert.equal(h.component.step, 'kit');
+  // Throttled or failed, the confirm is reported as the rotation would be.
+  for (const [status, wording] of [[429, /Too many changes to this account/], [503, /could not be replaced\. Try again\./]]) {
+    const h = await shown({ envelope: WITH_PREVIOUS, confirmEnvelope: async () => { throw gone(status); } });
+    h.component.acknowledged = true;
+    await h.component.replace();
+    assert.deepStrictEqual(h.posts, [], `status ${status}`);
+    assert.equal(h.session.locks, 0);
+    assert.match(h.component.error, wording);
+    assert.equal(h.component.step, 'kit');
+  }
 });
 
 test('a 409 says the old key still works, withdraws the new one and keeps the session open', async () => {

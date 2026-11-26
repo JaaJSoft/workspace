@@ -124,7 +124,6 @@ class CalledToolTests(_RegistryCase):
                 run_tool("fail_final", arguments, registry=self.registry)
 
     def test_a_tool_nobody_registered_is_not_on_offer(self):
-        self.assertNotIn("teleport_user", self.registry.names())
         self.assertNotIn(
             "teleport_user", [registered.name for registered in self.registry.get_all()]
         )

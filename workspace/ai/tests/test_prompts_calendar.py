@@ -36,7 +36,8 @@ class BuildEventExtractionMessagesTests(TestCase):
 
     def test_returns_system_and_user_messages(self):
         messages = build_event_extraction_messages(
-            [self._msg("Hi", "Meet at 3pm tomorrow.")]
+            [self._msg("Hi", "Meet at 3pm tomorrow.")],
+            user_tz=UTC,
         )
         (request,) = messages
         self.assertEqual(
@@ -44,7 +45,7 @@ class BuildEventExtractionMessagesTests(TestCase):
         )
 
     def test_system_message_rejects_vague_proposals(self):
-        messages = build_event_extraction_messages([self._msg("Hi", "x")])
+        messages = build_event_extraction_messages([self._msg("Hi", "x")], user_tz=UTC)
         system = system_text(messages).lower()
         self.assertIn("confirmed", system)
         self.assertIn("reject", system)
@@ -52,18 +53,22 @@ class BuildEventExtractionMessagesTests(TestCase):
     def test_user_message_includes_thread_in_chronological_order(self):
         m1 = self._msg("Plan", "On se voit ?")
         m2 = self._msg("Re: Plan", "Oui mardi 14h")
-        messages = build_event_extraction_messages([m1, m2])
+        messages = build_event_extraction_messages([m1, m2], user_tz=UTC)
         content = user_text(messages)
         self.assertLess(content.index("On se voit"), content.index("Oui mardi"))
 
     def test_user_message_wraps_body_in_untrusted_tags(self):
-        messages = build_event_extraction_messages([self._msg("Hi", "body")])
+        messages = build_event_extraction_messages(
+            [self._msg("Hi", "body")], user_tz=UTC
+        )
         self.assertIn("<untrusted-content>", user_text(messages))
         self.assertIn("</untrusted-content>", user_text(messages))
 
     def test_long_bodies_are_truncated(self):
         long_body = "x" * 10000
-        messages = build_event_extraction_messages([self._msg("Hi", long_body)])
+        messages = build_event_extraction_messages(
+            [self._msg("Hi", long_body)], user_tz=UTC
+        )
         self.assertLess(len(user_text(messages)), 8000)
 
     @patch("workspace.ai.prompts.calendar.timezone.now")
@@ -74,7 +79,9 @@ class BuildEventExtractionMessagesTests(TestCase):
         was sent."""
         mock_now.return_value = datetime(2026, 5, 15, 12, 0, tzinfo=UTC)
         # _msg date is 2026-05-14 09:00 UTC.
-        messages = build_event_extraction_messages([self._msg("Hi", "body")])
+        messages = build_event_extraction_messages(
+            [self._msg("Hi", "body")], user_tz=UTC
+        )
         self.assertIn("2026-05-14", user_text(messages))
 
     @patch("workspace.ai.prompts.calendar.timezone.now")
@@ -145,7 +152,7 @@ class BuildEventExtractionMessagesTests(TestCase):
         m1.date = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
         m2 = self._msg("Re: Plan", "Ok demain 8h ?")
         m2.date = datetime(2026, 4, 20, 14, 0, tzinfo=UTC)
-        messages = build_event_extraction_messages([m1, m2])
+        messages = build_event_extraction_messages([m1, m2], user_tz=UTC)
         content = user_text(messages)
         self.assertIn("2026-04-20", content)
         self.assertNotIn("2026-05-17", content)
@@ -158,5 +165,5 @@ class BuildEventExtractionMessagesTests(TestCase):
         mock_now.return_value = datetime(2026, 5, 17, 10, 0, tzinfo=UTC)
         msg = self._msg("Hi", "body")
         msg.date = None
-        messages = build_event_extraction_messages([msg])
+        messages = build_event_extraction_messages([msg], user_tz=UTC)
         self.assertIn("2026-05-17 10:00", user_text(messages))

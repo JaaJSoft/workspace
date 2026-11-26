@@ -265,20 +265,6 @@ emoji-picker {
   font-weight: 600;
 }
 
-/* Task list checkboxes */
-.msg-body.prose ul.task-list {
-  list-style: none;
-  padding-left: 0;
-}
-.msg-body.prose .task-list li {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4em;
-}
-.msg-body.prose .task-list input[type="checkbox"] {
-  pointer-events: none;
-}
-
 /* Inline code */
 .msg-body .code-inline {
   background: var(--color-base-200);

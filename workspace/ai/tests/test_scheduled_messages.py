@@ -64,7 +64,7 @@ class ScheduledMessageModelTests(TestCase):
             next_run_at=timezone.now() + timedelta(hours=1),
         )
         self.assertTrue(schedule.is_active)
-        schedule.compute_next_run()
+        schedule.compute_next_run(user_tz=ZoneInfo("UTC"))
         self.assertFalse(schedule.is_active)
 
     def test_recurring_hours_computes_next_run(self):
@@ -80,7 +80,7 @@ class ScheduledMessageModelTests(TestCase):
             next_run_at=now,
         )
         schedule.last_run_at = now
-        schedule.compute_next_run()
+        schedule.compute_next_run(user_tz=ZoneInfo("UTC"))
 
         expected = now + timedelta(hours=3)
         # Allow 1 second tolerance
@@ -105,7 +105,7 @@ class ScheduledMessageModelTests(TestCase):
             next_run_at=now,
         )
         schedule.last_run_at = now
-        schedule.compute_next_run()
+        schedule.compute_next_run(user_tz=ZoneInfo("UTC"))
 
         self.assertEqual(schedule.next_run_at.hour, 9)
         self.assertEqual(schedule.next_run_at.minute, 0)
@@ -358,7 +358,9 @@ class GenerateScheduledResponseTests(TestCase):
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
         with scripted(reply("Hello!", input_tokens=10, output_tokens=5)):
-            result = generate_scheduled_response(str(schedule.uuid))
+            result = generate_scheduled_response(
+                str(schedule.uuid), schedule.next_run_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "ok")
 
@@ -391,7 +393,9 @@ class GenerateScheduledResponseTests(TestCase):
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
         with scripted(reply("Check-in time!", input_tokens=10, output_tokens=5)):
-            result = generate_scheduled_response(str(schedule.uuid))
+            result = generate_scheduled_response(
+                str(schedule.uuid), schedule.next_run_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "ok")
 
@@ -415,7 +419,9 @@ class GenerateScheduledResponseTests(TestCase):
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
         with scripted(reply("Should not be asked")) as script:
-            result = generate_scheduled_response(str(schedule.uuid))
+            result = generate_scheduled_response(
+                str(schedule.uuid), schedule.next_run_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(script.requests, [])
@@ -434,7 +440,9 @@ class GenerateScheduledResponseTests(TestCase):
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
         with scripted(reply("", input_tokens=10), repeat=True) as script:
-            result = generate_scheduled_response(str(schedule.uuid))
+            result = generate_scheduled_response(
+                str(schedule.uuid), schedule.next_run_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "empty_response")
@@ -479,7 +487,9 @@ class GenerateScheduledResponseTests(TestCase):
                 wraps=UserMemory.objects.update_or_create,
             ) as saved,
         ):
-            result = generate_scheduled_response(str(schedule.uuid))
+            result = generate_scheduled_response(
+                str(schedule.uuid), schedule.next_run_at.isoformat()
+            )
 
         self.assertEqual(result, {"status": "skipped", "reason": "empty_response"})
         self.assertEqual(len(script.requests), 2)
@@ -489,7 +499,9 @@ class GenerateScheduledResponseTests(TestCase):
     def test_nonexistent_schedule(self):
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
-        result = generate_scheduled_response(str(uuid.uuid4()))
+        result = generate_scheduled_response(
+            str(uuid.uuid4()), timezone.now().isoformat()
+        )
         self.assertEqual(result["status"], "error")
         self.assertIn("not found", result["error"])
 
@@ -566,7 +578,7 @@ class GenerateScheduledResponseTests(TestCase):
 
         original_compute = ScheduledMessage.compute_next_run
 
-        def race_then_compute(self_obj, user_tz=None):
+        def race_then_compute(self_obj, user_tz):
             # Competing worker advances next_run_at in the DB before our CAS.
             ScheduledMessage.objects.filter(pk=self_obj.pk).update(
                 next_run_at=timezone.now() + timedelta(hours=24),
@@ -584,7 +596,9 @@ class GenerateScheduledResponseTests(TestCase):
             ),
             scripted(reply("Hello!", input_tokens=10, output_tokens=5)),
         ):
-            result = generate_scheduled_response(str(schedule.uuid))
+            result = generate_scheduled_response(
+                str(schedule.uuid), schedule.next_run_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "already_claimed")
@@ -1093,7 +1107,9 @@ class ScheduledRunContextTests(TestCase):
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
         with scripted(reply("Still there?", input_tokens=1, output_tokens=1)) as script:
-            generate_scheduled_response(str(schedule.uuid))
+            generate_scheduled_response(
+                str(schedule.uuid), schedule.next_run_at.isoformat()
+            )
 
         last = _system_text(script.sent[-1].parts[-1])
         self.assertIsNotNone(last)

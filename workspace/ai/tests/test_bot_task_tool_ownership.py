@@ -27,6 +27,8 @@ class BotTaskToolOwnershipMixin:
     The bot carries a goal or a schedule out with its creator's identity, so a
     tool call made while answering bob must not rewrite or stop alice's task:
     the bot would then act with alice's mail, calendar and files on bob's say.
+    Bots are kept out of groups, so the conversation is built through the ORM:
+    these tests guard the write path should that rule ever be bypassed.
     """
 
     def setUp(self):
@@ -126,17 +128,6 @@ class AgentGoalToolOwnershipTests(BotTaskToolOwnershipMixin, TestCase):
         self.goal.refresh_from_db()
         self.assertEqual(self.goal.status, AgentGoal.Status.COMPLETED)
 
-    def test_other_member_still_sees_the_goal_marked_read_only(self):
-        # Reading a goal in a conversation one belongs to is allowed; only
-        # changing it is the creator's call.
-        listing = self._call("list_agent_goals", None, self.bob)
-        self.assertIn(str(self.goal.uuid), listing)
-        self.assertIn("only its creator can change it", listing)
-
-        own_listing = self._call("list_agent_goals", None, self.alice)
-        self.assertIn(str(self.goal.uuid), own_listing)
-        self.assertNotIn("only its creator can change it", own_listing)
-
 
 class ScheduleToolOwnershipTests(BotTaskToolOwnershipMixin, TestCase):
     def setUp(self):
@@ -173,12 +164,3 @@ class ScheduleToolOwnershipTests(BotTaskToolOwnershipMixin, TestCase):
         )
         self.schedule.refresh_from_db()
         self.assertFalse(self.schedule.is_active)
-
-    def test_other_member_still_sees_the_schedule_marked_read_only(self):
-        listing = self._call("list_schedules", None, self.bob)
-        self.assertIn(str(self.schedule.uuid), listing)
-        self.assertIn("only its creator can change it", listing)
-
-        own_listing = self._call("list_schedules", None, self.alice)
-        self.assertIn(str(self.schedule.uuid), own_listing)
-        self.assertNotIn("only its creator can change it", own_listing)

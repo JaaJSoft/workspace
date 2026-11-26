@@ -143,7 +143,7 @@ def _build_goal_instruction(goal, user_tz):
 @shared_task(
     name="ai.run_agent_goal_check", priority=LOW_PRIORITY, bind=True, max_retries=0
 )
-def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
+def run_agent_goal_check(self, goal_id: str, claim_token: str):
     """Run one autonomous check-in: load goal, advance, let the agent work.
 
     The claim is finalised via :func:`cas_finalize` keyed on the
@@ -176,13 +176,12 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
     if goal.status != AgentGoal.Status.ACTIVE:
         return {"status": "skipped", "reason": "not_active"}
 
-    cas_value = claim_token or goal.next_check_at
     now = timezone.now()
     if not cas_finalize(
         AgentGoal,
         goal_id,
         claim_field="next_check_at",
-        claim_token=cas_value,
+        claim_token=claim_token,
         updates={
             "last_checked_at": now,
             "next_check_at": now + AgentGoal.FALLBACK_CHECK_INTERVAL,

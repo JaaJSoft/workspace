@@ -236,7 +236,9 @@ class RunAgentGoalCheckTests(TestCase):
             self._llm_tool_result(tc),
             self._llm_result("Routine summary of what I did (discard me)."),
         ):
-            result = run_agent_goal_check(str(goal.uuid))
+            result = run_agent_goal_check(
+                str(goal.uuid), goal.next_check_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "ok")
         bot_msg = Message.objects.filter(
@@ -266,7 +268,9 @@ class RunAgentGoalCheckTests(TestCase):
         with scripted(
             self._llm_result("I checked everything and here is a long update!")
         ):
-            result = run_agent_goal_check(str(goal.uuid))
+            result = run_agent_goal_check(
+                str(goal.uuid), goal.next_check_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["reason"], "silent")
@@ -287,7 +291,9 @@ class RunAgentGoalCheckTests(TestCase):
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
         with scripted(self._llm_result("Hello")) as script:
-            result = run_agent_goal_check(str(goal.uuid))
+            result = run_agent_goal_check(
+                str(goal.uuid), goal.next_check_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "not_active")
@@ -297,7 +303,7 @@ class RunAgentGoalCheckTests(TestCase):
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
         with scripted(self._llm_result("Hello")) as script:
-            result = run_agent_goal_check(str(uuid.uuid4()))
+            result = run_agent_goal_check(str(uuid.uuid4()), timezone.now().isoformat())
 
         self.assertEqual(result["status"], "error")
         self.assertEqual(script.requests, [])
@@ -323,7 +329,9 @@ class RunAgentGoalCheckTests(TestCase):
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
         with scripted(self._llm_result(""), repeat=True) as script:
-            result = run_agent_goal_check(str(goal.uuid))
+            result = run_agent_goal_check(
+                str(goal.uuid), goal.next_check_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["reason"], "silent")
@@ -353,7 +361,9 @@ class RunAgentGoalCheckTests(TestCase):
             scripted(self._llm_tool_result(tc), self._llm_result("Done.")),
             patch("workspace.ai.tasks.agent_goals.run_bot", side_effect=run_then_pause),
         ):
-            result = run_agent_goal_check(str(goal.uuid))
+            result = run_agent_goal_check(
+                str(goal.uuid), goal.next_check_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "goal_closed_by_user")
@@ -386,7 +396,9 @@ class RunAgentGoalCheckTests(TestCase):
             ),
             self._llm_result("Closed the goal."),
         ):
-            result = run_agent_goal_check(str(goal.uuid))
+            result = run_agent_goal_check(
+                str(goal.uuid), goal.next_check_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "ok")
         goal.refresh_from_db()
@@ -408,7 +420,9 @@ class RunAgentGoalCheckTests(TestCase):
             "workspace.ai.services.llm.get_model",
             side_effect=RuntimeError("LLM unavailable"),
         ):
-            result = run_agent_goal_check(str(goal.uuid))
+            result = run_agent_goal_check(
+                str(goal.uuid), goal.next_check_at.isoformat()
+            )
 
         self.assertEqual(result["status"], "error")
         self.assertFalse(
@@ -426,7 +440,7 @@ class RunAgentGoalCheckTests(TestCase):
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
         with scripted(self._llm_result("[SILENT]")) as script:
-            run_agent_goal_check(str(goal.uuid))
+            run_agent_goal_check(str(goal.uuid), goal.next_check_at.isoformat())
 
         system_prompt = script.sent[0].parts[0]
         self.assertIsInstance(system_prompt, SystemPromptPart)
@@ -445,7 +459,7 @@ class RunAgentGoalCheckTests(TestCase):
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
         with scripted(self._llm_result("[SILENT]")) as script:
-            run_agent_goal_check(str(goal.uuid))
+            run_agent_goal_check(str(goal.uuid), goal.next_check_at.isoformat())
 
         last = _system_text(script.sent[-1].parts[-1])
         self.assertIsNotNone(last)

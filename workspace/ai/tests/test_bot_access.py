@@ -124,7 +124,9 @@ class ScheduledResponseAccessTests(BotAccessFixture):
 
         schedule = self._schedule()
         with scripted(reply("Here is the creator's private mail.")) as script:
-            result = generate_scheduled_response(str(schedule.uuid))
+            result = generate_scheduled_response(
+                str(schedule.uuid), schedule.next_run_at.isoformat()
+            )
 
         self.assertEqual(result, {"status": "skipped", "reason": reason})
         self.assertEqual(script.requests, [])
@@ -166,7 +168,9 @@ class AgentGoalCheckAccessTests(BotAccessFixture):
 
         goal = self._goal()
         with scripted(reply("Here is the creator's private mail.")) as script:
-            result = run_agent_goal_check(str(goal.uuid))
+            result = run_agent_goal_check(
+                str(goal.uuid), goal.next_check_at.isoformat()
+            )
 
         self.assertEqual(result, {"status": "skipped", "reason": reason})
         self.assertEqual(script.requests, [])

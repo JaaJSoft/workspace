@@ -278,7 +278,6 @@ function buildSseApp({ openThreadRoot = null, showInline = false } = {}) {
     async markAsRead() {
       counters.read++;
     },
-    _updateConversationLastMessage() {},
     _bumpConversationUnread() {},
     async _listConversation() {},
     refreshConversationItems() {},
@@ -420,7 +419,6 @@ function buildSseAppCapturingFetch({ openThreadRoot = null } = {}) {
     async _refreshCurrentMessages() {},
     scrollToBottom() {},
     async markAsRead() {},
-    _updateConversationLastMessage() {},
     _bumpConversationUnread() {},
     async _listConversation() {},
     refreshConversationItems() {},

@@ -76,7 +76,6 @@ window.chatCallMixin = function chatCallMixin() {
     inCall: false,               // am I currently joined?
     isMuted: false,
     joiningCall: false,
-    callRole: 'owner',          // 'owner' (room tab) | 'observer' (main tab)
     _peers: {},                  // user_id -> { pc, audioEl, remoteStream, videoSender }
     _localStream: null,
     cameraOn: false,
@@ -128,12 +127,6 @@ window.chatCallMixin = function chatCallMixin() {
 
     // -- Lifecycle: join / leave -----------------------------
     async startOrJoinCall() {
-      // The main tab is an observer: it never owns the mic. Joining means
-      // opening the dedicated room tab instead of capturing media here.
-      if (!window.chatCallShouldOwnMedia(this.callRole)) {
-        this.openCallRoom(this.activeConversation && this.activeConversation.uuid);
-        return;
-      }
       if (!this.activeConversation || this.joiningCall) return;
       this.joiningCall = true;
       const convId = this.activeConversation.uuid;
@@ -186,7 +179,7 @@ window.chatCallMixin = function chatCallMixin() {
 
     async leaveCall() {
       // Stop the room's speaking meter and duration timer if present (room tab
-      // only; optional chaining makes this a no-op on the main observer tab).
+      // only; optional chaining makes this a no-op on the main chat tab).
       // Covers both the explicit Leave and the call_ended path, which both route
       // through leaveCall.
       this._stopSpeakingMeter?.();
@@ -202,7 +195,7 @@ window.chatCallMixin = function chatCallMixin() {
       this.isMuted = false;
       this.callParticipants = [];
       this.callSession = null;
-      // Notify the main-tab observer synchronously, before the fetch completes.
+      // Notify the main chat tab synchronously, before the fetch completes.
       // Posting here (while the page is still alive) ensures the main tab
       // receives the room-closed signal even if the tab closes before pagehide.
       if (this._roomChannel) {

@@ -8,8 +8,6 @@ from pydantic_ai.messages import ModelMessage
 from workspace.ai.prompts.base import prompt
 from workspace.ai.prompts.mail import INJECTION_GUARD
 
-_UTC = ZoneInfo("UTC")
-
 MAX_BODY_CHARS = 4000  # per message; threads can have many messages.
 
 SYSTEM_PROMPT = (
@@ -43,7 +41,7 @@ SYSTEM_PROMPT = (
 
 def build_event_extraction_messages(
     thread_messages: list,
-    user_tz: ZoneInfo | None = None,
+    user_tz: ZoneInfo,
 ) -> list[ModelMessage]:
     """Render a chronological thread into the conversation a model is sent.
 
@@ -61,7 +59,6 @@ def build_event_extraction_messages(
     "rdv demain a 8h" but processed in May would be interpreted as
     May+1 instead of March+1.
     """
-    tz = user_tz or _UTC
     rendered = []
     for i, m in enumerate(thread_messages, 1):
         body = (m.body_text or m.body_html or "").strip()
@@ -70,7 +67,7 @@ def build_event_extraction_messages(
         sender = m.from_email or "(unknown)"
         # In the recipient's zone: "demain" in a mail sent at 23:30 Paris
         # time means the day after the Paris date, not the UTC one.
-        date_str = m.date.astimezone(tz).isoformat() if m.date else ""
+        date_str = m.date.astimezone(user_tz).isoformat() if m.date else ""
         rendered.append(
             f"[Message {i} | {date_str} | From: {sender} | Subject: {m.subject}]\n{body}"
         )
@@ -79,8 +76,8 @@ def build_event_extraction_messages(
         next((m.date for m in reversed(thread_messages) if m.date), None)
         or timezone.now()
     )
-    anchor = anchor_dt.astimezone(tz).strftime("%Y-%m-%d %H:%M")
-    tz_name = str(tz)
+    anchor = anchor_dt.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
+    tz_name = str(user_tz)
 
     return prompt(
         SYSTEM_PROMPT,

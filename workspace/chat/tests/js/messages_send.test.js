@@ -43,7 +43,6 @@ function buildApp({ ok, duringPost = () => {} }) {
     isBotConversation() { return false; },
     $nextTick() {},
     scrollToBottom() {},
-    _updateConversationLastMessage() {},
     async _refreshCurrentMessages() {
       counters.refreshedAway = this.hasNewerMessages;
     },

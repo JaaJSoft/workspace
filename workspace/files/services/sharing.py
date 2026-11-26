@@ -8,6 +8,7 @@ might want to skip notifications, a user request always sends them).
 """
 
 from django.contrib.auth.hashers import make_password
+from django.urls import reverse
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.exceptions import APIException
 
@@ -193,6 +194,13 @@ def create_share_link(
         },
     )
     return link
+
+
+def share_link_url(request, link):
+    """The address *link* opens at, on the host *request* came through."""
+    return request.build_absolute_uri(
+        reverse("files_ui:shared_file", kwargs={"token": link.token})
+    )
 
 
 def revoke_share_link(file_obj, *, link_uuid, acting_user):

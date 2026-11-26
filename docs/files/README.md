@@ -105,7 +105,10 @@ dimensions.
   generated and shown in clear) and expiry. A folder link is *Read only*,
   *Upload only* (visitors drop files without an account and without seeing
   what is there) or *Read and upload*, with a per-file size cap and a maximum
-  number of uploads. The owner is notified once per batch of uploads.
+  number of uploads. The owner is notified once per batch of uploads. Each
+  link can be shown as a QR code, to scan from a phone, put on a screen or
+  download as a PNG and print. The code holds the link's address and never
+  its password.
 - **Group folders** are shared spaces, one per group, created by any member
   from the sidebar. Their files count against the group's quota, not the
   members'.

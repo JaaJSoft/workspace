@@ -1574,6 +1574,30 @@ msgid "Remove access"
 msgstr "Retirer l’accès"
 
 #: ui/templates/files/ui/partials/share_modal.html
+msgid "QR code"
+msgstr "QR code"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "QR code of the link"
+msgstr "QR code du lien"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Scan it to open the link."
+msgstr "Scannez-le pour ouvrir le lien."
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "The password is not in the code."
+msgstr "Le mot de passe n’est pas dans le code."
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Download PNG"
+msgstr "Télécharger en PNG"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Could not load the QR code. Reload the page and try again."
+msgstr "Impossible de charger le QR code. Rechargez la page et réessayez."
+
+#: ui/templates/files/ui/partials/share_modal.html
 msgid "Access"
 msgstr "Accès"
 

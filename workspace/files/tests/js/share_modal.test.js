@@ -177,3 +177,37 @@ test('a copied link is announced', async () => {
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepStrictEqual([copied, alerts], [['https://x/s/t'], ['Link copied to clipboard']]);
 });
+
+test('one QR code is unfolded at a time, and its button folds it back', () => {
+  const app = modal();
+  app.toggleLinkQr('l1');
+  assert.equal(app.qrLinkUuid, 'l1');
+  app.toggleLinkQr('l2');
+  assert.equal(app.qrLinkUuid, 'l2');
+  app.toggleLinkQr('l2');
+  assert.equal(app.qrLinkUuid, null);
+});
+
+test('a QR code that failed to load is asked for again on the next unfold', () => {
+  const app = modal();
+  app.toggleLinkQr('l1');
+  app.qrFailed = true;
+  app.toggleLinkQr('l1');
+  app.toggleLinkQr('l1');
+  assert.equal(app.qrFailed, false);
+});
+
+test('the QR code is shown as svg and downloaded as png, from where the link says it is', () => {
+  const app = modal();
+  const link = { uuid: 'l1', qrcode_url: '/api/v1/files/share-links/l1/qrcode' };
+  assert.equal(app.linkQrUrl(link), '/api/v1/files/share-links/l1/qrcode?kind=svg');
+  assert.equal(app.linkQrUrl(link, 'png'), '/api/v1/files/share-links/l1/qrcode?kind=png');
+});
+
+test('closing the modal folds the QR code, so reopening it starts from the list', () => {
+  const app = modal();
+  app.$refs = {};
+  app.toggleLinkQr('l1');
+  app.closeModal();
+  assert.equal(app.qrLinkUuid, null);
+});

@@ -11,7 +11,14 @@ import enum
 from django.contrib.auth.models import Group
 from django.db.models import BooleanField, Exists, ExpressionWrapper, OuterRef, Q
 
-from .models import File, FileFavorite, FileShare, PinnedFolder, tree_q
+from .models import (
+    File,
+    FileFavorite,
+    FileShare,
+    FileShareLink,
+    PinnedFolder,
+    tree_q,
+)
 
 
 class FilePermission(enum.IntEnum):
@@ -136,6 +143,18 @@ def owned_files_qs(user):
     the group.
     """
     return File.objects.filter(owned_files_q(user))
+
+
+def owned_share_links(user):
+    """The public links *user* manages: those of the live nodes they own.
+
+    A link is its owner's alone, so someone the node is shared with, or
+    another member of its group, sees none of them. Nor does the owner once
+    the node is in the trash or they have left its group.
+    """
+    return FileShareLink.objects.filter(
+        file__in=owned_files_qs(user).filter(deleted_at__isnull=True)
+    )
 
 
 def restorable_files_qs(user):

@@ -142,7 +142,7 @@ class StorageScope:
         """Filter matching every live node strictly below the scope."""
         if self.folder is None:
             return Q(owner=self.user, group__isnull=True, deleted_at__isnull=True)
-        path = self.folder.path or self.folder.get_path()
+        path = self.folder.path
         q = Q(path__startswith=f"{path}/", deleted_at__isnull=True)
         if self.folder.group_id:
             return q & Q(group=self.folder.group)

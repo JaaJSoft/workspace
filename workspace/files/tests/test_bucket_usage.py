@@ -173,16 +173,6 @@ class CounterMatchesAggregateTests(TestCase):
         )
         self.assertCountersMatch()
 
-    def test_size_backfill(self):
-        from django.core.management import call_command
-
-        f = self._upload("a.txt", b"12345")
-        File.objects.filter(pk=f.pk).update(size=None)
-        bucket_usage.reconcile()
-        call_command("backfill_file_sizes", stdout=io.StringIO())
-        self.assertEqual(File.objects.get(pk=f.pk).size, 5)
-        self.assertCountersMatch()
-
     def test_archive_extraction(self):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:

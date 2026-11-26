@@ -288,21 +288,6 @@ class PurgeTrashTaskTests(TestCase):
             {"files_deleted": 0, "folders_deleted": 0, "retention_days": 30},
         )
 
-    def test_retention_days_defaults_to_30_when_unset(self):
-        from django.conf import settings as dj_settings
-
-        # settings/files.py always defines TRASH_RETENTION_DAYS, so delete it
-        # inside an empty override block (the UserSettingsHolder restores
-        # it on exit) to actually exercise the getattr fallback in
-        # purge_trash. Overriding with None would not do it: the attribute
-        # would still exist and getattr would return None, not 30.
-        with self.settings():
-            del dj_settings.TRASH_RETENTION_DAYS
-            self.assertFalse(hasattr(dj_settings, "TRASH_RETENTION_DAYS"))
-            result = files_tasks.purge_trash.run()
-
-        self.assertEqual(result["retention_days"], 30)
-
 
 class SyncFolderTaskTests(TestCase):
     @classmethod

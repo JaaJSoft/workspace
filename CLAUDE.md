@@ -308,6 +308,12 @@ Project settings live in the `workspace/settings/` **package**, one module per t
 
 All API endpoints must be prefixed with `/api/` and have no trailing slashes.
 
+**The REST API is a product of its own, not the frontend's private backend.** Users drive their workspace headless (scripts, API tokens, other tools), so every main feature the UI offers is reachable under `/api/v1/...`, including the ones a page serves through a server-rendered view or an alpine-ajax partial.
+
+- An endpoint with no in-app caller is not dead code. A dead-code audit never proposes removing one on that ground.
+- An endpoint that is badly designed (it duplicates another, takes an awkward shape, names things the UI no longer does) gets redesigned, not dropped: the capability stays reachable through the API after the change.
+- A new feature ships its API alongside its UI, under the same access helpers and action registries (see *Authorization rules* below).
+
 ### Models
 
 Every model must use a UUID primary key with the `uuid_v7_or_v4` helper as default. Never use Django's auto-incremented `id` or `uuid.uuid4` directly.

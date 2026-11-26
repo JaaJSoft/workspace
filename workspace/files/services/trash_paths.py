@@ -63,8 +63,8 @@ def trashed_storage_path(node, root=None):
     root = root or trash_root_of(node)
     base = posixpath.join(trash_dir(root), root.name)
 
-    root_path = root.path or root.get_path()
-    node_path = node.path or node.get_path()
+    root_path = root.path
+    node_path = node.path
     if node_path == root_path:
         return base
     relative = node_path[len(root_path) + 1 :]

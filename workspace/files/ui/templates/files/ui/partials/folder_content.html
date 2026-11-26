@@ -6,7 +6,6 @@
     - nodes: QuerySet of File objects to display
 
   Optional context:
-    - show_actions: bool (default: True) - show row action buttons
     - empty_title: str - custom empty state title
     - empty_message: str - custom empty state message
     - is_trash_view: bool - render trash-specific actions
@@ -508,10 +507,6 @@
                 <span class="hidden @4xl:inline" x-text="action.label"></span>
               </button>
             </template>
-            <span
-              x-show="bulkActionsLoading"
-              class="loading loading-spinner loading-xs ml-2"
-            ></span>
           </div>
         </div>
       </div>
@@ -568,9 +563,7 @@
                     {% translate "Modified" %}
                   {% endif %}
                 </th>
-                {% if show_actions != False %}
-                  <th class="w-16" data-col="actions"><span class="sr-only">{% translate "Actions" %}</span></th>
-                {% endif %}
+                <th class="w-16" data-col="actions"><span class="sr-only">{% translate "Actions" %}</span></th>
               </tr>
             </thead>
             <tbody>

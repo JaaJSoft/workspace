@@ -23,10 +23,6 @@ window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true,
     }));
   }, { once: true });
 })();
-// Kept as a resolved Promise so existing `await window._filePrefsReady`
-// callers (e.g. filePreferences().init()) still work without changes.
-window._filePrefsReady = Promise.resolve();
-
 window.getFilePrefs = function() {
   return window._filePrefsCache;
 };
@@ -48,8 +44,7 @@ window.filePreferences = function filePreferences() {
     prefs: { ...window._filePrefsCache },
     _saveTimer: null,
 
-    async init() {
-      await window._filePrefsReady;
+    init() {
       this.prefs = { ...window._filePrefsCache };
       window.addEventListener('preferences-changed', (e) => {
         this.prefs = { ...e.detail };

@@ -59,8 +59,8 @@ def _require_target(user, node, parent):
     if parent is not None and node.node_type == File.NodeType.FOLDER:
         # ``path`` is denormalized and may still be None on a folder created
         # a moment ago.
-        node_path = node.path or node.get_path()
-        parent_path = parent.path or parent.get_path()
+        node_path = node.path
+        parent_path = parent.path
         if parent.pk == node.pk or parent_path.startswith(f"{node_path}/"):
             raise Refused(Refusal.INTO_ITSELF)
 

@@ -1,8 +1,4 @@
-import logging
-from datetime import timedelta
-
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.db.models.functions import Lower
 from django.http import Http404
 from django.utils import translation
@@ -62,11 +58,8 @@ from ..viewsets.storage import StorageMixin
 from ..viewsets.sync import SyncMixin
 from ..viewsets.trash import TrashMixin
 
-logger = logging.getLogger(__name__)
-User = get_user_model()
-
-RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
-RECENT_FILES_MAX_LIMIT = getattr(settings, "RECENT_FILES_MAX_LIMIT", 200)
+RECENT_FILES_LIMIT = settings.RECENT_FILES_LIMIT
+RECENT_FILES_MAX_LIMIT = settings.RECENT_FILES_MAX_LIMIT
 
 
 def duplicate_entries(instance):
@@ -332,8 +325,6 @@ class FileViewSet(
     ordering_fields = ["name", "created_at", "updated_at", "size"]
     ordering_case_insensitive_fields = ["name"]
     ordering = ["node_type", Lower("name")]
-
-    LOCK_TTL = timedelta(minutes=5)
 
     # ── Query helpers ─────────────────────────────────────────
 

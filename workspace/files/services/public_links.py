@@ -106,8 +106,8 @@ def resolve_within(link, node_uuid):
     if node.pk == root.pk:
         return node
 
-    root_path = root.path or root.get_path()
-    node_path = node.path or node.get_path()
+    root_path = root.path
+    node_path = node.path
     if not root_path or not node_path.startswith(f"{root_path}/"):
         return None
     return node

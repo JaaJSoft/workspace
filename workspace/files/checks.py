@@ -17,10 +17,10 @@ def check_malware_scanner_backend(app_configs, **kwargs):
     """
     from workspace.files.services.scanning.registry import _BACKENDS
 
-    if not getattr(settings, "FILES_MALWARE_SCAN_ENABLED", False):
+    if not settings.FILES_MALWARE_SCAN_ENABLED:
         return []
 
-    key = getattr(settings, "FILES_MALWARE_SCANNER", "clamav")
+    key = settings.FILES_MALWARE_SCANNER
     if key in _BACKENDS:
         return []
 

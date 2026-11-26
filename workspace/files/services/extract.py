@@ -145,8 +145,8 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         raise ValueError("Not a ZIP archive")
     check_copy_allowed(file_obj)
 
-    max_bytes = getattr(settings, "FILES_EXTRACT_MAX_BYTES", 2 * 1024 * 1024 * 1024)
-    max_entries = getattr(settings, "FILES_EXTRACT_MAX_ENTRIES", 10_000)
+    max_bytes = settings.FILES_EXTRACT_MAX_BYTES
+    max_entries = settings.FILES_EXTRACT_MAX_ENTRIES
 
     try:
         source = file_obj.content.open("rb")

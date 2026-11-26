@@ -12,7 +12,6 @@
   Context:
     - node: File, prepared by views._present_nodes
     - is_trash_view: bool
-    - show_actions: bool (default: True) - show the card's action button
 {% endcomment %}
 <div
   class="{% if node.is_quarantined %}bg-error/10 data-selected:bg-base-100 border-error/40{% else %}bg-base-100 border-base-300{% endif %} border rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col data-selected:ring-2 data-selected:ring-module data-selected:border-module data-busy:opacity-50 data-busy:pointer-events-none"
@@ -22,7 +21,6 @@
   data-display-name="{{ node.name }}"
   data-node-type="{{ node.node_type }}"
   data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
-  data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
   data-viewable="{{ node.viewable|yesno:'1,0' }}"
   data-file-type="{{ node.type }}"
   data-viewer="{{ node.viewer_slug }}"
@@ -125,16 +123,14 @@
           </div>
         {% endif %}
       </div>
-      {% if show_actions != False %}
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs btn-square shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
-          aria-label="{% translate 'More actions' %}"
-          data-item-control="menu"
-        >
-          <i data-lucide="more-vertical" class="w-4 h-4"></i>
-        </button>
-      {% endif %}
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
+        aria-label="{% translate 'More actions' %}"
+        data-item-control="menu"
+      >
+        <i data-lucide="more-vertical" class="w-4 h-4"></i>
+      </button>
     </div>
   </div>
 </div>

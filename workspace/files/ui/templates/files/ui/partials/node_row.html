@@ -14,7 +14,6 @@
   Context:
     - node: File, prepared by views._present_nodes
     - is_trash_view: bool
-    - show_actions: bool (default: True) - show the row's action button
 {% endcomment %}
 <tr
   class="hover group {% if node.node_type == 'folder' and not is_trash_view or node.node_type == 'file' and node.viewable or node.node_type == 'shortcut' and node.shortcut_opens and not is_trash_view %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-selected:bg-module/15 data-busy:opacity-50 data-busy:pointer-events-none"
@@ -24,7 +23,6 @@
   data-display-name="{{ node.name }}"
   data-node-type="{{ node.node_type }}"
   data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
-  data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
   data-viewable="{{ node.viewable|yesno:'1,0' }}"
   data-file-type="{{ node.type }}"
   data-viewer="{{ node.viewer_slug }}"
@@ -195,19 +193,17 @@
       {{ node.updated_at|localtime_tag:"date" }}
     {% endif %}
   </td>
-  {% if show_actions != False %}
-    <td data-stop-row-click data-col="actions">
-      <span
-        class="loading loading-spinner loading-xs hidden group-data-busy:inline-block"
-      ></span>
-      <button
-        type="button"
-        class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity group-data-busy:hidden"
-        aria-label="{% translate 'More actions' %}"
-        data-item-control="menu"
-      >
-        <i data-lucide="more-vertical" class="w-4 h-4"></i>
-      </button>
-    </td>
-  {% endif %}
+  <td data-stop-row-click data-col="actions">
+    <span
+      class="loading loading-spinner loading-xs hidden group-data-busy:inline-block"
+    ></span>
+    <button
+      type="button"
+      class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity group-data-busy:hidden"
+      aria-label="{% translate 'More actions' %}"
+      data-item-control="menu"
+    >
+      <i data-lucide="more-vertical" class="w-4 h-4"></i>
+    </button>
+  </td>
 </tr>

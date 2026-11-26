@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def scanning_enabled():
-    return bool(getattr(settings, "FILES_MALWARE_SCAN_ENABLED", False))
+    return settings.FILES_MALWARE_SCAN_ENABLED
 
 
 def pending_scan_qs(*, reanalyze=False):
@@ -83,7 +83,7 @@ def scan_and_record(file_obj, scanner):
     # apart from a verdict about what the row holds now.
     scanned_hash = file_obj.content_hash
 
-    max_bytes = int(getattr(settings, "FILES_MALWARE_SCAN_MAX_BYTES", 25 * 1024 * 1024))
+    max_bytes = settings.FILES_MALWARE_SCAN_MAX_BYTES
 
     if (file_obj.size or 0) > max_bytes:
         verdict = ScanVerdict(

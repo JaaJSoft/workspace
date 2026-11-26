@@ -1,14 +1,5 @@
-// A share entry is addressed to a user or to a group; the two share one
-// list, one permission toggle and one save loop, and are told apart by
-// `type` ('user' | 'group'). Ids overlap across the two tables, so every
-// map and set below is keyed by shareKey(), never by the bare id.
-function shareKey(type, id) {
-  return type + ':' + id;
-}
-
 window.shareModal = function shareModal() {
   return {
-    open: false,
     fileUuid: null,
     fileName: '',
     nodeType: 'file',
@@ -82,7 +73,6 @@ window.shareModal = function shareModal() {
         this.fileUuid = e.detail.uuid;
         this.fileName = e.detail.name;
         this.nodeType = e.detail.nodeType || 'file';
-        this.open = true;
         this.pendingAdds = [];
         this.pendingRemovals = new Set();
         this.pendingPermissionChanges = new Map();
@@ -285,7 +275,6 @@ window.shareModal = function shareModal() {
     },
 
     closeModal() {
-      this.open = false;
       const dlg = this.$refs.shareDialog;
       if (dlg && dlg.open) dlg.close();
       this.fileUuid = null;

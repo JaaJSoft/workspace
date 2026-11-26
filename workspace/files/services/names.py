@@ -288,8 +288,8 @@ def validate_move_target(file_obj, new_parent):
     if file_obj.node_type == File.NodeType.FOLDER:
         if new_parent.pk == file_obj.pk:
             raise ValueError(gettext("Cannot move a folder into itself."))
-        file_path = file_obj.path or file_obj.get_path()
-        parent_path = new_parent.path or new_parent.get_path()
+        file_path = file_obj.path
+        parent_path = new_parent.path
         if parent_path.startswith(f"{file_path}/"):
             raise ValueError(
                 gettext("Cannot move a folder into one of its descendants.")

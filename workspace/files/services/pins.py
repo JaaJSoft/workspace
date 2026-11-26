@@ -1,8 +1,6 @@
 """Pinned folders: which pins a user still sees, and dropping them on departure."""
 
-from django.db.models import Exists, OuterRef
-
-from ..models import FileFavorite, PinnedFolder
+from ..models import PinnedFolder
 from ..queries import accessible_file_ids
 
 
@@ -14,7 +12,7 @@ def visible_pins(user):
     sidebar would keep naming a folder the user can no longer open - under
     whatever name its owners give it next.
 
-    Each pin carries ``_folder_is_favorite`` and has ``folder`` loaded.
+    Each pin has ``folder`` loaded.
     """
     return (
         PinnedFolder.objects.filter(
@@ -22,11 +20,6 @@ def visible_pins(user):
             folder_id__in=accessible_file_ids(user, include_deleted=False),
         )
         .select_related("folder")
-        .annotate(
-            _folder_is_favorite=Exists(
-                FileFavorite.objects.filter(owner=user, file_id=OuterRef("folder_id"))
-            ),
-        )
         .order_by("position", "created_at")
     )
 

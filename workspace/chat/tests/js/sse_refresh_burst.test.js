@@ -117,3 +117,13 @@ test('a refresh scheduled for a conversation the user has since left is dropped'
 
   assert.equal(calls.messages, 0);
 });
+
+test('an unpin reloads the pinned bar along with the messages', async () => {
+  const { app, calls, flush } = buildApp();
+
+  app.handleSSEMessageUnpinned(inConv());
+  await flush();
+
+  assert.equal(calls.messages, 1);
+  assert.deepStrictEqual(calls.pins, ['conv-1']);
+});

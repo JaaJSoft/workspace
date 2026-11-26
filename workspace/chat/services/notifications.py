@@ -1,10 +1,25 @@
 from collections import defaultdict
 
+from django.db import transaction
 from django.utils import translation
 from django.utils.translation import gettext
 
-from workspace.core.sse_registry import notify_sse
+from workspace.core.sse_registry import notify_sse, push_user_event
 from workspace.users.services.settings import get_user_languages
+
+SSE_SLUG = "chat"
+
+
+def _active_member_ids(conversation, exclude_user=None):
+    from ..models import ConversationMember
+
+    member_ids = ConversationMember.objects.filter(
+        conversation=conversation,
+        left_at__isnull=True,
+    ).values_list("user_id", flat=True)
+    if exclude_user is not None:
+        member_ids = member_ids.exclude(user_id=exclude_user.id)
+    return member_ids
 
 
 def notify_conversation_members(conversation, exclude_user=None, *, dirty=True):
@@ -12,17 +27,24 @@ def notify_conversation_members(conversation, exclude_user=None, *, dirty=True):
 
     ``dirty`` as in ``notify_sse``: False when nothing changed in the database.
     """
-    from ..models import ConversationMember
+    for uid in _active_member_ids(conversation, exclude_user):
+        notify_sse(SSE_SLUG, uid, dirty=dirty)
 
-    member_user_ids = ConversationMember.objects.filter(
-        conversation=conversation,
-        left_at__isnull=True,
-    ).values_list("user_id", flat=True)
 
-    for uid in member_user_ids:
-        if exclude_user and uid == exclude_user.id:
-            continue
-        notify_sse("chat", uid, dirty=dirty)
+def push_conversation_event(conversation, payload, exclude_user=None):
+    """Queue *payload* on the chat stream of every active member, and wake it.
+
+    For a change the stream cannot find by polling the database: a row that
+    was deleted leaves nothing newer than its cursor. Sent once the write
+    commits, so a member refreshing on the event reads the row already gone.
+    """
+
+    def push():
+        for uid in _active_member_ids(conversation, exclude_user):
+            push_user_event(SSE_SLUG, uid, payload)
+
+    # A failed push must not turn a write that committed into an error.
+    transaction.on_commit(push, robust=True)
 
 
 def notification_title(conversation, author_name):

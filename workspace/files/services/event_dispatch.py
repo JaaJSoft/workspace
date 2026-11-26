@@ -41,14 +41,20 @@ def has_handlers(action) -> bool:
     return bool(_HANDLERS.get(str(action)))
 
 
-def run_handlers(event_uuid) -> None:
-    """Load the FileEvent and run every handler registered for its action."""
+def run_handlers(event_uuid, content_hash=None) -> None:
+    """Load the FileEvent and run every handler registered for its action.
+
+    With *content_hash*, only while the file still holds that content: a
+    write since then queued the handlers again, for its own bytes.
+    """
     from ..models import FileEvent
 
     try:
         event = FileEvent.objects.select_related("file", "actor").get(uuid=event_uuid)
     except FileEvent.DoesNotExist, ValidationError, ValueError, TypeError:
         # Unknown or malformed event id (e.g. a non-UUID string): nothing to run.
+        return
+    if content_hash is not None and event.file.content_hash != content_hash:
         return
     run_event_handlers(event, NORMAL_PRIORITY)
 

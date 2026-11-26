@@ -41,6 +41,9 @@ to folder*, *Open in Files* and *Delete*, which sends the note to the trash.
 
 - **Autosave** writes the note two seconds after the last keystroke, or at
   once with <kbd>Ctrl</kbd>+<kbd>S</kbd>, and shows whether it is saved.
+  A writing session shows as one *Updated* entry in the note's timeline,
+  and the note's links, search entry and malware scan follow its content a
+  minute after the last save rather than after each one.
 - **One writer at a time**: while someone edits a note, it opens read-only
   for the others, with their name in a banner. If a note changed on the
   server while the user was away, their edit is refused rather than written

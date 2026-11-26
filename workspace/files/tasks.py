@@ -217,6 +217,18 @@ def purge_trash():
     }
 
 
+@shared_task(name="files.purge_events", priority=BACKGROUND_PRIORITY)
+def purge_events():
+    """Delete the file events past FILES_EVENT_RETENTION_DAYS that no
+    timeline lists any more."""
+    from workspace.files.services.events import purge_expired_events
+
+    deleted = purge_expired_events()
+    if deleted:
+        logger.info("Purged %d file events past retention", deleted)
+    return {"deleted": deleted}
+
+
 @shared_task(name="files.settle_relocations", priority=BACKGROUND_PRIORITY)
 def settle_relocations():
     """Finish or undo the moves a dead worker or a rolled-back transaction
@@ -382,11 +394,11 @@ def sync_folder(user_id, folder_uuid=None):
 
 
 @shared_task(name="files.run_file_event_handlers", priority=NORMAL_PRIORITY)
-def run_file_event_handlers(event_uuid):
+def run_file_event_handlers(event_uuid, content_hash=None):
     """Run the registered handlers for a recorded FileEvent (off-request)."""
     from workspace.files.services.event_dispatch import run_handlers
 
-    run_handlers(event_uuid)
+    run_handlers(event_uuid, content_hash=content_hash)
 
 
 @shared_task(name="files.process_file", priority=NORMAL_PRIORITY)

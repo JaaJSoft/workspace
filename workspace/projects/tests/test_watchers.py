@@ -244,10 +244,7 @@ class WatchApiTests(ProjectTestMixin, APITestCase):
         cache.clear()
 
     def _url(self, task=None):
-        return (
-            f"/api/v1/projects/{self.project.uuid}"
-            f"/tasks/{(task or self.task).uuid}/watch"
-        )
+        return f"/api/v1/projects/tasks/{(task or self.task).uuid}/watch"
 
     def _row(self, user):
         return TaskWatcher.objects.filter(task=self.task, user=user).first()
@@ -256,12 +253,11 @@ class WatchApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.member)
 
         resp = self.client.put(self._url(), {"state": "watching"}, format="json")
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data, {"state": "watching"})
+        self.assertEqual(resp.status_code, 204)
         self.assertFalse(self._row(self.member).muted)
 
         resp = self.client.put(self._url(), {"state": "muted"}, format="json")
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 204)
         self.assertTrue(self._row(self.member).muted)
         self.assertEqual(TaskWatcher.objects.filter(task=self.task).count(), 1)
 
@@ -328,7 +324,7 @@ class AutoWatchApiTests(ProjectTestMixin, APITestCase):
 
     def test_assigning_via_patch_auto_watches(self):
         self.client.force_authenticate(self.admin)
-        url = f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}"
+        url = f"/api/v1/projects/tasks/{self.task.uuid}"
         resp = self.client.patch(url, {"assignees": [self.member.pk]}, format="json")
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(

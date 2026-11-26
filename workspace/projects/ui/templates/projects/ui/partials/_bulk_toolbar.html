@@ -8,7 +8,7 @@ sprint menus).
 
 Every control is gated on bulkCan(actionId): the action ids every
 selected task offers with bulk support, answered by
-POST /api/v1/projects/actions for the whole selection. Nothing is offered
+POST /api/v1/projects/available-actions for the whole selection. Nothing is offered
 until that answer lands, and the handlers check the same list again.
 
 The assignee and label popovers are positioned against the row rather

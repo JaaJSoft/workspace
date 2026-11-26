@@ -77,3 +77,33 @@ class FoldSqlTests(SimpleTestCase):
     def test_other_backends_are_refused(self):
         with self.assertRaises(NotSupportedError):
             self._sql(Fold.as_sql)
+
+
+class FoldedExactTests(TestCase):
+    def _matches(self, name, value):
+        Group.objects.create(name=name)
+        return Group.objects.filter(name__fiexact=value).exists()
+
+    def test_case_and_accents_are_ignored_both_ways(self):
+        self.assertTrue(self._matches("Réunion", "reunion"))
+        self.assertTrue(self._matches("elodie", "ÉLODIE"))
+
+    def test_the_whole_value_must_match(self):
+        self.assertFalse(self._matches("Comptabilité 2026", "compta"))
+        self.assertFalse(self._matches("compta", "compta perso"))
+
+    def test_like_wildcards_are_ordinary_characters(self):
+        self.assertFalse(self._matches("100 percent", "100%"))
+        self.assertFalse(self._matches("a-b", "a_b"))
+
+    def test_the_lookup_crosses_a_relation(self):
+        from django.contrib.auth.models import Permission
+
+        group = Group.objects.create(name="editors")
+        group.permissions.add(Permission.objects.get(codename="add_group"))
+        self.assertTrue(
+            Group.objects.filter(permissions__codename__fiexact="ADD_GROUP").exists()
+        )
+        self.assertFalse(
+            Group.objects.filter(permissions__codename__fiexact="add").exists()
+        )

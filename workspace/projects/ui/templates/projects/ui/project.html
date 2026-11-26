@@ -28,6 +28,7 @@
 {% block drawer_attrs %}
   x-data="projectBoard({
   apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}',
+  taskApi: '{% url 'project-all-tasks' %}',
   projectUuid: '{{ project.uuid|escapejs }}',
   projectBase: '{% url 'projects_ui:project' project.uuid %}',
   writable: {{ writable|yesno:'true,false' }},

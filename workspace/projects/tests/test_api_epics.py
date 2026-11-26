@@ -188,7 +188,7 @@ class TaskEpicApiTests(ProjectTestMixin, APITestCase):
         self.epic = self.project.epics.create(name="Launch")
 
     def _task_url(self, task):
-        return f"/api/v1/projects/{self.project.uuid}/tasks/{task.uuid}"
+        return f"/api/v1/projects/tasks/{task.uuid}"
 
     def test_create_task_with_epic(self):
         self.client.force_authenticate(self.member)
@@ -198,7 +198,10 @@ class TaskEpicApiTests(ProjectTestMixin, APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["epic"], self.epic.uuid)
+        self.assertEqual(
+            response.data["epic"],
+            {"uuid": str(self.epic.uuid), "name": self.epic.name, "color": ""},
+        )
         task = self.project.tasks.get()
         self.assertEqual(task.epic, self.epic)
 

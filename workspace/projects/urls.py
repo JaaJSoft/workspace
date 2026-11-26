@@ -1,9 +1,16 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from .views.actions import ProjectActionsView
+from .views.actions import ProjectAvailableActionsView
 from .views.calendar import TaskCalendarView
-from .views.search import TaskSearchView
+from .views.tasks import (
+    AllTasksView,
+    TaskBatchView,
+    TaskDetailView,
+    TaskListView,
+    TaskReorderView,
+    TaskWatchView,
+)
 from .views.viewsets import (
     EpicViewSet,
     LabelViewSet,
@@ -17,8 +24,6 @@ from .views.viewsets import (
     TaskCommentViewSet,
     TaskFileLinkViewSet,
     TaskLinkViewSet,
-    TaskViewSet,
-    TaskWatchView,
 )
 
 router = SimpleRouter(trailing_slash=False)
@@ -38,15 +43,6 @@ sprint_complete = SprintViewSet.as_view({"post": "complete"})
 status_list = StatusViewSet.as_view({"get": "list", "post": "create"})
 status_reorder = StatusViewSet.as_view({"post": "reorder"})
 status_detail = StatusViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
-task_list = TaskViewSet.as_view({"get": "list", "post": "create"})
-task_reorder = TaskViewSet.as_view({"post": "reorder"})
-task_move = TaskViewSet.as_view({"post": "move"})
-task_assign_sprint = TaskViewSet.as_view({"post": "assign_sprint"})
-task_bulk_edit = TaskViewSet.as_view({"post": "bulk_edit"})
-task_bulk_delete = TaskViewSet.as_view({"post": "bulk_delete"})
-task_detail = TaskViewSet.as_view(
-    {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
-)
 subtask_list = SubtaskViewSet.as_view({"get": "list", "post": "create"})
 subtask_reorder = SubtaskViewSet.as_view({"post": "reorder"})
 subtask_detail = SubtaskViewSet.as_view(
@@ -66,19 +62,25 @@ task_file_link_detail = TaskFileLinkViewSet.as_view({"delete": "destroy"})
 
 urlpatterns = [
     path(
-        "api/v1/projects/actions",
-        ProjectActionsView.as_view(),
-        name="project-actions",
+        "api/v1/projects/available-actions",
+        ProjectAvailableActionsView.as_view(),
+        name="project-available-actions",
     ),
+    path("api/v1/projects/tasks", AllTasksView.as_view(), name="project-all-tasks"),
     path(
         "api/v1/projects/tasks/calendar",
         TaskCalendarView.as_view(),
         name="project-tasks-calendar",
     ),
     path(
-        "api/v1/projects/tasks/search",
-        TaskSearchView.as_view(),
-        name="project-tasks-search",
+        "api/v1/projects/tasks/<uuid:uuid>",
+        TaskDetailView.as_view(),
+        name="project-task-detail",
+    ),
+    path(
+        "api/v1/projects/tasks/<uuid:uuid>/watch",
+        TaskWatchView.as_view(),
+        name="project-task-watch",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/members",
@@ -99,11 +101,6 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/notification-level",
         ProjectNotificationLevelView.as_view(),
         name="project-notification-level",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/watch",
-        TaskWatchView.as_view(),
-        name="project-task-watch",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/labels",
@@ -162,38 +159,18 @@ urlpatterns = [
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/tasks",
-        task_list,
+        TaskListView.as_view(),
         name="project-tasks",
     ),
     path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/batch",
+        TaskBatchView.as_view(),
+        name="project-tasks-batch",
+    ),
+    path(
         "api/v1/projects/<uuid:project_uuid>/tasks/reorder",
-        task_reorder,
+        TaskReorderView.as_view(),
         name="project-tasks-reorder",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/move",
-        task_move,
-        name="project-tasks-move",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/assign-sprint",
-        task_assign_sprint,
-        name="project-tasks-assign-sprint",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/bulk",
-        task_bulk_edit,
-        name="project-tasks-bulk",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/bulk-delete",
-        task_bulk_delete,
-        name="project-tasks-bulk-delete",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>",
-        task_detail,
-        name="project-task-detail",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/subtasks",

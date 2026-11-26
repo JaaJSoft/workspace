@@ -50,6 +50,11 @@ def user_project_ids(user, *, role=None):
     return list(member_ids.union(group_ids).order_by())
 
 
+def visible_tasks(user):
+    """The tasks of every project *user* can open, archived ones included."""
+    return Task.objects.filter(project_id__in=user_project_ids(user))
+
+
 _LINK_EVENT_TYPES = (TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED)
 
 

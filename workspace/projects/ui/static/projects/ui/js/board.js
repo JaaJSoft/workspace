@@ -85,8 +85,12 @@ function landAnimation(card) {
     .finished.catch(() => {});
 }
 
-// Upper bound of POST /api/v1/projects/actions, mirrored from the endpoint.
+// Uuids asked per POST /api/v1/projects/available-actions, under its cap.
 const ACTIONS_BATCH_SIZE = 200;
+
+// Tasks the link picker offers, and the most a page of the API holds.
+const LINK_SEARCH_RESULTS = 10;
+const LINK_SEARCH_MAX = 1000;
 
 // Action ids the whole selection offers with bulk support: the intersection
 // over every selected task of the ids answered with bulk=true. A task the
@@ -484,7 +488,8 @@ function projectBoard(config) {
     sidebarCounts: { backlog: 0, open: 0 },
     selected: [],
     // Ids the whole selection offers with bulk support (see
-    // bulkActionIntersection), answered by POST /api/v1/projects/actions.
+    // bulkActionIntersection), answered by POST
+    // /api/v1/projects/available-actions.
     // Null until the answer for the current selection lands, and the
     // toolbar buttons stay disabled meanwhile - the backend registry is
     // the only source of truth for what a selection may do.
@@ -795,7 +800,7 @@ function projectBoard(config) {
         const resp = await fetch(config.apiBase + '/tasks/reorder', {
           method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify({ status: statusUuid, order: order }),
+          body: JSON.stringify({ status: statusUuid, uuids: order }),
         });
         if (!resp.ok) throw new Error('Reorder failed');
       } catch (e) {
@@ -1090,7 +1095,7 @@ function projectBoard(config) {
       try {
         const parts = await Promise.all(
           slices.map(async (slice) => {
-            const resp = await fetch('/api/v1/projects/actions', {
+            const resp = await fetch('/api/v1/projects/available-actions', {
               method: 'POST',
               headers: this.headers(),
               body: JSON.stringify({ uuids: slice }),
@@ -1120,25 +1125,32 @@ function projectBoard(config) {
       }
       const uuids = this.selected.slice();
       try {
-        const resp = await fetch(config.apiBase + '/tasks/bulk', {
+        const resp = await fetch(config.apiBase + '/tasks/batch', {
           method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify(Object.assign({ tasks: uuids }, patch)),
+          body: JSON.stringify({ action: 'edit', uuids: uuids, data: patch }),
         });
-        if (!resp.ok) throw new Error('Bulk edit failed');
-        const data = await resp.json();
-        if (data.skipped && window.AppAlert) {
-          AppAlert.warning(
-            interpolate(
-              ngettext(
-                '%(count)s task starts after that due date and was left unchanged.',
-                '%(count)s tasks start after that due date and were left unchanged.',
-                data.skipped
-              ),
-              { count: data.skipped },
-              true
-            )
-          );
+        if (!resp.ok) {
+          // A lot is all or nothing: one task starting after the new due
+          // date refuses it whole, and the answer names each of them under
+          // the field it refuses.
+          const refused = await resp.json().catch(() => ({}));
+          const late = refused.data && refused.data.due_date;
+          const starting = Array.isArray(late) ? late.length : 0;
+          if (!starting) throw new Error('Bulk edit failed');
+          if (window.AppAlert) {
+            AppAlert.warning(
+              interpolate(
+                ngettext(
+                  '%(count)s task starts after that due date: nothing was changed.',
+                  '%(count)s tasks start after that due date: nothing was changed.',
+                  starting
+                ),
+                { count: starting },
+                true
+              )
+            );
+          }
         }
       } catch (e) {
         if (window.AppAlert) AppAlert.error(gettext('Could not update the tasks.'));
@@ -1206,10 +1218,10 @@ function projectBoard(config) {
       });
       if (!ok) return;
       try {
-        const resp = await fetch(config.apiBase + '/tasks/bulk-delete', {
+        const resp = await fetch(config.apiBase + '/tasks/batch', {
           method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify({ tasks: uuids }),
+          body: JSON.stringify({ action: 'delete', uuids: uuids }),
         });
         if (!resp.ok) throw new Error('Bulk delete failed');
         this.selected = this.selected.filter((u) => !uuids.includes(u));
@@ -1226,10 +1238,10 @@ function projectBoard(config) {
     async moveTasks(uuids, statusUuid) {
       if (!config.writable || !uuids.length || !statusUuid) return;
       try {
-        const resp = await fetch(config.apiBase + '/tasks/move', {
+        const resp = await fetch(config.apiBase + '/tasks/batch', {
           method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify({ status: statusUuid, tasks: uuids }),
+          body: JSON.stringify({ action: 'move', uuids: uuids, data: { status: statusUuid } }),
         });
         if (!resp.ok) throw new Error('Move failed');
         this.selected = this.selected.filter((u) => !uuids.includes(u));
@@ -1262,10 +1274,14 @@ function projectBoard(config) {
     async assignSprint(uuids, sprintUuid) {
       if (!config.writable || !uuids.length) return;
       try {
-        const resp = await fetch(config.apiBase + '/tasks/assign-sprint', {
+        const resp = await fetch(config.apiBase + '/tasks/batch', {
           method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify({ sprint: sprintUuid || null, tasks: uuids }),
+          body: JSON.stringify({
+            action: 'set_sprint',
+            uuids: uuids,
+            data: { sprint: sprintUuid || null },
+          }),
         });
         if (!resp.ok) throw new Error('Assign failed');
         this.selected = this.selected.filter((u) => !uuids.includes(u));
@@ -1490,7 +1506,7 @@ function projectBoard(config) {
     async patchTask(uuid, patch) {
       this._panelSaves++;
       try {
-        const resp = await fetch(config.apiBase + '/tasks/' + uuid, {
+        const resp = await fetch(config.taskApi + '/' + uuid, {
           method: 'PATCH',
           headers: this.headers(),
           body: JSON.stringify(patch),
@@ -1529,7 +1545,7 @@ function projectBoard(config) {
       });
       if (!ok) return;
       try {
-        const resp = await fetch(config.apiBase + '/tasks/' + uuid, {
+        const resp = await fetch(config.taskApi + '/' + uuid, {
           method: 'DELETE',
           headers: this.headers(),
         });
@@ -2233,18 +2249,20 @@ function taskPanel() {
         return;
       }
       try {
+        // A task links to another one: neither itself nor one it already
+        // holds. Those are dropped here, so the page asks for as many more.
+        const taken = new Set(this.links.map((l) => l.task.uuid));
+        taken.add(this.data.uuid);
+        const limit = Math.min(LINK_SEARCH_MAX, LINK_SEARCH_RESULTS + taken.size);
         const resp = await fetch(
-          this.data.link_search_url +
-            '?q=' +
-            encodeURIComponent(query) +
-            '&exclude=' +
-            this.data.uuid
+          this.data.link_search_url + '?limit=' + limit + '&q=' + encodeURIComponent(query)
         );
         if (!resp.ok) throw new Error('Search failed');
         const results = await resp.json();
         if (generation !== this._linkSearchGeneration) return;
-        const linked = new Set(this.links.map((l) => l.task.uuid));
-        this.linkResults = results.filter((r) => !linked.has(r.uuid));
+        this.linkResults = results
+          .filter((r) => !taken.has(r.uuid))
+          .slice(0, LINK_SEARCH_RESULTS);
         this.linkDropdown = true;
       } catch (e) {
         if (generation !== this._linkSearchGeneration) return;

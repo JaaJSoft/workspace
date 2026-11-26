@@ -5,17 +5,15 @@ from django.http import Http404
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import SAFE_METHODS
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.http_ranges import serve_with_ranges
-from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.queries import resolve_accessible_files
 
@@ -31,7 +29,6 @@ from ..models import (
     Task,
     TaskAttachment,
     TaskComment,
-    TaskEvent,
     TaskFileLink,
     TaskLink,
     TaskStatus,
@@ -53,32 +50,21 @@ from ..serializers import (
     SubtaskSerializer,
     TaskAttachmentCreateSerializer,
     TaskAttachmentSerializer,
-    TaskBulkDeleteSerializer,
-    TaskBulkEditSerializer,
     TaskCommentBodySerializer,
     TaskCommentSerializer,
     TaskFileLinkCreateSerializer,
     TaskLinkCreateSerializer,
-    TaskMoveSerializer,
-    TaskReorderSerializer,
-    TaskSerializer,
-    TaskSprintSerializer,
     TaskStatusSerializer,
-    TaskWatchSerializer,
 )
-from ..services.assignments import notify_assigned
 from ..services.attachments import (
     MAX_ATTACHMENTS_PER_REQUEST,
     MAX_UPLOAD_BYTES,
     create_attachments,
     remove_attachment,
 )
-from ..services.bulk import UNSET, bulk_update_tasks, delete_tasks
 from ..services.comments import add_comment, notify_comment_edited
 from ..services.conversion import convert_project_type
 from ..services.epics import epics_with_progress
-from ..services.estimates import format_estimate
-from ..services.events import record_task_event
 from ..services.file_links import file_links_for_task, link_files, unlink_file
 from ..services.links import create_link, delete_link, links_for_task
 from ..services.members import (
@@ -89,7 +75,6 @@ from ..services.members import (
 )
 from ..services.projects import create_project
 from ..services.sprints import (
-    assign_tasks_to_sprint,
     complete_sprint,
     delete_sprint,
     propagate_sprint_rename,
@@ -97,22 +82,6 @@ from ..services.sprints import (
 )
 from ..services.statuses import create_status, delete_status, reorder_statuses
 from ..services.subtasks import create_subtask, reorder_subtasks
-from ..services.task_filters import (
-    ORDERABLE_FIELDS,
-    TaskFilterError,
-    apply_task_filters,
-    apply_task_ordering,
-)
-from ..services.tasks import (
-    change_task_status,
-    create_task,
-    delete_task,
-    has_field_updates,
-    move_tasks,
-    reorder_tasks,
-    settle_moved_due_dates,
-)
-from ..services.watchers import auto_watch, clear_watch_state, set_watch_state
 from ..sse_provider import broadcast_project_change
 
 User = get_user_model()
@@ -287,15 +256,22 @@ class ProjectContextMixin:
 
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
-        try:
-            project = Project.objects.get(uuid=kwargs["project_uuid"])
-        except Project.DoesNotExist:
-            raise Http404 from None
+        project = self.resolve_project(**kwargs)
         role = get_project_role(request.user, project)
         if role is None:
             raise Http404
         self.project = project
         self.role = role
+
+    def resolve_project(self, project_uuid, **kwargs):
+        try:
+            return Project.objects.get(uuid=project_uuid)
+        except Project.DoesNotExist:
+            raise Http404 from None
+
+    def changed_task_uuid(self):
+        """The task a write of this view changed, for the pages showing it."""
+        return self.kwargs.get("task_uuid")
 
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
@@ -306,7 +282,7 @@ class ProjectContextMixin:
             and request.method not in SAFE_METHODS
             and _succeeded(response)
         ):
-            broadcast_project_change(project, task_uuid=self.kwargs.get("task_uuid"))
+            broadcast_project_change(project, task_uuid=self.changed_task_uuid())
         return response
 
     def get_serializer_context(self):
@@ -485,34 +461,6 @@ class ProjectNotificationLevelView(ProjectContextMixin, APIView):
         ProjectNotificationLevel.objects.filter(
             project=self.project, user=request.user
         ).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@extend_schema(tags=["Projects - Tasks"])
-class TaskWatchView(ProjectContextMixin, APIView):
-    """The caller's own watch state on one task.
-
-    Open to any user with project access; archived projects stay writable
-    here - the state is a per-user preference, not project data.
-    """
-
-    def _task(self, task_uuid):
-        try:
-            return self.project.tasks.get(uuid=task_uuid)
-        except Task.DoesNotExist:
-            raise Http404 from None
-
-    @extend_schema(summary="Watch or mute this task", request=TaskWatchSerializer)
-    def put(self, request, project_uuid, task_uuid):
-        serializer = TaskWatchSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        state = serializer.validated_data["state"]
-        set_watch_state(self._task(task_uuid), request.user, muted=state == "muted")
-        return Response({"state": state})
-
-    @extend_schema(summary="Drop your explicit watch state")
-    def delete(self, request, project_uuid, task_uuid):
-        clear_watch_state(self._task(task_uuid), request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -773,308 +721,6 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         reorder_statuses(self.project, serializer.validated_data["order"])
         return Response({"success": True})
-
-
-@extend_schema(tags=["Projects - Tasks"])
-@extend_schema_view(
-    list=extend_schema(
-        parameters=[
-            OpenApiParameter(
-                "q",
-                OpenApiTypes.STR,
-                description="Full-text search on title and description.",
-            ),
-            OpenApiParameter(
-                "status",
-                OpenApiTypes.UUID,
-                many=True,
-                description="Only tasks in these columns.",
-            ),
-            OpenApiParameter(
-                "assignee",
-                OpenApiTypes.STR,
-                many=True,
-                description="Only tasks assigned to these user IDs; the literal `none` matches unassigned tasks.",
-            ),
-            OpenApiParameter(
-                "label",
-                OpenApiTypes.UUID,
-                many=True,
-                description="Only tasks carrying these labels.",
-            ),
-            OpenApiParameter(
-                "epic",
-                OpenApiTypes.UUID,
-                many=True,
-                description="Only tasks belonging to these epics.",
-            ),
-            OpenApiParameter(
-                "priority",
-                OpenApiTypes.STR,
-                enum=Task.Priority.values,
-                description="Only tasks with this priority.",
-            ),
-            OpenApiParameter(
-                "due_before",
-                OpenApiTypes.DATE,
-                description="Only tasks due on or before this date.",
-            ),
-            OpenApiParameter(
-                "due_after",
-                OpenApiTypes.DATE,
-                description="Only tasks due on or after this date.",
-            ),
-            OpenApiParameter(
-                "created_by",
-                OpenApiTypes.INT,
-                description="Only tasks created by this user ID.",
-            ),
-            OpenApiParameter(
-                "completed",
-                OpenApiTypes.BOOL,
-                description="True keeps only tasks in a done column, false only open tasks.",
-            ),
-            OpenApiParameter(
-                "ordering",
-                OpenApiTypes.STR,
-                enum=sorted([*ORDERABLE_FIELDS, *(f"-{f}" for f in ORDERABLE_FIELDS)]),
-                description="Sort field, descending with a `-` prefix. `priority` sorts most important first; tasks without a due date always sort last.",
-            ),
-        ]
-    )
-)
-class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
-    serializer_class = TaskSerializer
-    lookup_field = "uuid"
-    lookup_url_kwarg = "task_uuid"
-    pagination_class = OptInLimitOffsetPagination
-    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
-
-    def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False):
-            return Task.objects.none()
-        qs = (
-            self.project.tasks.select_related("status", "epic")
-            .prefetch_related("assignees", "labels")
-            .order_by("position", "created_at")
-        )
-        if self.action != "list":
-            return qs
-        try:
-            qs = apply_task_filters(qs, self.request.query_params)
-            qs = apply_task_ordering(qs, self.request.query_params)
-        except TaskFilterError as exc:
-            raise ValidationError({exc.field: exc.message}) from exc
-        return qs.distinct()
-
-    def create(self, request, *args, **kwargs):
-        self._require_writable()
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        task = create_task(self.project, request.user, **serializer.validated_data)
-        return Response(self.get_serializer(task).data, status=status.HTTP_201_CREATED)
-
-    def partial_update(self, request, *args, **kwargs):
-        self._require_task_edit(request.data)
-        return super().partial_update(request, *args, **kwargs)
-
-    def perform_update(self, serializer):
-        old_due_date = serializer.instance.due_date
-        old_estimate = serializer.instance.estimate
-        old_epic = serializer.instance.epic
-        old_sprint = serializer.instance.sprint
-        old_assignee_ids = {u.pk for u in serializer.instance.assignees.all()}
-        # Compared before save: afterwards the instance already carries the
-        # new values and every edit would look like a no-op.
-        fields_updated = has_field_updates(
-            serializer.instance, serializer.validated_data
-        )
-        # The status is not the serializer's to write: it moves together with
-        # the position and completed_at, in change_task_status's locked write.
-        new_status = serializer.validated_data.pop("status", None)
-        task = serializer.save()
-        # Recorded before the status move: a task entering a board column
-        # joins the running sprint there, and change_task_status records that
-        # join, which must come after the change the request asked for.
-        saved_sprint = task.sprint
-        if saved_sprint != old_sprint:
-            # Sprint names snapshotted, same rationale as the epic names.
-            record_task_event(
-                task,
-                type=TaskEvent.Type.SPRINT,
-                actor=self.request.user,
-                from_value=old_sprint.name if old_sprint else "",
-                to_value=saved_sprint.name if saved_sprint else "",
-                from_ref=old_sprint.pk if old_sprint else None,
-                to_ref=saved_sprint.pk if saved_sprint else None,
-            )
-        if new_status is not None:
-            # Even when it names the status loaded above: another writer may
-            # have moved the task since, and the client asked for this one.
-            change_task_status(
-                task,
-                new_status,
-                actor=self.request.user,
-                # A sprint named in the same request is the client's choice.
-                keep_sprint=serializer.validated_data.get("sprint") is not None,
-            )
-        added_assignees = [
-            u
-            for u in serializer.validated_data.get("assignees", [])
-            if u.pk not in old_assignee_ids
-        ]
-        if added_assignees:
-            record_task_event(
-                task, type=TaskEvent.Type.ASSIGNED, actor=self.request.user
-            )
-            auto_watch(task, added_assignees)
-            notify_assigned(task, self.request.user, added_assignees)
-        if fields_updated:
-            record_task_event(
-                task, type=TaskEvent.Type.UPDATED, actor=self.request.user
-            )
-        if task.estimate != old_estimate:
-            record_task_event(
-                task,
-                type=TaskEvent.Type.ESTIMATED,
-                actor=self.request.user,
-                from_value=format_estimate(old_estimate),
-                to_value=format_estimate(task.estimate),
-            )
-        if task.epic_id != (old_epic.pk if old_epic else None):
-            # Epic *names* snapshotted, same rationale as the status names:
-            # epics are renamable and deletable, a FK would rewrite history.
-            record_task_event(
-                task,
-                type=TaskEvent.Type.EPIC,
-                actor=self.request.user,
-                from_value=old_epic.name if old_epic else "",
-                to_value=task.epic.name if task.epic else "",
-            )
-        if task.due_date != old_due_date:
-            settle_moved_due_dates([task])
-        # The response describes the row as stored, moves landed by another
-        # writer since the task was loaded included.
-        try:
-            task.refresh_from_db(
-                from_queryset=Task.objects.select_related("status"),
-                fields=["status", "position", "completed_at", "sprint", "updated_at"],
-            )
-        except Task.DoesNotExist:
-            # Deleted meanwhile: answer the 404 an unknown task gets.
-            raise Http404(
-                f"No {Task._meta.object_name} matches the given query."
-            ) from None
-
-    def destroy(self, request, *args, **kwargs):
-        self._require_action("delete")
-        return super().destroy(request, *args, **kwargs)
-
-    def perform_destroy(self, instance):
-        delete_task(instance, actor=self.request.user)
-
-    def reorder(self, request, *args, **kwargs):
-        """Single drag-and-drop endpoint: backlog sort, in-column sort and
-        cross-column moves. Idempotent (safe with optimistic UI retries)."""
-        self._require_action("move")
-        serializer = TaskReorderSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        status_obj = self._resolve_status(serializer.validated_data["status"])
-        if status_obj is None:
-            return Response(
-                {"detail": _("Unknown status for this project.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        reorder_tasks(
-            self.project,
-            status_obj,
-            serializer.validated_data["order"],
-            actor=request.user,
-        )
-        return Response({"success": True})
-
-    def move(self, request, *args, **kwargs):
-        """Bulk move (backlog multi-select "send to board"): appends the
-        listed tasks to the end of the target column. Idempotent."""
-        self._require_action("move")
-        serializer = TaskMoveSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        status_obj = self._resolve_status(serializer.validated_data["status"])
-        if status_obj is None:
-            return Response(
-                {"detail": _("Unknown status for this project.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        moved = move_tasks(
-            self.project,
-            status_obj,
-            serializer.validated_data["tasks"],
-            actor=request.user,
-        )
-        return Response({"success": True, "moved": len(moved)})
-
-    def assign_sprint(self, request, *args, **kwargs):
-        """Bulk sprint assignment (backlog planning): sets or clears the
-        sprint of the listed tasks without touching their status. Idempotent."""
-        self._require_action("move")
-        serializer = TaskSprintSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        sprint = None
-        sprint_uuid = serializer.validated_data["sprint"]
-        if sprint_uuid is not None:
-            sprint = self.project.sprints.filter(uuid=sprint_uuid).first()
-            if sprint is None:
-                return Response(
-                    {"detail": _("Unknown sprint for this project.")},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        try:
-            changed = assign_tasks_to_sprint(
-                self.project,
-                sprint,
-                serializer.validated_data["tasks"],
-                actor=request.user,
-            )
-        except ProjectRuleError as exc:
-            return _rule_error_response(exc)
-        return Response({"success": True, "updated": len(changed)})
-
-    def bulk_edit(self, request, *args, **kwargs):
-        """Bulk field edit (selection toolbars): assign/unassign, add or
-        remove labels, set the priority or the due date of the listed tasks
-        in one request. Set-oriented, so replaying a payload is a no-op."""
-        self._require_bulk_edit(request.data)
-        serializer = TaskBulkEditSerializer(
-            data=request.data, context={"project": self.project}
-        )
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        changed, skipped = bulk_update_tasks(
-            self.project,
-            data["tasks"],
-            actor=request.user,
-            assign=data.get("assign", ()),
-            unassign=data.get("unassign", ()),
-            add_labels=data.get("add_labels", ()),
-            remove_labels=data.get("remove_labels", ()),
-            priority=data.get("priority"),
-            due_date=data["due_date"] if "due_date" in data else UNSET,
-        )
-        return Response({"success": True, "updated": len(changed), "skipped": skipped})
-
-    def bulk_delete(self, request, *args, **kwargs):
-        """Bulk delete (selection toolbars). Unknown UUIDs are skipped, so a
-        retry after a partial failure is safe."""
-        self._require_action("delete")
-        serializer = TaskBulkDeleteSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        deleted = delete_tasks(
-            self.project, serializer.validated_data["tasks"], actor=request.user
-        )
-        return Response({"success": True, "deleted": deleted})
-
-    def _resolve_status(self, status_uuid):
-        return self.project.statuses.filter(uuid=status_uuid).first()
 
 
 @extend_schema(tags=["Projects - Tasks"])

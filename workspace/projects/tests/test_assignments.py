@@ -25,7 +25,7 @@ class AssignmentTestsBase(ProjectTestMixin, APITestCase):
 
     def _patch_task(self, task, payload):
         self.client.force_authenticate(self.admin)
-        url = f"/api/v1/projects/{self.project.uuid}/tasks/{task.uuid}"
+        url = f"/api/v1/projects/tasks/{task.uuid}"
         return self.client.patch(url, payload, format="json")
 
     def _unread(self, task, user):
@@ -129,11 +129,15 @@ class AssigneeOutsideTheProjectTests(AssignmentTestsBase):
 
     def test_a_bulk_edit(self):
         task = self._task()
-        url = f"/api/v1/projects/{self.project.uuid}/tasks/bulk"
+        url = f"/api/v1/projects/{self.project.uuid}/tasks/batch"
         self.client.force_authenticate(self.admin)
 
         def assign(user_id):
-            payload = {"tasks": [str(task.uuid)], "assign": [user_id]}
+            payload = {
+                "action": "edit",
+                "uuids": [str(task.uuid)],
+                "data": {"assign": [user_id]},
+            }
             return self.client.post(url, payload, format="json")
 
         self._assert_same_answer(assign(self.outsider.pk), assign(self._unknown_id()))

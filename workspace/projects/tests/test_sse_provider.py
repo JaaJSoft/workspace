@@ -44,7 +44,7 @@ class ProjectChangeApiTests(_LiveUpdatesBase, APITestCase):
         self.client.force_authenticate(user)
         with self.captureOnCommitCallbacks(execute=True):
             return self.client.patch(
-                f"{self.api}/tasks/{self.task.uuid}", data, format="json"
+                f"/api/v1/projects/tasks/{self.task.uuid}", data, format="json"
             )
 
     def test_a_task_change_reaches_every_member_the_author_included(self):
@@ -83,11 +83,11 @@ class ProjectChangeApiTests(_LiveUpdatesBase, APITestCase):
                 f"{self.api}/tasks/reorder",
                 {
                     "status": str(backlog.uuid),
-                    "order": [str(other.uuid), str(self.task.uuid)],
+                    "uuids": [str(other.uuid), str(self.task.uuid)],
                 },
                 format="json",
             )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         [event] = announced(self.admin)
         self.assertIsNone(event["task"])
 
@@ -96,7 +96,7 @@ class ProjectChangeApiTests(_LiveUpdatesBase, APITestCase):
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
                 f"{self.api}/tasks/reorder",
-                {"status": "not-a-uuid", "order": []},
+                {"status": "not-a-uuid", "uuids": []},
                 format="json",
             )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -162,7 +162,7 @@ class PageRevisionTests(_LiveUpdatesBase, TestCase):
         self.client.force_login(self.admin)
         with self.captureOnCommitCallbacks(execute=True):
             self.client.patch(
-                f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}",
+                f"/api/v1/projects/tasks/{self.task.uuid}",
                 {"title": "Ship it today"},
                 content_type="application/json",
             )

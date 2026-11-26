@@ -192,7 +192,7 @@ class StatusChangeEventTests(ProjectTestMixin, TestCase):
     def test_api_status_patch_records_event_with_actor(self):
         self.client.force_login(self.member)
         resp = self.client.patch(
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}",
+            f"/api/v1/projects/tasks/{self.task.uuid}",
             {"status": str(self.done.uuid)},
             content_type="application/json",
         )
@@ -205,7 +205,7 @@ class StatusChangeEventTests(ProjectTestMixin, TestCase):
     def test_patch_without_status_change_records_update_not_move(self):
         self.client.force_login(self.member)
         resp = self.client.patch(
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}",
+            f"/api/v1/projects/tasks/{self.task.uuid}",
             {"title": "Ship it soon"},
             content_type="application/json",
         )
@@ -231,9 +231,7 @@ class DeleteTaskEventTests(ProjectTestMixin, TestCase):
 
     def test_api_delete_records_event(self):
         self.client.force_login(self.admin)
-        resp = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}"
-        )
+        resp = self.client.delete(f"/api/v1/projects/tasks/{self.task.uuid}")
         self.assertEqual(resp.status_code, 204)
         event = TaskEvent.objects.get()
         self.assertEqual(event.type, TaskEvent.Type.DELETED)

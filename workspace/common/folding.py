@@ -16,7 +16,7 @@ like the ``icontains`` it replaces.
 
 from django.db import NotSupportedError
 from django.db.models import CharField, Func, TextField, Value
-from django.db.models.lookups import Contains
+from django.db.models.lookups import Contains, Exact
 
 from workspace.common.text import fold_text
 
@@ -61,6 +61,27 @@ class FoldedContains(Contains):
         # lookup names.
         pattern = connection.pattern_ops["contains"].format(connection.pattern_esc)
         return pattern.format(rhs)
+
+
+@CharField.register_lookup
+@TextField.register_lookup
+class FoldedExact(Exact):
+    """``name__fiexact="reunion"`` matches "Réunion", and nothing longer."""
+
+    lookup_name = "fiexact"
+
+    def get_prep_lookup(self):
+        rhs = self.rhs
+        if not hasattr(rhs, "resolve_expression"):
+            rhs = Value(str(rhs), output_field=TextField())
+        return Fold(rhs)
+
+    def get_prep_lhs(self):
+        return Fold(super().get_prep_lhs())
+
+    def get_rhs_op(self, connection, rhs):
+        # connection.operators only knows the built-in lookup names.
+        return connection.operators["exact"] % rhs
 
 
 def _sqlite_fold(value):

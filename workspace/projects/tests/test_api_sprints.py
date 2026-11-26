@@ -261,20 +261,26 @@ class AssignSprintApiTests(ScrumProjectMixin, APITestCase):
         self.sprint = self.scrum.sprints.create(name="Sprint 1")
         self.t1 = create_task(self.scrum, self.admin, title="t1")
         self.t2 = create_task(self.scrum, self.admin, title="t2")
-        self.url = f"/api/v1/projects/{self.scrum.uuid}/tasks/assign-sprint"
+        self.url = f"/api/v1/projects/{self.scrum.uuid}/tasks/batch"
 
-    def test_member_assigns_selection_to_sprint(self):
-        self.client.force_authenticate(self.member)
-        response = self.client.post(
+    def _plan(self, sprint, *tasks):
+        return self.client.post(
             self.url,
             {
-                "sprint": str(self.sprint.uuid),
-                "tasks": [str(self.t1.uuid), str(self.t2.uuid)],
+                "action": "set_sprint",
+                "uuids": [str(task.uuid) for task in tasks],
+                "data": {"sprint": str(sprint.uuid) if sprint else None},
             },
             format="json",
         )
+
+    def test_member_assigns_selection_to_sprint(self):
+        self.client.force_authenticate(self.member)
+        response = self._plan(self.sprint, self.t1, self.t2)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["updated"], 2)
+        self.assertEqual(
+            [task["sprint"]["name"] for task in response.data], ["Sprint 1"] * 2
+        )
         self.t1.refresh_from_db()
         self.assertEqual(self.t1.sprint_id, self.sprint.pk)
         # Planning never touches the board status.
@@ -286,12 +292,9 @@ class AssignSprintApiTests(ScrumProjectMixin, APITestCase):
         self.t1.sprint = self.sprint
         self.t1.save(update_fields=["sprint"])
         self.client.force_authenticate(self.member)
-        response = self.client.post(
-            self.url,
-            {"sprint": None, "tasks": [str(self.t1.uuid)]},
-            format="json",
-        )
+        response = self._plan(None, self.t1)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data[0]["sprint"])
         self.t1.refresh_from_db()
         self.assertIsNone(self.t1.sprint)
 
@@ -299,23 +302,20 @@ class AssignSprintApiTests(ScrumProjectMixin, APITestCase):
         other = create_project(self.admin, name="Elsewhere")
         foreign = other.sprints.create(name="Sprint X")
         self.client.force_authenticate(self.member)
-        response = self.client.post(
-            self.url,
-            {"sprint": str(foreign.uuid), "tasks": [str(self.t1.uuid)]},
-            format="json",
-        )
+        response = self._plan(foreign, self.t1)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_closed_sprint_target_is_400(self):
+    def test_a_closed_sprint_refuses_new_tasks(self):
+        """The request is well formed and the sprint is the project's: its
+        state is what refuses, and nothing the caller can rewrite fixes it."""
         self.sprint.state = Sprint.State.CLOSED
         self.sprint.save(update_fields=["state"])
         self.client.force_authenticate(self.member)
-        response = self.client.post(
-            self.url,
-            {"sprint": str(self.sprint.uuid), "tasks": [str(self.t1.uuid)]},
-            format="json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self._plan(self.sprint, self.t1)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("detail", response.data)
+        self.t1.refresh_from_db()
+        self.assertIsNone(self.t1.sprint)
 
 
 class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
@@ -336,7 +336,7 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["sprint"], self.sprint.uuid)
+        self.assertEqual(response.data["sprint"]["uuid"], str(self.sprint.uuid))
 
     def test_task_created_in_backlog_stays_unplanned(self):
         self.client.force_authenticate(self.member)
@@ -352,8 +352,12 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
         task = create_task(self.scrum, self.admin, title="t")
         self.client.force_authenticate(self.member)
         response = self.client.post(
-            f"/api/v1/projects/{self.scrum.uuid}/tasks/move",
-            {"status": str(self.todo.uuid), "tasks": [str(task.uuid)]},
+            f"/api/v1/projects/{self.scrum.uuid}/tasks/batch",
+            {
+                "action": "move",
+                "uuids": [str(task.uuid)],
+                "data": {"status": str(self.todo.uuid)},
+            },
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -364,7 +368,7 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
         task = create_task(self.scrum, self.admin, title="t")
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"/api/v1/projects/{self.scrum.uuid}/tasks/{task.uuid}",
+            f"/api/v1/projects/tasks/{task.uuid}",
             {"status": str(self.todo.uuid)},
             format="json",
         )
@@ -383,7 +387,7 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
         task = create_task(self.scrum, self.admin, title="t")
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"/api/v1/projects/{self.scrum.uuid}/tasks/{task.uuid}",
+            f"/api/v1/projects/tasks/{task.uuid}",
             {"sprint": str(planned.uuid), "status": str(self.todo.uuid)},
             format="json",
         )
@@ -402,7 +406,7 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
         task = create_task(self.scrum, self.admin, title="t", sprint=planned)
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"/api/v1/projects/{self.scrum.uuid}/tasks/{task.uuid}",
+            f"/api/v1/projects/tasks/{task.uuid}",
             {"sprint": None, "status": str(self.todo.uuid)},
             format="json",
         )
@@ -422,7 +426,7 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
         task = create_task(self.scrum, self.admin, title="t")
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"/api/v1/projects/{self.scrum.uuid}/tasks/{task.uuid}",
+            f"/api/v1/projects/tasks/{task.uuid}",
             {"sprint": str(self.sprint.uuid)},
             format="json",
         )
@@ -468,7 +472,7 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
         task = create_task(self.scrum, self.admin, title="t")
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"/api/v1/projects/{self.scrum.uuid}/tasks/{task.uuid}",
+            f"/api/v1/projects/tasks/{task.uuid}",
             {"sprint": str(closed.uuid)},
             format="json",
         )
@@ -521,7 +525,7 @@ class SprintActionsApiTests(ScrumProjectMixin, APITestCase):
     def _actions(self, user, project):
         self.client.force_authenticate(user)
         response = self.client.post(
-            "/api/v1/projects/actions",
+            "/api/v1/projects/available-actions",
             {"uuids": [str(project.uuid)]},
             format="json",
         )

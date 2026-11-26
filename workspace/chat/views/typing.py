@@ -10,6 +10,7 @@ from ..models import Conversation, ConversationMember, Message, MessageAttachmen
 from ..services.conversations import (
     can_clear_conversation,
     get_active_membership,
+    get_unread_counts,
 )
 from ..services.deletion import discard_attachment_files
 from ..services.notifications import notify_conversation_members
@@ -41,6 +42,15 @@ class TypingIndicatorView(APIView):
             dirty=False,
         )
         return Response({"status": "ok"})
+
+
+@extend_schema(tags=["Chat - Conversations"])
+class UnreadCountsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Get unread message counts")
+    def get(self, request):
+        return Response(get_unread_counts(request.user))
 
 
 @extend_schema(tags=["Chat - Conversations"])

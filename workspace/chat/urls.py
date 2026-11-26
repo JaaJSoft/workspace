@@ -67,6 +67,11 @@ urlpatterns = [
         messages.MessageDetailView.as_view(),
         name="chat-message-detail",
     ),
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/messages/<uuid:message_id>/readers",
+        messages.MessageReadersView.as_view(),
+        name="chat-message-readers",
+    ),
     # Reactions
     path(
         "api/v1/chat/messages/<uuid:message_id>/reactions",
@@ -90,6 +95,11 @@ urlpatterns = [
         "api/v1/chat/conversations/<uuid:conversation_id>/read",
         messages.MarkReadView.as_view(),
         name="chat-mark-read",
+    ),
+    path(
+        "api/v1/chat/unread-counts",
+        typing.UnreadCountsView.as_view(),
+        name="chat-unread-counts",
     ),
     # Typing indicator
     path(

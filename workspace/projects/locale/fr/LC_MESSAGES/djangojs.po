@@ -20,16 +20,14 @@ msgid "Unknown status"
 msgstr "Statut inconnu"
 
 #: ui/static/projects/ui/js/board.js
-msgid "%(count)s task starts after that due date and was left unchanged."
-msgid_plural ""
-"%(count)s tasks start after that due date and were left unchanged."
+msgid "%(count)s task starts after that due date: nothing was changed."
+msgid_plural "%(count)s tasks start after that due date: nothing was changed."
 msgstr[0] ""
-"%(count)s tâche commence après cette échéance et n’a pas été modifiée."
+"%(count)s tâche commence après cette échéance : rien n’a été modifié."
 msgstr[1] ""
-"%(count)s de tâches commencent après cette échéance et n’ont pas été "
-"modifiées."
+"%(count)s de tâches commencent après cette échéance : rien n’a été modifié."
 msgstr[2] ""
-"%(count)s tâches commencent après cette échéance et n’ont pas été modifiées."
+"%(count)s tâches commencent après cette échéance : rien n’a été modifié."
 
 #: ui/static/projects/ui/js/board.js
 msgid "Could not update the tasks."

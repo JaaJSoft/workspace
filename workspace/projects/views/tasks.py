@@ -99,6 +99,7 @@ class TaskListView(ProjectContextMixin, ListCreateAPIView):
 @extend_schema(tags=["Projects - Tasks"])
 @extend_schema_view(
     get=extend_schema(
+        operation_id="api_v1_projects_all_tasks_list",
         summary="List the tasks of every project the caller can open",
         description=(
             "Most recently updated first; searched with `q`, best match "

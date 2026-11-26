@@ -95,6 +95,7 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "NotificationPriorityEnum": "workspace.notifications.models.Notification.Priority",
         "TaskPriorityEnum": "workspace.projects.models.Task.Priority",
+        "SprintStateEnum": "workspace.projects.models.Sprint.State",
     },
     "TAGS": [
         {

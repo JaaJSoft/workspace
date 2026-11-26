@@ -3,13 +3,16 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest import mock
 
+from django.core.cache import cache
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.projects.models import Task, TaskEvent, TaskStatus
+from workspace.projects.services.projects import create_project
 from workspace.projects.services.statuses import create_status
 from workspace.projects.services.tasks import create_task
+from workspace.users.services.settings import set_setting
 
 from .base import ProjectTestMixin
 
@@ -676,3 +679,177 @@ class TaskEstimateApiTests(TaskApiMixin, APITestCase):
         self.assertEqual([t["title"] for t in response.data], ["one", "five", "none"])
         response = self.client.get(self.tasks_url, {"ordering": "-estimate"})
         self.assertEqual([t["title"] for t in response.data], ["five", "one", "none"])
+
+
+class TaskShapeTests(TaskApiMixin, APITestCase):
+    """What a task looks like on the wire."""
+
+    def setUp(self):
+        super().setUp()
+        self.label = self.project.labels.create(name="bug", color="#ff0000")
+        self.epic = self.project.epics.create(name="Launch")
+        self.task = create_task(
+            self.project,
+            self.admin,
+            title="Ship it",
+            assignees=[self.member],
+            labels=[self.label],
+            epic=self.epic,
+        )
+        self.detail_url = f"/api/v1/projects/tasks/{self.task.uuid}"
+        self.client.force_authenticate(self.member)
+
+    def test_relations_read_as_small_objects(self):
+        data = self.client.get(self.detail_url).data
+        self.assertEqual(
+            data["project"],
+            {
+                "uuid": str(self.project.uuid),
+                "name": "Website",
+                "key": self.project.key,
+            },
+        )
+        self.assertEqual(data["status"]["name"], "Backlog")
+        self.assertEqual(data["status"]["category"], "backlog")
+        self.assertEqual(
+            data["assignees"],
+            [
+                {
+                    "id": self.member.pk,
+                    "username": "member1",
+                    "first_name": "",
+                    "last_name": "",
+                    "avatar_url": f"/api/v1/users/{self.member.pk}/avatar",
+                }
+            ],
+        )
+        self.assertEqual(
+            data["labels"],
+            [{"uuid": str(self.label.uuid), "name": "bug", "color": "#ff0000"}],
+        )
+        self.assertEqual(data["epic"]["name"], "Launch")
+        self.assertIsNone(data["sprint"])
+        self.assertEqual(data["created_by"]["username"], "admin1")
+
+    def test_relations_are_written_by_identifier_under_the_same_name(self):
+        response = self.client.patch(
+            self.detail_url,
+            {
+                "status": str(self.todo.uuid),
+                "assignees": [self.admin.pk],
+                "labels": [],
+                "epic": None,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["status"]["uuid"], str(self.todo.uuid))
+        self.assertEqual(
+            [user["id"] for user in response.data["assignees"]], [self.admin.pk]
+        )
+        self.assertEqual(response.data["labels"], [])
+        self.assertIsNone(response.data["epic"])
+
+    def test_a_relation_of_another_project_answers_like_an_unknown_one(self):
+        other = create_project(self.admin, name="Other")
+        theirs = other.statuses.first()
+
+        def refusal(pk):
+            response = self.client.patch(
+                self.detail_url, {"status": str(pk)}, format="json"
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            return response.content.replace(str(pk).encode(), b"<pk>")
+
+        self.assertEqual(refusal(theirs.uuid), refusal(uuid.uuid4()))
+
+    def test_instants_are_utc_whatever_the_callers_zone(self):
+        set_setting(self.member, "core", "timezone", "Asia/Tokyo")
+        self.addCleanup(cache.clear)
+        self.client.force_authenticate(None)
+        self.client.force_login(self.member)
+        data = self.client.get(self.detail_url).json()
+        self.assertTrue(data["created_at"].endswith("Z"), data["created_at"])
+
+    def test_the_list_costs_the_same_whatever_the_number_of_tasks(self):
+        def queries():
+            with self.assertNumQueries(FuzzyInt(1, 12)) as context:
+                self.client.get(self.tasks_url)
+            return len(context.captured_queries)
+
+        few = queries()
+        for i in range(5):
+            create_task(
+                self.project,
+                self.admin,
+                title=f"more {i}",
+                assignees=[self.member],
+                labels=[self.label],
+                epic=self.epic,
+            )
+        self.assertEqual(queries(), few)
+
+
+class TaskOutOfReachTests(TaskApiMixin, APITestCase):
+    """A task is addressed without its project: one of a project the caller
+    cannot open must answer exactly like one that does not exist."""
+
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(self.project, self.admin, title="Private")
+        self.client.force_authenticate(self.outsider)
+
+    def _answers(self, method, suffix="", body=None):
+        send = getattr(self.client, method)
+        hidden = send(
+            f"/api/v1/projects/tasks/{self.task.uuid}{suffix}", body, format="json"
+        )
+        absent = send(
+            f"/api/v1/projects/tasks/{uuid.uuid4()}{suffix}", body, format="json"
+        )
+        return hidden, absent
+
+    def test_reading_writing_and_deleting(self):
+        for method, body in (
+            ("get", None),
+            ("patch", {"title": "Mine now"}),
+            ("delete", None),
+        ):
+            with self.subTest(method=method):
+                hidden, absent = self._answers(method, body=body)
+                self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+                self.assertEqual(
+                    (hidden.status_code, hidden.content),
+                    (absent.status_code, absent.content),
+                )
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.title, "Private")
+
+    def test_watching(self):
+        for method, body in (("put", {"state": "watching"}), ("delete", None)):
+            with self.subTest(method=method):
+                hidden, absent = self._answers(method, "/watch", body)
+                self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+                self.assertEqual(hidden.content, absent.content)
+
+    def test_asking_what_can_be_done(self):
+        absent = uuid.uuid4()
+        url = "/api/v1/projects/available-actions"
+        hidden = self.client.post(url, {"uuids": [str(self.task.uuid)]}, format="json")
+        unknown = self.client.post(url, {"uuids": [str(absent)]}, format="json")
+        self.assertEqual(hidden.data, {str(self.task.uuid): []})
+        self.assertEqual(unknown.data, {str(absent): []})
+
+
+class FuzzyInt(int):
+    """An int equal to any value of a range, for an upper bound on queries."""
+
+    def __new__(cls, lowest, highest):
+        value = super().__new__(cls, highest)
+        value.lowest, value.highest = lowest, highest
+        return value
+
+    def __eq__(self, other):
+        return self.lowest <= other <= self.highest
+
+    __hash__ = int.__hash__

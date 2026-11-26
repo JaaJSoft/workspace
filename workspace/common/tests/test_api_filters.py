@@ -8,7 +8,13 @@ from django.test import TestCase
 from django.utils import timezone
 from django_filters import rest_framework as filters
 
-from workspace.common.filters import BooleanFilter, MultiValueFilter, TextSearchFilter
+from workspace.common.filters import (
+    BooleanFilter,
+    KeyFilter,
+    MultiValueFilter,
+    OrderingFilter,
+    TextSearchFilter,
+)
 
 User = get_user_model()
 
@@ -216,3 +222,122 @@ class TextSearchFilterTests(TestCase):
         managers = Group.objects.get(name="Managers")
         managers.permissions.add(Permission.objects.get(codename="change_group"))
         self.assertEqual(self._names("once=_group"), ["Managers"])
+
+
+class _LogEntryByUser(filters.FilterSet):
+    user = MultiValueFilter(child=forms.IntegerField(), allow_me=True, allow_none=True)
+    user_username = KeyFilter(field_name="user__username")
+    type_model = KeyFilter(field_name="content_type__model")
+
+    class Meta:
+        model = LogEntry
+        fields = []
+
+
+class MeAndKeyFilterTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="Alice")
+        cls.zoe = User.objects.create_user(username="Zoé")
+        group_type = ContentType.objects.get_for_model(Group)
+        for user, text, kind in (
+            (cls.alice, "by alice", group_type),
+            (cls.zoe, "by zoe", None),
+        ):
+            LogEntry.objects.create(
+                user=user, action_flag=1, object_repr=text, content_type=kind
+            )
+
+    def _entries(self, query, user=None):
+        request = type("Request", (), {"user": user})() if user else None
+        filterset = _LogEntryByUser(
+            QueryDict(query), queryset=LogEntry.objects.all(), request=request
+        )
+        self.assertTrue(filterset.is_valid(), filterset.errors)
+        return sorted(filterset.qs.values_list("object_repr", flat=True))
+
+    def test_me_names_the_caller(self):
+        self.assertEqual(self._entries("user=me", self.alice), ["by alice"])
+        self.assertEqual(self._entries("user=me", self.zoe), ["by zoe"])
+
+    def test_me_sits_next_to_other_values(self):
+        both = f"user=me,{self.zoe.pk}"
+        self.assertEqual(self._entries(both, self.alice), ["by alice", "by zoe"])
+
+    def test_me_names_nobody_without_a_caller(self):
+        self.assertEqual(self._entries("user=me"), [])
+
+    def test_me_is_refused_where_it_is_not_allowed(self):
+        filterset = _PermissionFilter(
+            QueryDict("content_type=me"), queryset=Permission.objects.all()
+        )
+        self.assertFalse(filterset.is_valid())
+
+    def test_a_key_matches_whole_ignoring_case_and_accents(self):
+        self.assertEqual(self._entries("user_username=alice"), ["by alice"])
+        self.assertEqual(self._entries("user_username=ZOE"), ["by zoe"])
+        self.assertEqual(self._entries("user_username=zo"), [])
+
+    def test_several_keys_are_or(self):
+        self.assertEqual(
+            self._entries("user_username=alice,zoe"), ["by alice", "by zoe"]
+        )
+        self.assertEqual(
+            self._entries("user_username=alice&user_username=nobody"), ["by alice"]
+        )
+
+    def test_a_key_naming_nothing_matches_no_row(self):
+        self.assertEqual(self._entries("user_username=nobody"), [])
+        self.assertEqual(self._entries("type_model=nothing"), [])
+
+    def test_keys_of_two_relations_are_and(self):
+        self.assertEqual(
+            self._entries("user_username=alice&type_model=GROUP"), ["by alice"]
+        )
+        self.assertEqual(self._entries("user_username=zoe&type_model=group"), [])
+
+
+class _UserOrdering(filters.FilterSet):
+    ordering = OrderingFilter(
+        fields={"name": "username", "seen": "last_login"}, tie_break=("-pk",)
+    )
+
+    class Meta:
+        model = User
+        fields = []
+
+
+class OrderingFilterTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        now = timezone.now()
+        User.objects.create_user(username="b", last_login=now)
+        User.objects.create_user(username="a")
+        User.objects.create_user(username="c", last_login=now)
+        User.objects.create_user(username="d")
+
+    def _names(self, query):
+        filterset = _UserOrdering(
+            QueryDict(query), queryset=User.objects.order_by("pk")
+        )
+        self.assertTrue(filterset.is_valid(), filterset.errors)
+        return list(filterset.qs.values_list("username", flat=True))
+
+    def test_absent_keeps_the_order_of_the_queryset(self):
+        self.assertEqual(self._names(""), ["b", "a", "c", "d"])
+
+    def test_one_field_either_way(self):
+        self.assertEqual(self._names("ordering=name"), ["a", "b", "c", "d"])
+        self.assertEqual(self._names("ordering=-name"), ["d", "c", "b", "a"])
+
+    def test_ties_fall_to_the_tie_break_and_empty_values_sort_last(self):
+        # b and c share a login time, a and d have none.
+        self.assertEqual(self._names("ordering=seen"), ["c", "b", "d", "a"])
+        self.assertEqual(self._names("ordering=-seen"), ["c", "b", "d", "a"])
+
+    def test_a_field_that_was_not_declared_is_refused(self):
+        for query in ("ordering=email", "ordering=name,seen", "ordering=--name"):
+            with self.subTest(query=query):
+                filterset = _UserOrdering(QueryDict(query), queryset=User.objects.all())
+                self.assertFalse(filterset.is_valid())
+                self.assertEqual(list(filterset.errors), ["ordering"])

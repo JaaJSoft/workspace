@@ -67,6 +67,10 @@ msgstr "j N Y"
 msgid "The current state does not allow this."
 msgstr "L’état actuel ne le permet pas."
 
+#: serializers.py
+msgid "The same uuid is listed twice."
+msgstr "Le même uuid est listé deux fois."
+
 #: templates/ui/partials/attachment_menu.html
 msgid "Attach files"
 msgstr "Joindre des fichiers"

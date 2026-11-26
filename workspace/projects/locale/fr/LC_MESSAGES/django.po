@@ -642,7 +642,7 @@ msgstr "Seul le sprint actif peut être terminé."
 msgid "Target sprint must be another open sprint of this project."
 msgstr "Le sprint cible doit être un autre sprint ouvert de ce projet."
 
-#: services/sprints.py views/viewsets.py
+#: services/sprints.py
 msgid "Unknown sprint for this project."
 msgstr "Sprint inconnu pour ce projet."
 
@@ -2421,9 +2421,10 @@ msgstr "Sprint cible inconnu pour ce projet."
 msgid "Unknown target column for this project."
 msgstr "Colonne cible inconnue pour ce projet."
 
-#: views/viewsets.py
-msgid "Unknown status for this project."
-msgstr "Colonne inconnue pour ce projet."
+#: views/tasks.py
+#, python-format
+msgid "%(task)s starts after this due date."
+msgstr "%(task)s commence après cette échéance."
 
 #: views/viewsets.py
 msgid "Task not found."

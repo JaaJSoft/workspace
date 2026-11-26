@@ -10,10 +10,9 @@ import os
 import re
 import sqlite3
 import tempfile
-import unittest
 from collections import namedtuple
 from pathlib import Path
-from unittest import mock, skipUnless
+from unittest import TestCase, mock, skipUnless
 
 from django.conf import settings
 from django.core.management import CommandError, call_command
@@ -88,7 +87,7 @@ def _legacy_database(path):
 
 
 @skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
-class IncrementalModeTests(unittest.TestCase):
+class IncrementalModeTests(TestCase):
     def test_a_new_database_is_in_incremental_mode(self):
         with file_connection() as db:
             with db.cursor() as cursor:
@@ -105,7 +104,7 @@ class IncrementalModeTests(unittest.TestCase):
 
 
 @skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
-class IncrementalVacuumTests(unittest.TestCase):
+class IncrementalVacuumTests(TestCase):
     def test_free_pages_go_back_to_the_filesystem(self):
         with file_connection() as db:
             _fill_and_free(db)
@@ -174,7 +173,7 @@ class IncrementalVacuumTests(unittest.TestCase):
 
 
 @skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
-class FullVacuumTests(unittest.TestCase):
+class FullVacuumTests(TestCase):
     def test_switches_an_existing_database_to_incremental(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "db.sqlite3"
@@ -219,7 +218,7 @@ class FreeSpaceTests(SimpleTestCase):
 
 
 @skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
-class SnapshotTests(unittest.TestCase):
+class SnapshotTests(TestCase):
     def test_writes_a_copy_while_a_writer_holds_the_lock(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "snapshot.sqlite3"

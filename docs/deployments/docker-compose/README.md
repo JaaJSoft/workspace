@@ -138,7 +138,7 @@ AI_IMAGE_MODEL=dall-e-3
 
 The `workspace-data` volume is mounted at `/app/data` in every app service and contains:
 
-- The SQLite database (`db.sqlite3`) - see [SQLite maintenance](../../guides/sqlite-maintenance.md) for the one-off step an installation from before incremental vacuum needs, and for snapshots
+- The SQLite database (`db.sqlite3`)
 - User-uploaded files and media
 - The scheduler's record of when each periodic task last ran (`celerybeat-schedule`)
 

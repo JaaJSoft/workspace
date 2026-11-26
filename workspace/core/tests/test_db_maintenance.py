@@ -1,9 +1,10 @@
 """Tests for the SQLite maintenance pass, the full VACUUM and snapshots.
 
 They pin how long each operation can hold the write lock: the scheduled pass
-only ever frees a bounded number of pages per statement, a full VACUUM is
-never scheduled and refuses to start without the disk it needs, and a
-snapshot is written while another connection holds the write lock.
+only ever frees a bounded number of pages per statement, the full VACUUM that
+switches an existing database runs after migrate, never on a schedule, and
+refuses to start without the disk it needs, and a snapshot is written while
+another connection holds the write lock.
 """
 
 import os
@@ -16,6 +17,7 @@ from unittest import TestCase, mock, skipUnless
 
 from django.conf import settings
 from django.core.management import CommandError, call_command
+from django.core.management.sql import emit_post_migrate_signal
 from django.db import connection
 from django.test import SimpleTestCase, TransactionTestCase
 
@@ -23,10 +25,10 @@ from workspace.core.services import sqlite_maintenance
 from workspace.core.services.sqlite_maintenance import (
     NotEnoughSpace,
     ensure_free_space,
-    full_vacuum,
     incremental_vacuum,
     run_maintenance,
     snapshot,
+    switch_to_incremental,
 )
 from workspace.core.tasks import db_maintenance
 from workspace.core.tests.sqlite_files import file_connection
@@ -95,7 +97,7 @@ class IncrementalModeTests(TestCase):
             self.assertEqual(_pragma(db, "auto_vacuum"), 2)
             self.assertEqual(_pragma(db, "journal_mode"), "wal")
 
-    def test_an_existing_database_keeps_its_mode_until_a_full_vacuum(self):
+    def test_an_existing_database_keeps_its_mode_until_it_is_rewritten(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "db.sqlite3"
             _legacy_database(path)
@@ -173,20 +175,27 @@ class IncrementalVacuumTests(TestCase):
 
 
 @skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
-class FullVacuumTests(TestCase):
-    def test_switches_an_existing_database_to_incremental(self):
+class SwitchToIncrementalTests(TestCase):
+    def test_rewrites_an_existing_database_into_incremental_mode(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "db.sqlite3"
             _legacy_database(path)
             size_before = os.path.getsize(path)
             with file_connection(path) as db:
-                result = full_vacuum(db)
+                result = switch_to_incremental(db)
 
                 self.assertEqual(result["auto_vacuum_before"], "none")
                 self.assertEqual(result["auto_vacuum"], "incremental")
                 self.assertEqual(_pragma(db, "auto_vacuum"), 2)
                 self.assertEqual(_pragma(db, "freelist_count"), 0)
             self.assertLess(os.path.getsize(path), size_before // 2)
+
+    def test_leaves_an_incremental_database_alone(self):
+        with file_connection() as db:
+            _fill_and_free(db)
+            statements, result = _capture_sql(db, lambda: switch_to_incremental(db))
+        self.assertIsNone(result)
+        self.assertFalse(_full_vacuums(statements))
 
     def test_refuses_to_start_without_enough_free_disk(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -197,10 +206,43 @@ class FullVacuumTests(TestCase):
                     sqlite_maintenance, "disk_usage", return_value=DiskUsage(0, 0, 0)
                 ):
                     statements, _ = _capture_sql(
-                        db, lambda: self.assertRaises(NotEnoughSpace, full_vacuum, db)
+                        db,
+                        lambda: self.assertRaises(
+                            NotEnoughSpace, switch_to_incremental, db
+                        ),
                     )
                 self.assertEqual(_pragma(db, "auto_vacuum"), 0)
         self.assertFalse(_full_vacuums(statements))
+
+
+@skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
+class SwitchAfterMigrateTests(TransactionTestCase):
+    def test_migrate_switches_the_database(self):
+        # What migrate sends once it is done; only apps with models send it.
+        with mock.patch.object(
+            sqlite_maintenance, "switch_to_incremental", return_value=None
+        ) as switch:
+            emit_post_migrate_signal(verbosity=0, interactive=False, db="default")
+
+        self.assertTrue(switch.called)
+        self.assertTrue(all(c.args == (connection,) for c in switch.call_args_list))
+
+    def test_a_short_disk_leaves_the_switch_to_the_next_migrate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "db.sqlite3"
+            _legacy_database(path)
+            with file_connection(path) as db:
+                with (
+                    mock.patch.object(sqlite_maintenance, "connections", {"x": db}),
+                    mock.patch.object(
+                        sqlite_maintenance,
+                        "disk_usage",
+                        return_value=DiskUsage(0, 0, 0),
+                    ),
+                    self.assertLogs(sqlite_maintenance.logger, "WARNING"),
+                ):
+                    sqlite_maintenance.switch_after_migrate(sender=None, using="x")
+                self.assertEqual(_pragma(db, "auto_vacuum"), 0)
 
 
 class FreeSpaceTests(SimpleTestCase):
@@ -290,21 +332,8 @@ class MaintenanceTaskTests(TransactionTestCase):
         self.assertEqual(result["integrity_check"], "ok")
 
 
-@skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
-class CommandTests(TransactionTestCase):
-    def test_full_vacuum_without_enough_disk_fails_cleanly(self):
-        with mock.patch.object(
-            sqlite_maintenance, "disk_usage", return_value=DiskUsage(0, 0, 0)
-        ):
-            statements, _ = _capture_sql(
-                connection,
-                lambda: self.assertRaises(
-                    CommandError, call_command, "db_maintenance", "--full-vacuum"
-                ),
-            )
-        self.assertFalse(_full_vacuums(statements))
-
-    def test_snapshot_refuses_an_existing_file(self):
+class SnapshotCommandTests(SimpleTestCase):
+    def test_refuses_an_existing_file(self):
         with tempfile.NamedTemporaryFile() as existing:
             with self.assertRaises(CommandError):
                 call_command("db_snapshot", existing.name)

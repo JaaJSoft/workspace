@@ -5,12 +5,11 @@ holds the write lock. Writers wait for it up to the busy timeout (60 s, see
 ``settings/db.py``) and then fail with "database is locked".
 
 - The scheduled pass (``run_maintenance``) returns free pages to the
-  filesystem with ``PRAGMA incremental_vacuum``, in steps of a few thousand
+  filesystem with ``PRAGMA incremental_vacuum``, in steps of a thousand
   pages, each one its own short write transaction.
-- ``full_vacuum`` rewrites the whole file and holds the write lock while it
-  runs. Nothing schedules it: it is the one-off step that switches an existing
-  database to incremental mode, run by hand through ``manage.py db_maintenance
-  --full-vacuum``.
+- ``switch_to_incremental`` rewrites a database created before incremental
+  auto_vacuum, once, with a full VACUUM. It runs after ``migrate``, while the
+  rest of the deployment waits for it, and never on a schedule.
 - ``snapshot`` writes a compacted copy with ``VACUUM INTO``, from a read
   transaction, so writers keep going while it runs.
 """
@@ -23,6 +22,7 @@ from collections import defaultdict
 from shutil import disk_usage
 
 from django.db import connection as default_connection
+from django.db import connections
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ def incremental_vacuum(
     """Return free pages to the filesystem, a bounded step at a time.
 
     Does nothing on a database still in ``auto_vacuum = NONE``: its free pages
-    only leave the file through ``full_vacuum``. Always runs at least one step
+    only leave the file through ``switch_to_incremental``. Always runs at least one step
     when there are free pages, then stops once the budget is spent.
     """
     db = db or default_connection
@@ -225,16 +225,19 @@ def _megabytes(size):
     return f"{size / 2**20:.0f} MB"
 
 
-def full_vacuum(db=None):
-    """Rewrite the database file, and switch it to incremental auto_vacuum.
+def switch_to_incremental(db=None):
+    """Rewrite a database created in auto_vacuum = NONE into incremental mode.
 
-    Holds the write lock for the whole rewrite. It writes a new copy of the
-    database to SQLite's temporary directory, then the copy again through the
-    WAL next to the database, so it refuses to start without room for both.
+    Returns None when the database is already incremental. Otherwise a full
+    VACUUM: it holds the write lock for the whole rewrite, writes a new copy of
+    the database to SQLite's temporary directory, then the copy again through
+    the WAL next to the database, so it refuses to start without room for both.
     """
     db = db or default_connection
     db.ensure_connection()
     before = database_stats(db)
+    if before["auto_vacuum"] == "incremental":
+        return None
     database_dir = os.path.dirname(os.path.abspath(db.settings_dict["NAME"]))
     ensure_free_space(
         {
@@ -245,8 +248,7 @@ def full_vacuum(db=None):
 
     start = time.monotonic()
     with db.cursor() as cursor:
-        # Only a VACUUM on this connection, with this set, switches a
-        # database created in auto_vacuum = NONE.
+        # Only a VACUUM on this connection, with this set, switches the mode.
         cursor.execute("PRAGMA auto_vacuum = INCREMENTAL;")
         cursor.execute("VACUUM;")
     result = {"vacuum_ms": _elapsed_ms(start)}
@@ -262,6 +264,30 @@ def full_vacuum(db=None):
         }
     )
     return result
+
+
+def switch_after_migrate(sender, using, **kwargs):
+    """``post_migrate`` receiver: switch the migrated database to incremental.
+
+    ``migrate`` runs before the other processes of a deployment start, so
+    nothing waits on the write lock the rewrite holds. Without the disk for it,
+    the switch waits for the next ``migrate`` rather than failing the deploy.
+    """
+    db = connections[using]
+    if not is_sqlite(db) or db.in_atomic_block:
+        return
+    try:
+        result = switch_to_incremental(db)
+    except NotEnoughSpace as exc:
+        logger.warning("SQLite stays in auto_vacuum = NONE: %s", exc)
+        return
+    if result:
+        logger.info(
+            "SQLite switched to incremental auto_vacuum in %s ms (size %s -> %s bytes)",
+            result["vacuum_ms"],
+            result["size_before"],
+            result["size_after"],
+        )
 
 
 def snapshot(destination, db=None):
@@ -308,7 +334,7 @@ def run_maintenance(db=None, *, with_integrity_check=False):
     if result["auto_vacuum"] != "incremental":
         logger.warning(
             "SQLite auto_vacuum is %s: free pages stay in the file until "
-            "'manage.py db_maintenance --full-vacuum' switches it to incremental",
+            "the next 'manage.py migrate' switches it to incremental",
             result["auto_vacuum"],
         )
     result.update(wal_checkpoint(db))

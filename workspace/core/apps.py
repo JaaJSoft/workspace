@@ -16,6 +16,15 @@ class CoreConfig(AppConfig):
 
         register(check_task_broker)
 
+        from django.db.models.signals import post_migrate
+
+        from workspace.core.services.sqlite_maintenance import switch_after_migrate
+
+        # Every app with models sends post_migrate, core (which has none)
+        # never does: the receiver listens to all of them and returns at once
+        # on a database already switched.
+        post_migrate.connect(switch_after_migrate, dispatch_uid="sqlite_incremental")
+
         from django.contrib import admin
 
         # Unfold swaps admin.site for its own site in its ready(), which runs

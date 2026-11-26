@@ -120,7 +120,7 @@ CELERY_BEAT_SCHEDULE = {
     # vacuum frees pages in short write transactions with pauses between them,
     # so writers barely wait. A full VACUUM is never scheduled: it holds the
     # write lock for the whole rewrite and needs twice the database in free
-    # disk (manage.py db_maintenance --full-vacuum, by hand).
+    # disk; the one a database needs to switch modes runs after migrate.
     "db-maintenance": {
         "task": "core.db_maintenance",
         "schedule": crontab(hour=3, minute=0, day_of_week="1-6"),

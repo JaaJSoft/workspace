@@ -47,7 +47,7 @@ class BooleanFilter(django_filters.Filter):
     field_class = _BooleanField
 
 
-class _ValuesWidget(forms.Widget):
+class _ValuesWidget(forms.TextInput):
     def value_from_datadict(self, data, files, name):
         given = data.getlist(name) if hasattr(data, "getlist") else [data.get(name)]
         return [
@@ -57,6 +57,11 @@ class _ValuesWidget(forms.Widget):
             for part in str(value).split(",")
             if part.strip()
         ]
+
+    def format_value(self, value):
+        if isinstance(value, list):
+            value = ",".join(value)
+        return super().format_value(value)
 
 
 class _ValuesField(forms.Field):
@@ -121,7 +126,8 @@ class TextSearchFilter(django_filters.CharFilter):
         condition = Q()
         for name in self.search_fields:
             condition |= Q(**{f"{name}__ficontains": value})
-        return qs.filter(condition)
+        qs = self.get_method(qs)(condition)
+        return qs.distinct() if self.distinct else qs
 
 
 class CaseInsensitiveOrderingFilter(OrderingFilter):

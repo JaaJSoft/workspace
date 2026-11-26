@@ -171,7 +171,23 @@ test('turning push off after a failed save on load asks the server for its row f
   assert.equal(fetchCalls[2].url, '/api/v1/notifications/push/subscriptions/sub-uuid');
 });
 
-test('turning push off still unsubscribes the browser when the server cannot be reached', async () => {
+test('turning push off still unsubscribes the browser when the network is down', async () => {
+  const sub = browserSubscription();
+  const offline = () => {
+    throw new Error('offline');
+  };
+  const { stores, fetchCalls, warnings } = loadPushStore({ subscription: sub, saveOk: offline });
+  await flush();
+
+  await stores.push.toggle();
+
+  assert.equal(sub.unsubscribed, true);
+  assert.equal(stores.push.enabled, false);
+  assert.equal(fetchCalls.some((c) => c.opts.method === 'DELETE'), false);
+  assert.ok(warnings.some((args) => args.join(' ').includes('before unsubscribe')));
+});
+
+test('turning push off still unsubscribes the browser when the server refuses the save', async () => {
   const sub = browserSubscription();
   const { stores, fetchCalls } = loadPushStore({ subscription: sub, saveOk: () => false });
   await flush();

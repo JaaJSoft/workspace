@@ -370,7 +370,13 @@ document.addEventListener('alpine:init', function () {
     async _unsubscribe() {
       if (!this.subscription) return;
       // The server deletes by its own id, which a failed save on load left unknown.
-      if (!this.subscriptionUuid) await this._saveSubscription(this.subscription);
+      if (!this.subscriptionUuid) {
+        try {
+          await this._saveSubscription(this.subscription);
+        } catch (e) {
+          console.warn('Push subscription save before unsubscribe failed:', e);
+        }
+      }
       const uuid = this.subscriptionUuid;
       await this.subscription.unsubscribe();
       this.subscription = null;

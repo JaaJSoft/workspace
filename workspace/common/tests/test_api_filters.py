@@ -162,9 +162,25 @@ class MultiValueFilterTests(TestCase):
         filterset = _GroupFilter(QueryDict(query), queryset=Group.objects.all())
         self.assertEqual(list(filterset.qs), [group])
 
+    def test_the_filter_draws_as_a_text_input_holding_its_values(self):
+        """Regression: the browsable API draws the filter form, and a widget
+        without a template raised there."""
+        filterset = _PermissionFilter(
+            QueryDict("codename=add_group&codename=view_group"),
+            queryset=Permission.objects.all(),
+        )
+        html = str(filterset.form["codename"])
+        self.assertIn('type="text"', html)
+        self.assertIn('value="add_group,view_group"', html)
+        self.assertNotIn(
+            "value=", str(_PermissionFilter(QueryDict("")).form["codename"])
+        )
+
 
 class _GroupSearch(filters.FilterSet):
     q = TextSearchFilter(fields=("name", "permissions__codename"))
+    without = TextSearchFilter(fields=("name",), exclude=True)
+    once = TextSearchFilter(fields=("permissions__codename",), distinct=True)
 
     class Meta:
         model = Group
@@ -192,3 +208,11 @@ class TextSearchFilterTests(TestCase):
 
     def test_any_of_the_fields_matches(self):
         self.assertEqual(self._names("q=add_group"), ["Managers"])
+
+    def test_exclude_keeps_the_rows_that_do_not_match(self):
+        self.assertEqual(self._names("without=managers"), ["Équipe Support"])
+
+    def test_distinct_returns_a_row_matching_through_two_related_rows_once(self):
+        managers = Group.objects.get(name="Managers")
+        managers.permissions.add(Permission.objects.get(codename="change_group"))
+        self.assertEqual(self._names("once=_group"), ["Managers"])

@@ -4,6 +4,7 @@
 ``test_api_standard`` compares that with the gaps already known.
 """
 
+import ast
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -121,16 +122,51 @@ def _view_sources():
         yield from WORKSPACE.glob(pattern)
 
 
+def _definitions(text):
+    """The classes and functions of a module: (first line, last line, dotted name)."""
+    found = []
+
+    def walk(node, prefix):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+                name = f"{prefix}.{child.name}" if prefix else child.name
+                found.append((child.lineno, child.end_lineno, name))
+                walk(child, name)
+            else:
+                walk(child, prefix)
+
+    walk(ast.parse(text), "")
+    return found
+
+
+def _places(pattern, text, definitions):
+    """Where *pattern* matches, each named by the innermost definition around it.
+
+    A file is too coarse an address: most view modules already hold a gap, so a
+    new one beside it would go unseen.
+    """
+    for match in pattern.finditer(text):
+        line = text.count("\n", 0, match.start()) + 1
+        around = [d for d in definitions if d[0] <= line <= d[1]]
+        yield max(around)[2] if around else "<module>"
+
+
 def _source_gaps(gaps):
+    rules = {
+        "query parameter read by hand": HAND_READ_QUERY,
+        "error without a body": BODILESS_ERROR,
+        "error under another key": ERROR_KEY,
+    }
     for source in _view_sources():
         text = source.read_text(encoding="utf-8")
         name = source.relative_to(WORKSPACE).as_posix()
-        if HAND_READ_QUERY.search(text):
-            gaps["query parameter read by hand"].add(name)
-        if BODILESS_ERROR.search(text):
-            gaps["error without a body"].add(name)
-        if ERROR_KEY.search(text):
-            gaps["error under another key"].add(name)
+        definitions = None
+        for rule, pattern in rules.items():
+            if not pattern.search(text):
+                continue
+            definitions = definitions or _definitions(text)
+            for place in _places(pattern, text, definitions):
+                gaps[rule].add(f"{name}::{place}")
     for source in WORKSPACE.rglob("*.py"):
         name = source.relative_to(WORKSPACE).as_posix()
         if "/tests/" in name or name == "common/pagination.py":

@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework import status
@@ -9,6 +11,7 @@ from workspace.notifications.models import PushSubscription
 User = get_user_model()
 
 PUBLIC = "93.184.216.34"
+SUBSCRIPTIONS = "/api/v1/notifications/push/subscriptions"
 
 
 class PushVapidKeyViewTests(TestCase):
@@ -49,7 +52,7 @@ class PushSubscribeViewTests(TestCase):
 
     def test_subscribe_creates_subscription(self):
         response = self.client.post(
-            "/api/v1/notifications/push/subscribe",
+            SUBSCRIPTIONS,
             {
                 "endpoint": "https://push.example.com/sub/abc123",
                 "keys": {
@@ -75,7 +78,7 @@ class PushSubscribeViewTests(TestCase):
             auth="old-auth",
         )
         response = self.client.post(
-            "/api/v1/notifications/push/subscribe",
+            SUBSCRIPTIONS,
             {
                 "endpoint": "https://push.example.com/sub/abc123",
                 "keys": {
@@ -85,7 +88,7 @@ class PushSubscribeViewTests(TestCase):
             },
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         sub = PushSubscription.objects.get(
             endpoint="https://push.example.com/sub/abc123"
         )
@@ -107,7 +110,7 @@ class PushSubscribeViewTests(TestCase):
             auth="their-auth",
         )
         response = self.client.post(
-            "/api/v1/notifications/push/subscribe",
+            SUBSCRIPTIONS,
             {
                 "endpoint": "https://push.example.com/sub/abc123",
                 "keys": {"p256dh": "attacker-p256dh", "auth": "attacker-auth"},
@@ -134,14 +137,14 @@ class PushSubscribeViewTests(TestCase):
             auth="browser-auth",
         )
         response = self.client.post(
-            "/api/v1/notifications/push/subscribe",
+            SUBSCRIPTIONS,
             {
                 "endpoint": "https://push.example.com/sub/abc123",
                 "keys": {"p256dh": "browser-p256dh", "auth": "browser-auth"},
             },
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         sub = PushSubscription.objects.get(
             endpoint="https://push.example.com/sub/abc123"
         )
@@ -156,7 +159,7 @@ class PushSubscribeViewTests(TestCase):
             auth="browser-auth",
         )
         response = self.client.post(
-            "/api/v1/notifications/push/subscribe",
+            SUBSCRIPTIONS,
             {
                 "endpoint": "https://push.example.com/sub/abc123",
                 "keys": {"p256dh": "browser-p256dh", "auth": "guessed-auth"},
@@ -173,7 +176,7 @@ class PushSubscribeViewTests(TestCase):
 
     def test_subscribe_with_non_string_keys_returns_400(self):
         response = self.client.post(
-            "/api/v1/notifications/push/subscribe",
+            SUBSCRIPTIONS,
             {
                 "endpoint": "https://push.example.com/sub/abc123",
                 "keys": {"p256dh": 12, "auth": ["a"]},
@@ -191,7 +194,7 @@ class PushSubscribeViewTests(TestCase):
             auth="their-auth",
         )
         response = self.client.post(
-            "/api/v1/notifications/push/subscribe",
+            SUBSCRIPTIONS,
             {
                 "endpoint": "https://push.example.com/sub/abc123",
                 "keys": {"p256dh": "clé", "auth": "clé"},
@@ -202,7 +205,7 @@ class PushSubscribeViewTests(TestCase):
 
     def test_subscribe_missing_fields_returns_400(self):
         response = self.client.post(
-            "/api/v1/notifications/push/subscribe",
+            SUBSCRIPTIONS,
             {
                 "endpoint": "https://push.example.com/sub/abc123",
             },
@@ -210,36 +213,65 @@ class PushSubscribeViewTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_unsubscribe_deletes_subscription(self):
+    def test_subscribing_answers_the_subscription_without_its_keys(self):
+        response = self.client.post(
+            SUBSCRIPTIONS,
+            {
+                "endpoint": "https://push.example.com/sub/abc123",
+                "keys": {"p256dh": "test-p256dh-key", "auth": "test-auth-key"},
+            },
+            format="json",
+        )
+        subscription = PushSubscription.objects.get()
+        self.assertEqual(
+            set(response.data), {"uuid", "endpoint", "created_at"}, response.data
+        )
+        self.assertEqual(response.data["uuid"], str(subscription.uuid))
+
+    def test_lists_the_callers_subscriptions_only(self):
+        other = User.objects.create_user(username="other", password="pass123")
+        mine = PushSubscription.objects.create(
+            user=self.user,
+            endpoint="https://push.example.com/sub/mine",
+            p256dh="p",
+            auth="a",
+        )
         PushSubscription.objects.create(
+            user=other,
+            endpoint="https://push.example.com/sub/theirs",
+            p256dh="p",
+            auth="a",
+        )
+        response = self.client.get(SUBSCRIPTIONS)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([row["uuid"] for row in response.data], [str(mine.uuid)])
+
+    def test_unsubscribe_deletes_subscription(self):
+        subscription = PushSubscription.objects.create(
             user=self.user,
             endpoint="https://push.example.com/sub/abc123",
             p256dh="test-p256dh",
             auth="test-auth",
         )
-        response = self.client.delete(
-            "/api/v1/notifications/push/subscribe",
-            {
-                "endpoint": "https://push.example.com/sub/abc123",
-            },
-            format="json",
-        )
+        response = self.client.delete(f"{SUBSCRIPTIONS}/{subscription.uuid}")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(
-            PushSubscription.objects.filter(
-                endpoint="https://push.example.com/sub/abc123",
-            ).exists()
-        )
+        self.assertFalse(PushSubscription.objects.exists())
 
-    def test_unsubscribe_nonexistent_returns_204(self):
-        response = self.client.delete(
-            "/api/v1/notifications/push/subscribe",
-            {
-                "endpoint": "https://push.example.com/sub/nonexistent",
-            },
-            format="json",
+    def test_another_users_subscription_answers_like_an_absent_one(self):
+        other = User.objects.create_user(username="other", password="pass123")
+        theirs = PushSubscription.objects.create(
+            user=other,
+            endpoint="https://push.example.com/sub/theirs",
+            p256dh="p",
+            auth="a",
         )
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        hidden = self.client.delete(f"{SUBSCRIPTIONS}/{theirs.uuid}")
+        absent = self.client.delete(f"{SUBSCRIPTIONS}/{uuid.uuid4()}")
+        self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            (hidden.status_code, hidden.content), (absent.status_code, absent.content)
+        )
+        self.assertTrue(PushSubscription.objects.filter(pk=theirs.pk).exists())
 
 
 class PushEndpointGuardTests(TestCase):
@@ -251,7 +283,7 @@ class PushEndpointGuardTests(TestCase):
     def _subscribe(self, endpoint, answers=None):
         with FakeNetwork(answers or {}) as net:
             response = self.client.post(
-                "/api/v1/notifications/push/subscribe",
+                SUBSCRIPTIONS,
                 {"endpoint": endpoint, "keys": {"p256dh": "k", "auth": "a"}},
                 format="json",
             )
@@ -276,10 +308,11 @@ class PushEndpointGuardTests(TestCase):
 
     def test_a_name_resolving_to_a_private_address_is_refused(self):
         response, net = self._subscribe(
-            "https://web:8000/api/v1/files", {"web": [["172.18.0.2"]]}
+            "https://web.internal:8000/api/v1/files",
+            {"web.internal": [["172.18.0.2"]]},
         )
         self._assert_refused(response)
-        self.assertIn("private network", response.json()["error"])
+        self.assertIn("private network", response.json()["endpoint"][0])
         self.assertEqual(net.dialed, [])
 
     def test_a_public_push_service_is_accepted(self):

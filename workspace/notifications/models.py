@@ -155,6 +155,10 @@ class Notification(models.Model):
     def __str__(self):
         return f"{self.title} -> {self.recipient}"
 
+    @property
+    def is_read(self):
+        return self.read_at is not None
+
 
 class PushSubscription(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)

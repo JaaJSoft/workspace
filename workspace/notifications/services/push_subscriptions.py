@@ -17,7 +17,9 @@ def _holds_keys(subscription, p256dh, auth):
 
 
 def save_push_subscription(user, endpoint, p256dh, auth):
-    """Register *endpoint* as a push target of *user*; False when refused.
+    """Register *endpoint* as a push target of *user*.
+
+    Returns the subscription and whether it is new, or None when refused.
 
     The endpoint is the subscription's identity, so a browser re-subscribing
     under another login takes the row over - but only by presenting the keys
@@ -32,13 +34,13 @@ def save_push_subscription(user, endpoint, p256dh, auth):
             )
         )
         if created:
-            return True
+            return subscription, True
         if subscription.user_id != user.pk and not _holds_keys(
             subscription, p256dh, auth
         ):
-            return False
+            return None
         subscription.user = user
         subscription.p256dh = p256dh
         subscription.auth = auth
         subscription.save(update_fields=["user", "p256dh", "auth"])
-    return True
+    return subscription, False

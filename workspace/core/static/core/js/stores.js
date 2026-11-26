@@ -175,6 +175,7 @@ document.addEventListener('alpine:init', function () {
 
   // Notifications store
   const NOTIFICATIONS_PAGE_SIZE = 20;
+  const NOTIFICATIONS_MAX_PAGE_SIZE = 1000;
 
   Alpine.store('notifications', {
     unread: 0,
@@ -192,9 +193,9 @@ document.addEventListener('alpine:init', function () {
 
     _buildUrl(extra) {
       const p = new URLSearchParams({ limit: String(NOTIFICATIONS_PAGE_SIZE) });
-      if (this._filter === 'unread') p.set('filter', 'unread');
+      if (this._filter === 'unread') p.set('read', 'false');
       else if (this._filter !== 'all') p.set('origin', this._filter);
-      if (this._search) p.set('search', this._search);
+      if (this._search) p.set('q', this._search);
       if (extra) Object.entries(extra).forEach(([k, v]) => p.set(k, v));
       return '/api/v1/notifications?' + p.toString();
     },
@@ -209,7 +210,8 @@ document.addEventListener('alpine:init', function () {
 
     // Reloads as many rows as are listed, so the pages added by Load more survive.
     async refresh() {
-      await this._fetchHead(Math.max(NOTIFICATIONS_PAGE_SIZE, this.items.length));
+      const listed = Math.max(NOTIFICATIONS_PAGE_SIZE, this.items.length);
+      await this._fetchHead(Math.min(NOTIFICATIONS_MAX_PAGE_SIZE, listed));
     },
 
     async _fetchHead(limit) {
@@ -247,7 +249,8 @@ document.addEventListener('alpine:init', function () {
       const r = await fetch('/api/v1/notifications/' + uuid, {
         method: 'PATCH',
         credentials: 'same-origin',
-        headers: { 'X-CSRFToken': getCSRFToken() },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ is_read: true }),
       });
       if (!r.ok) return;
       const item = this.items.find(n => n.uuid === uuid);
@@ -258,7 +261,7 @@ document.addEventListener('alpine:init', function () {
     },
 
     async markAllRead() {
-      const r = await fetch('/api/v1/notifications/read-all', {
+      const r = await fetch('/api/v1/notifications/mark-all-read', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'X-CSRFToken': getCSRFToken() },
@@ -283,6 +286,8 @@ document.addEventListener('alpine:init', function () {
   Alpine.store('push', {
     supported: 'serviceWorker' in navigator && 'PushManager' in window,
     subscription: null,
+    // The server's row for this browser, known once the subscription was saved.
+    subscriptionUuid: null,
     loading: false,
 
     get enabled() { return !!this.subscription; },
@@ -353,23 +358,27 @@ document.addEventListener('alpine:init', function () {
 
     async _saveSubscription(sub) {
       const json = sub.toJSON();
-      return fetch('/api/v1/notifications/push/subscribe', {
+      const resp = await fetch('/api/v1/notifications/push/subscriptions', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
       });
+      if (resp.ok) this.subscriptionUuid = (await resp.json()).uuid || null;
+      return resp;
     },
 
     async _unsubscribe() {
       if (!this.subscription) return;
-      const endpoint = this.subscription.endpoint;
+      // The server deletes by its own id, which a failed save on load left unknown.
+      if (!this.subscriptionUuid) await this._saveSubscription(this.subscription);
+      const uuid = this.subscriptionUuid;
       await this.subscription.unsubscribe();
       this.subscription = null;
-      const csrfToken = getCSRFToken();
-      await fetch('/api/v1/notifications/push/subscribe', {
+      this.subscriptionUuid = null;
+      if (!uuid) return;
+      await fetch('/api/v1/notifications/push/subscriptions/' + uuid, {
         method: 'DELETE', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ endpoint: endpoint }),
+        headers: { 'X-CSRFToken': getCSRFToken() },
       });
     },
 

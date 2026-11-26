@@ -112,3 +112,25 @@ test('loopbackConnected: neither peer up -> false', () => {
   assert.equal(ctx.chatDiagLoopbackConnected('connecting', 'checking', 'connecting', 'checking'), false);
   assert.equal(ctx.chatDiagLoopbackConnected('new', 'new', 'new', 'new'), false);
 });
+
+test('fetchIceServers: reads the list from the ice-servers endpoint', async () => {
+  const servers = [{ urls: 'turn:t:3478', username: '1:2', credential: 'c' }];
+  let requested = null;
+  const fetchCtx = loadScript('workspace/chat/ui/static/chat/ui/js/call_diagnostic.js', {
+    fetch: async (url) => { requested = url; return { ok: true, json: async () => ({ ice_servers: servers }) }; },
+  });
+  const got = await fetchCtx.chatCallDiagnosticMixin()._diagFetchIceServers();
+  assert.equal(requested, '/api/v1/chat/call/ice-servers');
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(got)), servers);
+});
+
+test('fetchIceServers: a failed request yields no server, not an error', async () => {
+  const refused = loadScript('workspace/chat/ui/static/chat/ui/js/call_diagnostic.js', {
+    fetch: async () => ({ ok: false, json: async () => ({}) }),
+  });
+  assert.equal((await refused.chatCallDiagnosticMixin()._diagFetchIceServers()).length, 0);
+  const offline = loadScript('workspace/chat/ui/static/chat/ui/js/call_diagnostic.js', {
+    fetch: async () => { throw new TypeError('offline'); },
+  });
+  assert.equal((await offline.chatCallDiagnosticMixin()._diagFetchIceServers()).length, 0);
+});

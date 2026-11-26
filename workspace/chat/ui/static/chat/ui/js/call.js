@@ -85,21 +85,12 @@ window.chatCallMixin = function chatCallMixin() {
     localVideoStream: null,      // MediaStream wrapping the current outgoing video track
     _localVideoTrack: null,      // the live camera or screen track, or null
     _videoRequestToken: 0,       // bumped per capture request and on teardown to cancel stale awaits
-    _iceServers: [],
+    _iceServers: [],             // from the join response, never embedded in the page
     _heartbeatTimer: null,
 
     _csrf() {
       return (typeof getCSRFToken === 'function') ? getCSRFToken()
         : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
-    },
-
-    _loadIceServers() {
-      if (this._iceServers.length) return this._iceServers;
-      const el = document.getElementById('call-ice-servers-data');
-      if (el) {
-        try { this._iceServers = JSON.parse(el.textContent); } catch (e) { this._iceServers = []; }
-      }
-      return this._iceServers;
     },
 
     _initCallSounds() {
@@ -409,7 +400,7 @@ window.chatCallMixin = function chatCallMixin() {
     // -- Peer connections ------------------------------------
     _ensurePeer(peerId, initiateOffer) {
       if (this._peers[peerId]) return this._peers[peerId];
-      const pc = new RTCPeerConnection({ iceServers: this._loadIceServers() });
+      const pc = new RTCPeerConnection({ iceServers: this._iceServers });
       const audioEl = document.createElement('audio');
       audioEl.autoplay = true;
       audioEl.dataset.peer = String(peerId);

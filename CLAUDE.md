@@ -390,8 +390,12 @@ An invalid value answers 400 naming the parameter: a bad integer, UUID, date, en
 
 **In the code**
 
-- Every list filter is declared in a django-filter `FilterSet`, in the module's `filters.py`, wired with `filterset_class`. A view never reads `request.query_params` for a filter; a page view sharing the same filters reuses the `FilterSet`.
-- Every operation declares a serializer for its request and one for its response: no hand-built dict, no free-form object. The OpenAPI schema generates without a warning.
+- **Written once, in `common`.** What the standard says of every endpoint is code of `workspace/common/` (`pagination.py`, `filters.py`, `serializers.py`, `views.py`), never of a module: the paginator and its headers, the filter types (several values, `none`, three-state booleans, date ranges, ordering), the relation field, and one base view per repeated pattern (batch, reorder, available actions, yes/no link). A module subclasses and declares only what is its own: its visible queryset, its registry, its actions. Before writing one of these in a module, look there; when the piece is missing, add it there.
+- **A resource is DRF generic views** (`ListCreateAPIView`, `RetrieveUpdateDestroyAPIView`) or a ViewSet, so the lookup, the 404 with a body, the 201 with the full object, pagination and filtering are DRF's. `APIView` is for what is not a resource (an action, a computed view), and still declares its serializers.
+- **One serializer per resource.** The shared relation field renders the small object on read and takes the identifier on write, so a second write serializer exists only when the write shape really differs (a password, fields that cannot be read back). A user is always the one summary serializer of `users` (`id`, `username`, `first_name`, `last_name`, `avatar_url`), never a module's own.
+- **Every answer has a `Serializer` class**, in the module's `serializers.py`, a count or a stats object included: no hand-built dict, no inline declaration, no free-form object. The service returns objects or dicts, the serializer is the contract, and the OpenAPI schema generates without a warning.
+- **The serializer validates, the service acts.** A serializer checks the shape and that each identifier it is handed is one the caller can reach (rule 1 of *Authorization rules*); the view hands the validated data to the service. No business logic in `create()` or `update()`: the same service serves the API, an AI tool and a Celery task.
+- **Every list filter is a `FilterSet`**, in the module's `filters.py`, wired with `filterset_class`. A view never reads `request.query_params` for a filter; a page view sharing the same filters reuses the `FilterSet`.
 
 ### Models
 

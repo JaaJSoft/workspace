@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from workspace.common.http_ranges import safe_filename
 from workspace.common.mixins import CacheControlMixin
-from workspace.common.qr import QRTooLarge, qr_png, qr_svg
+from workspace.common.qr import QR_IMAGE_KINDS, QRTooLarge, qr_response
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..queries import reachable_list, reachable_person, user_person_lists, user_persons
@@ -20,15 +20,6 @@ from ..services.vcard_import import import_vcards
 
 IMPORT_MAX_SIZE = 20 * 1024 * 1024
 VCARD_CONTENT_TYPE = "text/vcard; charset=utf-8"
-
-# The SVG is what the dialog shows - it stays sharp at whatever size the
-# page gives it - and the PNG is what a download hands to a gallery or a
-# print job, so it carries its resolution in the file.
-QR_RENDERERS = {
-    "svg": (qr_svg, "image/svg+xml", 8),
-    "png": (qr_png, "image/png", 12),
-}
-QR_BORDER = 4
 
 
 def _vcf_response(text, filename):
@@ -181,7 +172,7 @@ class PersonQRCodeView(CacheControlMixin, APIView):
                 "kind",
                 str,
                 description="`svg` (default) or `png`.",
-                enum=["svg", "png"],
+                enum=QR_IMAGE_KINDS,
             ),
         ],
         responses={
@@ -202,7 +193,7 @@ class PersonQRCodeView(CacheControlMixin, APIView):
         # `kind`, not `format`: DRF reserves the latter for picking a renderer
         # and answers 404 for a value none of them declares.
         kind = request.query_params.get("kind", "svg").lower()
-        if kind not in QR_RENDERERS:
+        if kind not in QR_IMAGE_KINDS:
             return Response(
                 {"kind": ["Unsupported image kind. Use svg or png."]},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -222,10 +213,4 @@ class PersonQRCodeView(CacheControlMixin, APIView):
                 },
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
-        render, content_type, scale = QR_RENDERERS[kind]
-        response = HttpResponse(
-            render(code, scale=scale, border=QR_BORDER), content_type=content_type
-        )
-        filename = f"{safe_filename(person.display_name)}.{kind}"
-        response["Content-Disposition"] = f'inline; filename="{filename}"'
-        return response
+        return qr_response(code, kind, person.display_name)

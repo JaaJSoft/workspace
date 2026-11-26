@@ -8,7 +8,10 @@ so the theme the page is drawn in never reaches the image.
 import io
 
 import segno
+from django.http import HttpResponse
 from segno import DataOverflowError
+
+from .http_ranges import safe_filename
 
 # Recovers ~15% of a damaged symbol. Level L would pack the same payload into
 # a smaller grid, but a code read off a screen at an angle needs the slack.
@@ -46,3 +49,22 @@ def qr_png(qr, *, scale=8, border=4):
     """The code as PNG bytes, for a download that lands in a gallery or a
     print job rather than a browser."""
     return _render(qr, "png", scale, border)
+
+
+# The SVG is what a page shows - it stays sharp at whatever size the page
+# gives it - and the PNG is what a download hands to a gallery or a print
+# job, so it carries its resolution in the file.
+_IMAGE_KINDS = {
+    "svg": (qr_svg, "image/svg+xml", 8),
+    "png": (qr_png, "image/png", 12),
+}
+QR_IMAGE_KINDS = tuple(_IMAGE_KINDS)
+
+
+def qr_response(qr, kind, name):
+    """The code served as an image of *kind*, one of ``QR_IMAGE_KINDS``: shown
+    in the page, and called ``<name>.<kind>`` once saved."""
+    render, content_type, scale = _IMAGE_KINDS[kind]
+    response = HttpResponse(render(qr, scale=scale), content_type=content_type)
+    response["Content-Disposition"] = f'inline; filename="{safe_filename(name)}.{kind}"'
+    return response

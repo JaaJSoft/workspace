@@ -1,6 +1,15 @@
 from django.test import SimpleTestCase
 
-from workspace.common.qr import DARK, LIGHT, QRTooLarge, make_qr, qr_png, qr_svg
+from workspace.common.qr import (
+    DARK,
+    LIGHT,
+    QR_IMAGE_KINDS,
+    QRTooLarge,
+    make_qr,
+    qr_png,
+    qr_response,
+    qr_svg,
+)
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
@@ -48,3 +57,35 @@ class RenderTests(SimpleTestCase):
         svg = qr_svg(self.code)
         self.assertIn('fill="#fff"', svg)
         self.assertIn('stroke="#000"', svg)
+
+
+class ResponseTests(SimpleTestCase):
+    def setUp(self):
+        self.code = make_qr("https://example.test/files/shared/token")
+
+    def test_the_two_kinds_a_code_is_served_as(self):
+        self.assertEqual(QR_IMAGE_KINDS, ("svg", "png"))
+
+    def test_svg_is_served_as_an_svg_document(self):
+        response = qr_response(self.code, "svg", "card")
+        self.assertEqual(response["Content-Type"], "image/svg+xml")
+        self.assertEqual(response.content.decode(), qr_svg(self.code))
+
+    def test_png_is_served_larger_than_the_default_for_print(self):
+        response = qr_response(self.code, "png", "card")
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertTrue(response.content.startswith(PNG_MAGIC))
+        self.assertGreater(len(response.content), len(qr_png(self.code)))
+
+    def test_shown_in_the_page_and_named_for_a_save(self):
+        response = qr_response(self.code, "png", "Alice Martin")
+        self.assertEqual(
+            response["Content-Disposition"], 'inline; filename="Alice Martin.png"'
+        )
+
+    def test_a_name_cannot_close_the_filename_it_sits_in(self):
+        response = qr_response(self.code, "svg", 'a"; attachment; x="b')
+        self.assertEqual(
+            response["Content-Disposition"],
+            'inline; filename="a\\"; attachment; x=\\"b.svg"',
+        )

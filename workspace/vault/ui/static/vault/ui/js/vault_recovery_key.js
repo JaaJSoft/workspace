@@ -69,10 +69,11 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
       return '';
     },
 
-    // What the dialog learned of the rotation it sent: 'landed', 'absent' or
-    // 'unknown'. Heard on the window, because a lock may have taken the
-    // dialog while the request was out and a detached element reaches
-    // nothing else.
+    // What the dialog knows of the rotation it sent: 'unknown' from the
+    // moment the request leaves, then 'landed' or 'absent' once the server
+    // has said, or 'unknown' still when it cannot be asked. Heard on the
+    // window, because a lock may have taken the dialog while the request was
+    // out and a detached element reaches nothing else.
     recoveryKeyOutcome(outcome, sealedKex) {
       if (outcome === 'landed') {
         this.recoveryKeyReplaced();
@@ -314,8 +315,15 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
       this.busy = true;
       this.error = '';
       try {
+        // In flight from here. Until the server's word is in, a lock that
+        // takes the dialog must not be read as proof that nothing was sent.
+        this.tellPage('unknown', pending);
         try {
-          if (!(await window.vaultEnvelopeRotation.commit(pending, gone))) return;
+          if (!(await window.vaultEnvelopeRotation.commit(pending, gone))) {
+            // The dialog went away before the rotation left.
+            this.tellPage('absent', pending);
+            return;
+          }
         } catch (err) {
           // A refusal does not say what the server holds: an earlier attempt
           // may have landed with its answer lost. So the server is asked.

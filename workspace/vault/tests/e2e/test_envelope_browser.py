@@ -587,3 +587,21 @@ class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
         self.page.click("[data-testid=recovery-replace]")
         self.page.wait_for_selector(KEY_REPLACED_NOTICE, timeout=60000)
         self.assertEqual(self._remembered(), new_secret)
+
+    def test_a_lock_while_the_rotation_is_out_does_not_call_the_key_void(self):
+        """The request is on its way and the vault locks, as a hidden tab makes
+        it: the gate cannot know yet, and must not say the key opens nothing."""
+        new_secret = self._draw_a_new_key()
+        held = []
+        self.page.route(ROTATE_ROUTE, lambda route: held.append(route))
+        with self.page.expect_request(ROTATE_ROUTE):
+            self._confirm()
+
+        self.page.evaluate("() => window.vaultSession.lock()")
+        self.page.wait_for_selector(KEY_UNSETTLED_NOTICE)
+        self.assertEqual(self.page.locator(KEY_DISCARDED_NOTICE).count(), 0)
+
+        # The answer arrives after the lock: the gate then says what it is.
+        held[0].continue_()
+        self.page.wait_for_selector(KEY_REPLACED_NOTICE, timeout=60000)
+        self.assertEqual(self._remembered(), new_secret)

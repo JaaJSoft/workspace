@@ -1072,7 +1072,6 @@ def library_map(request):
         "title": _("Map"),
         "count_label": _count_label(counts, media_type),
         "view_empty": not (counts["photos"] or counts["videos"]),
-        "map_enabled": enabled,
         "map_offer_server": tile_server(),
         "map_config": {
             "tileUrl": settings.PHOTOS_MAP_TILE_URL,
@@ -1204,8 +1203,6 @@ def album(request, uuid):
             "title": album.title,
             "description": album.description,
             "sort_mode": album.sort_mode,
-            "role": role,
-            "allow_download": album.allow_download,
         },
         "tags": [
             {"tag": t, "url": _url_with({"tag": str(t.uuid)}), "active": False}
@@ -1396,7 +1393,6 @@ def shared_album(request, token):
     files = link_files(album)
     first, last = album_date_range(files)
     context = {
-        "link": link,
         "album": album,
         "count_label": _count_label(media_type_counts(files), None),
         "date_range": _date_range_label(first, last, _album_tz(album)),

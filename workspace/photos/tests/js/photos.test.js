@@ -417,22 +417,17 @@ test('properties opens the Files panel and loads the tags once', () => {
   assert.deepEqual(requests.map((r) => r[0]), ['/files/properties/u1', '/files/properties/u2']);
 });
 
-test('share and view hand the photo to the Files components', () => {
+test('share hands the photo to the Files share modal', () => {
   const { ctx, dispatched } = load();
   const app = ctx.photosApp();
   const photo = { uuid: 'u1', name: 'beach.jpg', type: 'jpeg' };
 
   app.ctxMenu = { open: true, photo };
   app.runCtxAction({ id: 'share' });
-  app.ctxMenu = { open: true, photo };
-  app.runCtxAction({ id: 'view' });
 
   assert.deepEqual(
     dispatched.map((e) => [e.type, { ...e.detail }]),
-    [
-      ['open-share-modal', { uuid: 'u1', name: 'beach.jpg', nodeType: 'file' }],
-      ['open-file-viewer', { uuid: 'u1', name: 'beach.jpg', type: 'jpeg' }],
-    ],
+    [['open-share-modal', { uuid: 'u1', name: 'beach.jpg', nodeType: 'file' }]],
   );
 });
 

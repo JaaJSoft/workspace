@@ -19,11 +19,10 @@ logger = logging.getLogger(__name__)
 @shared_task(
     name="photos.analyze_faces",
     priority=NORMAL_PRIORITY,
-    bind=True,
     max_retries=0,
     ignore_result=True,
 )
-def analyze_photo_faces(self, file_uuid):
+def analyze_photo_faces(file_uuid):
     """Find the faces of one photo, unless they are already up to date.
 
     max_retries=0: a photo that failed is still pending, and the hourly
@@ -35,11 +34,10 @@ def analyze_photo_faces(self, file_uuid):
 @shared_task(
     name="photos.analyze_video_faces",
     priority=LOW_PRIORITY,
-    bind=True,
     max_retries=0,
     ignore_result=True,
 )
-def analyze_video_faces(self, file_uuid):
+def analyze_video_faces(file_uuid):
     """Find the people of one video, unless they are already up to date.
 
     Its own task, below the photos: a video takes seconds to minutes of
@@ -67,11 +65,10 @@ def _analyze_pending(file_uuid):
 @shared_task(
     name="photos.analyze_appearances",
     priority=LOW_PRIORITY,
-    bind=True,
     max_retries=0,
     ignore_result=True,
 )
-def analyze_photo_appearances(self, file_uuid):
+def analyze_photo_appearances(file_uuid):
     """Find the people of one photo by their body, unless they are already
     up to date. Below its faces: those name people, these only suggest.
 
@@ -101,11 +98,10 @@ def face_analysis_task(file_type):
 @shared_task(
     name="photos.embed_photo",
     priority=LOW_PRIORITY,
-    bind=True,
     max_retries=0,
     ignore_result=True,
 )
-def embed_photo(self, file_uuid):
+def embed_photo(file_uuid):
     """Embed one photo, unless its embedding is already up to date.
 
     max_retries=0: a photo that failed is still pending, and the hourly
@@ -117,11 +113,10 @@ def embed_photo(self, file_uuid):
 @shared_task(
     name="photos.embed_video",
     priority=LOW_PRIORITY,
-    bind=True,
     max_retries=0,
     ignore_result=True,
 )
-def embed_video(self, file_uuid):
+def embed_video(file_uuid):
     """Embed the key frames of one video, unless they are already up to date.
 
     Its own task, as analyze_video_faces: a video costs a whole decode and a
@@ -153,11 +148,10 @@ def embedding_task(file_type):
 @shared_task(
     name="photos.check_sensitive",
     priority=NORMAL_PRIORITY,
-    bind=True,
     max_retries=0,
     ignore_result=True,
 )
-def check_sensitive_photo(self, file_uuid):
+def check_sensitive_photo(file_uuid):
     """Check one photo for sensitive content, unless it is already up to date.
 
     max_retries=0: a photo that failed is still pending, and the hourly
@@ -169,11 +163,10 @@ def check_sensitive_photo(self, file_uuid):
 @shared_task(
     name="photos.check_sensitive_video",
     priority=LOW_PRIORITY,
-    bind=True,
     max_retries=0,
     ignore_result=True,
 )
-def check_sensitive_video(self, file_uuid):
+def check_sensitive_video(file_uuid):
     """Check the frames of one video for sensitive content, unless it is
     already up to date.
 

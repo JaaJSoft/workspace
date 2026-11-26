@@ -54,8 +54,6 @@ ANALYSIS_VERSIONS = {
     # 2: the date written in the file name when the container has none.
     MediaItem.MediaType.VIDEO: 2,
 }
-# The version of a row written before rows recorded one.
-_UNVERSIONED = 1
 
 # Every field a reader fills, empty. A row is rewritten from this base, so a
 # photo replaced by a video (or the other way round) keeps nothing of the
@@ -120,11 +118,11 @@ def pending_media_qs(*, reanalyze=False):
         ~Q(content_hash="") & ~Q(media_item__content_hash=F("content_hash"))
     )
     for media_type, version in ANALYSIS_VERSIONS.items():
-        if version > _UNVERSIONED:
-            pending |= Q(media_item__media_type=media_type) & (
-                Q(media_item__analysis_version__isnull=True)
-                | Q(media_item__analysis_version__lt=version)
-            )
+        # A null version is a row written before rows recorded one.
+        pending |= Q(media_item__media_type=media_type) & (
+            Q(media_item__analysis_version__isnull=True)
+            | Q(media_item__analysis_version__lt=version)
+        )
     return qs.filter(pending)
 
 

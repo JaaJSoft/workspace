@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const vm = require('node:vm');
 const { loadScripts } = require('../../../common/tests/js/loader');
 
 const ENVELOPE = {
@@ -409,15 +410,49 @@ test('a rotation whose answer was lost, and landed, is a replacement', async () 
   }
 });
 
-test('a failed rotation the server never saw replaces nothing', async () => {
-  const h = await shown({ remembered: OLD_KEY, rotateEnvelope: async () => { throw new Error('down'); } });
+test('a rotation the server itself refused replaced nothing', async () => {
+  // A refusal from the application is the one answer that rules a write out.
+  const h = await shown({ remembered: OLD_KEY, rotateEnvelope: async () => { throw gone(400); } });
   h.component.acknowledged = true;
   await h.component.replace();
   assert.equal(h.component.error, 'Your recovery key could not be replaced. Try again.');
   assert.equal(h.component.step, 'kit');
+  assert.equal(h.component.outcomeUnknown, false);
   assert.equal(h.session.remembered, OLD_KEY);
   assert.deepStrictEqual(acts(h), []);
   assert.deepStrictEqual(told(h), ['sending', 'absent']);
+});
+
+test('a rotation that got no answer is not called absent on an envelope read too early', async () => {
+  // No answer, or a gateway's: the server may still be holding the request,
+  // and commit it after this read came back with the old envelope.
+  for (const failure of [new TypeError('network error'), gone(502), gone(504)]) {
+    const h = await shown({ remembered: OLD_KEY, rotateEnvelope: async () => { throw failure; } });
+    h.component.acknowledged = true;
+    await h.component.replace();
+    const label = `status ${failure.status}`;
+    assert.match(h.component.error, /could not check whether your recovery key was replaced/, label);
+    assert.equal(h.component.step, 'kit', label);
+    assert.equal(h.component.outcomeUnknown, true, label);
+    assert.deepStrictEqual(told(h), ['sending', 'unknown'], label);
+    assert.deepStrictEqual(acts(h), [], label);
+  }
+});
+
+test('a confirm that failed with nothing sent replaced nothing, server in reach or not', async () => {
+  for (const offline of [false, true]) {
+    const h = await shown({
+      envelope: WITH_PREVIOUS,
+      confirmEnvelope: async () => { throw new TypeError('network error'); },
+    });
+    h.session.offline = offline;
+    h.component.acknowledged = true;
+    await h.component.replace();
+    assert.equal(h.component.error, 'Your recovery key could not be replaced. Try again.', `offline ${offline}`);
+    assert.equal(h.component.outcomeUnknown, false);
+    assert.deepStrictEqual(h.posts, []);
+    assert.deepStrictEqual(told(h), ['sending', 'absent']);
+  }
 });
 
 test('a rotation nobody answered, with the server out of reach, is not called a failure', async () => {
@@ -467,24 +502,43 @@ test('trying again settles a rotation nobody answered, whichever way it went', a
   }
 });
 
-test('the step says nothing has changed again once the server confirms it', async () => {
-  // Unknown first, then an attempt the server answers for: refused, with an
-  // envelope that is not this dialog's. What was in doubt no longer is.
-  let calls = 0;
-  const h = await shown({
-    rotateEnvelope: async () => {
-      calls += 1;
-      throw calls === 1 ? new TypeError('network error') : gone(429);
-    },
-  });
-  h.session.offline = true;
+test('a later refusal does not clear an earlier attempt still in doubt, unless it is a conflict', async () => {
+  // The first request may still land. A throttle on the second says nothing
+  // about it; a conflict does - the envelope both name has moved, so neither
+  // can be committed any more.
+  for (const [status, settled] of [[429, false], [400, false], [409, true]]) {
+    let calls = 0;
+    const h = await shown({
+      rotateEnvelope: async () => {
+        calls += 1;
+        throw calls === 1 ? new TypeError('network error') : gone(status);
+      },
+    });
+    h.session.offline = true;
+    h.component.acknowledged = true;
+    await h.component.replace();
+    assert.equal(h.component.outcomeUnknown, true);
+    h.session.offline = false;
+    await h.component.replace();
+    assert.equal(told(h).at(-1), settled ? 'absent' : 'unknown', `status ${status}`);
+    assert.equal(h.component.outcomeUnknown, !settled, `status ${status}`);
+    if (settled) assert.equal(h.component.step, 'credentials');
+    else assert.match(h.component.error, /could not check/);
+  }
+});
+
+test('the step stops saying nothing has changed while the request is out', async () => {
+  // The server may already have committed it by the time the eye reaches
+  // the warning.
+  let release;
+  const h = await shown({ rotateEnvelope: () => new Promise((resolve) => { release = () => resolve(null); }) });
   h.component.acknowledged = true;
-  await h.component.replace();
-  assert.equal(h.component.outcomeUnknown, true);
-  h.session.offline = false;
-  await h.component.replace();
   assert.equal(h.component.outcomeUnknown, false);
-  assert.match(h.component.error, /Too many changes/);
+  const pending = h.component.replace();
+  await tick();
+  assert.equal(h.component.outcomeUnknown, true);
+  release();
+  await pending;
 });
 
 test('an unanswered rotation is reported to the page even after a lock took the dialog', async () => {
@@ -782,6 +836,47 @@ test('an unlock that still cannot ask keeps the question open', async () => {
   const { mixin } = await unlockedAfterAnUnansweredRotation({ envelope: ENVELOPE, offline: true });
   assert.equal(mixin.recoveryKeyNotice, 'unsettled');
   assert.equal(mixin.recoveryKeyUnsettled, 'new-kex');
+});
+
+test('an unlock too soon after the rotation left does not rule it out', async () => {
+  // The envelope is still the old one, and the request may be held somewhere
+  // between this page and the database. Only time rules that out.
+  const h = harness({ remembered: OLD_KEY });
+  // The clock the script reads is its own realm's.
+  let now = 1_000_000;
+  vm.runInContext('Date', h.ctx).now = () => now;
+  const { mixin } = root(h);
+  mixin.openRecoveryKeyDialog();
+  mixin.recoveryKeyWasShown();
+  mixin.recoveryKeyOutcome('sending', 'new-kex');
+  mixin.recoveryKeyOutcome('unknown', 'new-kex');
+  mixin.closeRecoveryKeyDialog();
+
+  now += 5_000;
+  mixin.recoveryKeyUnlocked();
+  await tick();
+  assert.equal(mixin.recoveryKeyNotice, 'unsettled');
+  assert.equal(mixin.recoveryKeyUnsettled, 'new-kex', 'the question was closed on a read made too early');
+
+  now += 10 * 60 * 1000;
+  mixin.recoveryKeyUnlocked();
+  await tick();
+  assert.equal(mixin.recoveryKeyNotice, 'discarded');
+  assert.equal(mixin.recoveryKeyUnsettled, null);
+});
+
+test('a rotation found in place is found at once, however recent', async () => {
+  const h = harness({ remembered: OLD_KEY });
+  h.session.envelope = { ...ENVELOPE, wrapped_kex_priv: 'new-kex' };
+  const { mixin } = root(h, { openedWithPrevious: true });
+  mixin.openRecoveryKeyDialog();
+  mixin.recoveryKeyWasShown();
+  mixin.recoveryKeyOutcome('sending', 'new-kex');
+  mixin.recoveryKeyOutcome('unknown', 'new-kex');
+  mixin.closeRecoveryKeyDialog();
+  mixin.recoveryKeyUnlocked();
+  await tick();
+  assert.equal(mixin.recoveryKeyNotice, 'landed');
 });
 
 test('an unlock with nothing left open only clears the notices', async () => {

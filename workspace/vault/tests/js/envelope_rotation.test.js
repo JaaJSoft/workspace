@@ -226,3 +226,15 @@ test('a refused rotation rejects with its status', async () => {
   const h = harness({ rotateEnvelope: async () => { throw refused(409); } });
   await assert.rejects(h.R.commit(ROTATION, never), (err) => err.status === 409);
 });
+
+test('an error says whether the rotation itself had left', async () => {
+  // A caller reporting what became of it has to tell a confirm that failed
+  // with nothing sent from a rotation that may have been written.
+  const afterConfirm = harness({ confirmEnvelope: async () => { throw refused(429); } });
+  await assert.rejects(
+    afterConfirm.R.commit({ ...ROTATION, confirmFirst: true }, never),
+    (err) => err.rotationSent === undefined
+  );
+  const afterRotate = harness({ rotateEnvelope: async () => { throw new TypeError('network error'); } });
+  await assert.rejects(afterRotate.R.commit(ROTATION, never), (err) => err.rotationSent === true);
+});

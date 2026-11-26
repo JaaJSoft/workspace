@@ -571,7 +571,19 @@ class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
         self.page.evaluate("() => window.vaultSession.lock()")
         self.page.wait_for_selector(KEY_UNSETTLED_NOTICE)
 
+        # An unlock straight away finds the old envelope, which proves little:
+        # a request held on its way could still be committed.
         self._restore_the_connection()
+        self._unlock_on(self.page)
+        self._wait_unlocked(self.page)
+        self.page.wait_for_selector(KEY_UNSETTLED_NOTICE)
+        self.assertEqual(self.page.locator(KEY_DISCARDED_NOTICE).count(), 0)
+
+        # Past the time any server holds a request, the same read settles it.
+        self.page.evaluate("() => window.vaultSession.lock()")
+        self.page.evaluate(
+            "() => { const real = Date.now; Date.now = () => real() + 10 * 60 * 1000; }"
+        )
         self._unlock_on(self.page)
         self._wait_unlocked(self.page)
         self.page.wait_for_selector(KEY_DISCARDED_NOTICE, timeout=30000)
@@ -598,6 +610,9 @@ class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
         self.page.route(ROTATE_ROUTE, lambda route: held.append(route))
         with self.page.expect_request(ROTATE_ROUTE):
             self._confirm()
+        # The request is out: the server may be committing it, so the step no
+        # longer says that nothing has changed.
+        self.assertFalse(self.page.get_by_text("Nothing has changed yet").is_visible())
 
         self.page.evaluate("() => window.vaultSession.lock()")
         self.page.wait_for_selector(KEY_UNSETTLED_NOTICE)
@@ -615,4 +630,51 @@ class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
         held[0].continue_()
         self.page.wait_for_selector(KEY_REPLACED_NOTICE, timeout=60000)
         self.assertFalse(self.page.evaluate("() => window.vaultSession.isUnlocked()"))
+        self.assertEqual(self._remembered(), new_secret)
+
+    def test_a_rotation_committed_after_the_envelope_was_read_back_is_not_a_failure(
+        self,
+    ):
+        """The page gets no answer, reads the envelope back and finds the old
+        one - and the server commits the rotation after that. Calling it a
+        failure on that read would have the key's owner discard the one in
+        place."""
+        before = _envelope(self.user)
+        new_secret = self._draw_a_new_key()
+        lost = []
+
+        def lose(route):
+            request = route.request
+            lost.append((request.url, request.headers, request.post_data))
+            route.abort()
+
+        self.page.route(ROTATE_ROUTE, lose)
+        self._confirm()
+        # The envelope read is answered, with the envelope still in place.
+        self.page.wait_for_selector(
+            "text=could not check whether your recovery key was replaced",
+            timeout=60000,
+        )
+        self.assertEqual(self.page.locator(RECOVERY_KEY).count(), 1)
+        self.assertEqual(_envelope(self.user), before)
+
+        # The request the page gave up on reaches the server after all.
+        url, headers, body = lost[0]
+        late = self.context.request.post(
+            url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-CSRFToken": headers["x-csrftoken"],
+            },
+        )
+        self.assertEqual(late.status, 200)
+        self.assertNotEqual(
+            _envelope(self.user)["wrapped_kex_priv"], before["wrapped_kex_priv"]
+        )
+
+        # Trying again meets its own rotation and completes.
+        self.page.unroute(ROTATE_ROUTE)
+        self.page.click("[data-testid=recovery-replace]")
+        self.page.wait_for_selector(KEY_REPLACED_NOTICE, timeout=60000)
         self.assertEqual(self._remembered(), new_secret)

@@ -109,14 +109,24 @@ window.vaultEnvelopeRotation = (function () {
   // said so before it left. Rejects with the API's error, status attached: a
   // refused confirm stops here rather than rotate away the envelope being
   // replaced and keep an older one.
+  //
+  // An error from the rotation itself carries rotationSent: from that request
+  // on a write may have happened, whatever came back, and a caller that
+  // reports what became of it needs to tell it from a confirm that failed
+  // with nothing sent.
   async function commit(rotation, cancelled) {
     if (rotation.confirmFirst) {
       await window.vaultApi.confirmEnvelope(rotation.expected);
       if (cancelled()) return false;
     }
-    await window.vaultApi.rotateEnvelope(
-      window.vaultEnvelope.rotateBody(rotation.sealed, rotation.expected)
-    );
+    try {
+      await window.vaultApi.rotateEnvelope(
+        window.vaultEnvelope.rotateBody(rotation.sealed, rotation.expected)
+      );
+    } catch (err) {
+      if (err && typeof err === 'object') err.rotationSent = true;
+      throw err;
+    }
     return true;
   }
 

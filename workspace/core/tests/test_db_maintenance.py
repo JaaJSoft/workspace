@@ -1,119 +1,334 @@
-"""Tests for the SQLite maintenance task and its cadence flags.
+"""Tests for the SQLite maintenance pass, the full VACUUM and snapshots.
 
-These pin *which* pragmas run for a given flag combination, so the split
-between the cheap daily pass (optimize + WAL checkpoint) and the heavy weekly
-pass (VACUUM + integrity_check) cannot silently regress.
+They pin how long each operation can hold the write lock: the scheduled pass
+only ever frees a bounded number of pages per statement, a full VACUUM is
+never scheduled and refuses to start without the disk it needs, and a
+snapshot is written while another connection holds the write lock.
 """
 
-from unittest import skipUnless
+import os
+import re
+import sqlite3
+import tempfile
+import unittest
+from collections import namedtuple
+from pathlib import Path
+from unittest import mock, skipUnless
 
 from django.conf import settings
+from django.core.management import CommandError, call_command
 from django.db import connection
 from django.test import SimpleTestCase, TransactionTestCase
 
-from workspace.core.tasks import _run_maintenance, db_maintenance
+from workspace.core.services import sqlite_maintenance
+from workspace.core.services.sqlite_maintenance import (
+    NotEnoughSpace,
+    ensure_free_space,
+    full_vacuum,
+    incremental_vacuum,
+    run_maintenance,
+    snapshot,
+)
+from workspace.core.tasks import db_maintenance
+from workspace.core.tests.sqlite_files import file_connection
 
 _IS_SQLITE = connection.vendor == "sqlite"
 
+DiskUsage = namedtuple("DiskUsage", "total used free")
 
-def _capture_sql(callback):
-    """Run ``callback`` while recording every SQL statement executed."""
+
+def _capture_sql(db, callback):
+    """Run ``callback`` while recording every SQL statement ``db`` executes."""
     executed = []
 
     def wrapper(execute, sql, params, many, context):
         executed.append(sql)
         return execute(sql, params, many, context)
 
-    with connection.execute_wrapper(wrapper):
+    with db.execute_wrapper(wrapper):
         result = callback()
     return executed, result
 
 
-def _ran_vacuum(statements):
-    return any(s.strip().upper().startswith("VACUUM") for s in statements)
+def _ran(statements, pattern):
+    return any(re.search(pattern, s, re.IGNORECASE) for s in statements)
 
 
-def _ran_integrity_check(statements):
-    return any("integrity_check" in s for s in statements)
+def _full_vacuums(statements):
+    return [s for s in statements if s.strip().upper().rstrip(";") == "VACUUM"]
 
 
-def _ran_optimize(statements):
-    return any("PRAGMA optimize" in s for s in statements)
+def _pragma(db, name):
+    with db.cursor() as cursor:
+        cursor.execute(f"PRAGMA {name};")
+        return cursor.fetchone()[0]
 
 
-def _ran_wal_checkpoint(statements):
-    return any("wal_checkpoint" in s for s in statements)
+def _fill_and_free(db, rows=400):
+    """Write rows then delete most of them, leaving free pages in the file."""
+    with db.cursor() as cursor:
+        cursor.execute("CREATE TABLE blob (data BLOB);")
+        cursor.execute(
+            "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n "
+            "WHERE i < %s) INSERT INTO blob SELECT randomblob(8000) FROM n;",
+            [rows],
+        )
+        cursor.execute("DELETE FROM blob WHERE rowid > 10;")
+        cursor.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+
+
+def _legacy_database(path):
+    """A database created before auto_vacuum was set, with free pages."""
+    raw = sqlite3.connect(path, isolation_level=None)
+    raw.execute("PRAGMA journal_mode=WAL;")
+    raw.execute("CREATE TABLE blob (data BLOB);")
+    raw.executemany("INSERT INTO blob VALUES (randomblob(8000));", [()] * 400)
+    raw.execute("DELETE FROM blob WHERE rowid > 10;")
+    raw.close()
 
 
 @skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
-class LightMaintenanceTests(TransactionTestCase):
-    """The daily pass keeps the cheap operations and skips the heavy ones.
+class IncrementalModeTests(unittest.TestCase):
+    def test_a_new_database_is_in_incremental_mode(self):
+        with file_connection() as db:
+            with db.cursor() as cursor:
+                cursor.execute("CREATE TABLE t (a);")
+            self.assertEqual(_pragma(db, "auto_vacuum"), 2)
+            self.assertEqual(_pragma(db, "journal_mode"), "wal")
 
-    Uses TransactionTestCase so the WAL checkpoint runs in autocommit rather
-    than against an open transaction (which locks the database)."""
+    def test_an_existing_database_keeps_its_mode_until_a_full_vacuum(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "db.sqlite3"
+            _legacy_database(path)
+            with file_connection(path) as db:
+                self.assertEqual(_pragma(db, "auto_vacuum"), 0)
 
-    def test_light_run_runs_optimize_and_checkpoint_only(self):
-        statements, result = _capture_sql(
-            lambda: _run_maintenance(skip_vacuum=True, skip_integrity_check=True)
-        )
 
-        self.assertTrue(_ran_optimize(statements))
-        self.assertTrue(_ran_wal_checkpoint(statements))
-        self.assertFalse(_ran_vacuum(statements))
-        self.assertFalse(_ran_integrity_check(statements))
+@skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
+class IncrementalVacuumTests(unittest.TestCase):
+    def test_free_pages_go_back_to_the_filesystem(self):
+        with file_connection() as db:
+            _fill_and_free(db)
+            free_before = _pragma(db, "freelist_count")
+            size_before = os.path.getsize(db.settings_dict["NAME"])
 
-        self.assertTrue(result["vacuum_skipped"])
-        self.assertTrue(result["integrity_check_skipped"])
-        self.assertNotIn("vacuum_ms", result)
+            result = run_maintenance(db)
+
+            self.assertEqual(result["auto_vacuum"], "incremental")
+            self.assertEqual(result["pages_freed"], free_before)
+            self.assertEqual(result["freelist_count"], 0)
+            self.assertLess(result["size_after"], size_before // 2)
+            self.assertEqual(
+                os.path.getsize(db.settings_dict["NAME"]), result["size_after"]
+            )
+
+    def test_every_statement_frees_a_bounded_number_of_pages(self):
+        # A bare "PRAGMA incremental_vacuum" frees every page at once, in one
+        # write transaction as long as the file is large.
+        with file_connection() as db:
+            _fill_and_free(db)
+            free = _pragma(db, "freelist_count")
+            statements, result = _capture_sql(
+                db,
+                lambda: incremental_vacuum(db, step_pages=50, pause_seconds=0),
+            )
+
+        vacuums = [s for s in statements if "incremental_vacuum" in s]
+        self.assertTrue(vacuums)
+        self.assertTrue(all("incremental_vacuum(50)" in s for s in vacuums))
+        self.assertEqual(result["steps"], -(-free // 50))
+        self.assertFalse(_full_vacuums(statements))
+
+    def test_the_budget_stops_the_run(self):
+        with file_connection() as db:
+            _fill_and_free(db)
+            free = _pragma(db, "freelist_count")
+
+            result = incremental_vacuum(db, step_pages=50, budget_seconds=0)
+
+        self.assertEqual(result["steps"], 1)
+        self.assertEqual(result["pages_freed"], 50)
+        self.assertEqual(result["freelist_count"], free - 50)
+
+    def test_refuses_to_run_inside_a_transaction(self):
+        with file_connection() as db:
+            _fill_and_free(db)
+            with mock.patch.object(db, "in_atomic_block", True):
+                with self.assertRaises(RuntimeError):
+                    incremental_vacuum(db)
+            self.assertGreater(_pragma(db, "freelist_count"), 0)
+
+    def test_a_database_in_none_mode_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "db.sqlite3"
+            _legacy_database(path)
+            with file_connection(path) as db:
+                free = _pragma(db, "freelist_count")
+                statements, result = _capture_sql(db, lambda: run_maintenance(db))
+
+        self.assertEqual(result["auto_vacuum"], "none")
+        self.assertEqual(result["steps"], 0)
+        self.assertEqual(result["freelist_count"], free)
+        self.assertFalse(_ran(statements, r"incremental_vacuum"))
+        self.assertFalse(_full_vacuums(statements))
+
+
+@skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
+class FullVacuumTests(unittest.TestCase):
+    def test_switches_an_existing_database_to_incremental(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "db.sqlite3"
+            _legacy_database(path)
+            size_before = os.path.getsize(path)
+            with file_connection(path) as db:
+                result = full_vacuum(db)
+
+                self.assertEqual(result["auto_vacuum_before"], "none")
+                self.assertEqual(result["auto_vacuum"], "incremental")
+                self.assertEqual(_pragma(db, "auto_vacuum"), 2)
+                self.assertEqual(_pragma(db, "freelist_count"), 0)
+            self.assertLess(os.path.getsize(path), size_before // 2)
+
+    def test_refuses_to_start_without_enough_free_disk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "db.sqlite3"
+            _legacy_database(path)
+            with file_connection(path) as db:
+                with mock.patch.object(
+                    sqlite_maintenance, "disk_usage", return_value=DiskUsage(0, 0, 0)
+                ):
+                    statements, _ = _capture_sql(
+                        db, lambda: self.assertRaises(NotEnoughSpace, full_vacuum, db)
+                    )
+                self.assertEqual(_pragma(db, "auto_vacuum"), 0)
+        self.assertFalse(_full_vacuums(statements))
+
+
+class FreeSpaceTests(SimpleTestCase):
+    def test_directories_on_one_disk_add_up(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b = Path(tmp) / "a", Path(tmp) / "b"
+            a.mkdir()
+            b.mkdir()
+            with mock.patch.object(
+                sqlite_maintenance, "disk_usage", return_value=DiskUsage(0, 0, 100)
+            ):
+                ensure_free_space({a: 60})
+                with self.assertRaises(NotEnoughSpace):
+                    ensure_free_space({a: 60, b: 60})
+
+
+@skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
+class SnapshotTests(unittest.TestCase):
+    def test_writes_a_copy_while_a_writer_holds_the_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "snapshot.sqlite3"
+            with file_connection() as db:
+                with db.cursor() as cursor:
+                    cursor.execute("CREATE TABLE t (a);")
+                    cursor.execute("INSERT INTO t VALUES (1);")
+                writer = sqlite3.connect(db.settings_dict["NAME"], isolation_level=None)
+                writer.execute("BEGIN IMMEDIATE;")
+                writer.execute("INSERT INTO t VALUES (2);")
+                try:
+                    result = snapshot(target, db)
+                finally:
+                    writer.execute("COMMIT;")
+                    writer.close()
+
+            copy = sqlite3.connect(target)
+            rows = copy.execute("SELECT a FROM t;").fetchall()
+            copy.close()
+        self.assertEqual(rows, [(1,)])
+        self.assertEqual(result["path"], str(target))
+
+    def test_refuses_an_existing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "snapshot.sqlite3"
+            target.write_bytes(b"keep me")
+            with file_connection() as db, self.assertRaises(FileExistsError):
+                snapshot(target, db)
+            self.assertEqual(target.read_bytes(), b"keep me")
+
+    def test_refuses_without_enough_free_disk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "snapshot.sqlite3"
+            with file_connection() as db:
+                with db.cursor() as cursor:
+                    cursor.execute("CREATE TABLE t (a);")
+                with (
+                    mock.patch.object(
+                        sqlite_maintenance,
+                        "disk_usage",
+                        return_value=DiskUsage(0, 0, 0),
+                    ),
+                    self.assertRaises(NotEnoughSpace),
+                ):
+                    snapshot(target, db)
+            self.assertFalse(target.exists())
+
+
+@skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
+class MaintenanceTaskTests(TransactionTestCase):
+    """The task on the default database; autocommit, hence TransactionTestCase."""
+
+    def test_daily_pass_runs_no_full_vacuum_and_no_integrity_check(self):
+        statements, result = _capture_sql(connection, lambda: db_maintenance.run())
+
+        self.assertTrue(_ran(statements, r"PRAGMA optimize"))
+        self.assertTrue(_ran(statements, r"wal_checkpoint"))
+        self.assertFalse(_full_vacuums(statements))
+        self.assertFalse(_ran(statements, r"integrity_check"))
         self.assertNotIn("integrity_check", result)
 
-    def test_task_forwards_skip_flags(self):
-        statements, _ = _capture_sql(
-            lambda: db_maintenance.run(skip_vacuum=True, skip_integrity_check=True)
+    def test_weekly_pass_adds_the_integrity_check(self):
+        statements, result = _capture_sql(
+            connection, lambda: db_maintenance.run(integrity_check=True)
         )
 
-        self.assertFalse(_ran_vacuum(statements))
-        self.assertFalse(_ran_integrity_check(statements))
-
-
-@skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
-class FullMaintenanceTests(TransactionTestCase):
-    """The weekly pass runs everything; VACUUM needs autocommit, hence the
-    TransactionTestCase base (VACUUM cannot run inside an open transaction)."""
-
-    def test_full_run_runs_vacuum_and_integrity_check(self):
-        statements, result = _capture_sql(_run_maintenance)
-
-        self.assertTrue(_ran_optimize(statements))
-        self.assertTrue(_ran_wal_checkpoint(statements))
-        self.assertTrue(_ran_vacuum(statements))
-        self.assertTrue(_ran_integrity_check(statements))
-
-        self.assertNotIn("vacuum_skipped", result)
-        self.assertNotIn("integrity_check_skipped", result)
-        self.assertIn("vacuum_ms", result)
+        self.assertTrue(_ran(statements, r"integrity_check"))
+        self.assertFalse(_full_vacuums(statements))
         self.assertEqual(result["integrity_check"], "ok")
 
 
+@skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")
+class CommandTests(TransactionTestCase):
+    def test_full_vacuum_without_enough_disk_fails_cleanly(self):
+        with mock.patch.object(
+            sqlite_maintenance, "disk_usage", return_value=DiskUsage(0, 0, 0)
+        ):
+            statements, _ = _capture_sql(
+                connection,
+                lambda: self.assertRaises(
+                    CommandError, call_command, "db_maintenance", "--full-vacuum"
+                ),
+            )
+        self.assertFalse(_full_vacuums(statements))
+
+    def test_snapshot_refuses_an_existing_file(self):
+        with tempfile.NamedTemporaryFile() as existing:
+            with self.assertRaises(CommandError):
+                call_command("db_snapshot", existing.name)
+
+
 class BeatScheduleTests(SimpleTestCase):
-    """Guard the availability fix: the daily pass must skip the heavy ops, and
-    the two passes must never fire on the same day."""
+    def test_no_entry_runs_a_full_vacuum(self):
+        for name, entry in settings.CELERY_BEAT_SCHEDULE.items():
+            if entry["task"] == "core.db_maintenance":
+                self.assertEqual(
+                    set(entry.get("kwargs", {})) - {"integrity_check"}, set(), name
+                )
 
-    def test_daily_pass_skips_heavy_ops(self):
-        entry = settings.CELERY_BEAT_SCHEDULE["db-maintenance"]
-        self.assertEqual(entry["task"], "core.db_maintenance")
-        self.assertTrue(entry["kwargs"]["skip_vacuum"])
-        self.assertTrue(entry["kwargs"]["skip_integrity_check"])
-
-    def test_full_pass_runs_everything(self):
-        entry = settings.CELERY_BEAT_SCHEDULE["db-maintenance-full"]
-        self.assertEqual(entry["task"], "core.db_maintenance")
-        # No kwargs -> _run_maintenance defaults -> VACUUM + integrity_check run.
-        self.assertNotIn("kwargs", entry)
+    def test_integrity_check_runs_weekly(self):
+        daily = settings.CELERY_BEAT_SCHEDULE["db-maintenance"]
+        weekly = settings.CELERY_BEAT_SCHEDULE["db-maintenance-weekly"]
+        self.assertNotIn("kwargs", daily)
+        self.assertEqual(weekly["kwargs"], {"integrity_check": True})
 
     def test_passes_never_collide(self):
         daily = settings.CELERY_BEAT_SCHEDULE["db-maintenance"]["schedule"]
-        full = settings.CELERY_BEAT_SCHEDULE["db-maintenance-full"]["schedule"]
-        self.assertEqual(daily.hour, full.hour)
-        self.assertEqual(daily.minute, full.minute)
-        self.assertEqual(daily.day_of_week & full.day_of_week, set())
+        weekly = settings.CELERY_BEAT_SCHEDULE["db-maintenance-weekly"]["schedule"]
+        self.assertEqual(daily.hour, weekly.hour)
+        self.assertEqual(daily.minute, weekly.minute)
+        self.assertEqual(daily.day_of_week & weekly.day_of_week, set())
+        self.assertEqual(daily.day_of_week | weekly.day_of_week, set(range(7)))

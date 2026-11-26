@@ -147,7 +147,7 @@ kubectl apply -f ingress.yaml
 
 A single `PersistentVolumeClaim` (`workspace-data`, 10Gi, `ReadWriteOnce`) is mounted at `/app/data` and contains:
 
-- The SQLite database (`db.sqlite3`)
+- The SQLite database (`db.sqlite3`) - see [SQLite maintenance](../../guides/sqlite-maintenance.md) for the one-off step an installation from before incremental vacuum needs, and for snapshots
 - User-uploaded files
 
 ## Health Checks

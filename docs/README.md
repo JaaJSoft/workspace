@@ -29,6 +29,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 ## Guides
 
 - [Migrating from SQLite to PostgreSQL](guides/sqlite-to-postgres.md)
+- [SQLite maintenance](guides/sqlite-maintenance.md) - the nightly pass, switching an existing database to incremental vacuum, `db_snapshot`
 - [Monitoring with Prometheus](guides/monitoring.md) - `/metrics` credentials, scrape config, exposed series
 - [Translations](guides/translations.md) - choosing the language, per-module catalogs, `manage.py translations`, marking strings
 

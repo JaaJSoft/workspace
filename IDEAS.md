@@ -58,7 +58,7 @@ The instance sends no email of its own: calendar invitations go out through the 
 
 ### Self-hosting and operations - P1
 
-- [ ] **Backup and restore** - `manage.py backup|restore` (a `VACUUM INTO` snapshot, a blob manifest, retention), a nightly task and a "last backup" card in the admin. Document Litestream or restic for continuous backups (M)
+- [ ] **Backup and restore** - `manage.py backup|restore` (the `db_snapshot` copy, a blob manifest, retention), a nightly task and a "last backup" card in the admin. Document Litestream or restic for continuous backups (M)
 - [ ] **All-in-one mode for a NAS or a Pi** - `PROCESS_TYPE=all`, with `SECRET_KEY` and VAPID keys generated on first start and kept in the volume, and a documented memory profile. The base of the Synology package (PR #1475); see #1619 (M)
 - [ ] **Split Celery queues** - interactive, heavy and ml. With one queue, a long photo analysis can hold every worker while a bot reply waits (see #1628). A single-process `ml` worker on a Pi (S/M)
 - [ ] **Health console** - covers:

@@ -341,7 +341,7 @@ jobs:
           # back through Redis: the round trip of every task a request sends.
           docker compose exec -T web python manage.py shell -c '
           from workspace.celery import app
-          result = app.send_task("core.db_maintenance", kwargs={"skip_vacuum": True, "skip_integrity_check": True})
+          result = app.send_task("core.db_maintenance")
           print("Task result:", result.get(timeout=60))
           '
 

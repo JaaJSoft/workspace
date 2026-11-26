@@ -64,3 +64,82 @@ test('the recovery key actually reaches the pdf', async () => {
   // to differ.
   assert.notDeepEqual(await bytes(KIT), await bytes(other));
 });
+
+// --- the helper around the bundle: emergency_kit.js -------------------------
+
+function helper(globals = {}) {
+  const appended = [];
+  const built = [];
+  const helperCtx = loadScript('workspace/vault/ui/static/vault/ui/js/emergency_kit.js', {
+    document: {
+      createElement: () => ({}),
+      head: { appendChild: (script) => appended.push(script) },
+    },
+    location: { origin: 'https://workspace.example.com' },
+    downloadBlob: (blob, filename) => built.push({ blob, filename }),
+    userTzDayKey: () => '2026-08-22',
+    ...globals,
+  });
+  return { kit: helperCtx.vaultEmergencyKit, helperCtx, appended, built };
+}
+
+test('the key is grouped in blocks of four, the short last one included', () => {
+  const { kit } = helper();
+  assert.equal(kit.grouped('ABCDEFGHIJ'), 'ABCD-EFGH-IJ');
+  assert.equal(kit.grouped(''), '');
+});
+
+test('a kit is dated by its owner\'s day, not by the day it is in UTC', () => {
+  // The date is what tells two kits of one account apart. At 23:30 in Los
+  // Angeles the UTC date is already tomorrow's.
+  const seen = [];
+  const { kit, built } = helper({
+    vaultOnboardingTools: { buildEmergencyKitPdf: (fields) => { seen.push(fields); return 'pdf'; } },
+    // Not instanceof: the date is built in the script's realm.
+    userTzDayKey: (date) => { assert.equal(typeof date.getTime(), 'number'); return '2026-08-21'; },
+  });
+  kit.download({ email: 'demo@example.com', secretText: 'ABCDEFGHJKMN' });
+  assert.deepStrictEqual({ ...seen[0] }, {
+    email: 'demo@example.com',
+    serverUrl: 'https://workspace.example.com',
+    secretText: 'ABCD-EFGH-JKMN',
+    createdAt: '2026-08-21',
+  });
+  assert.deepStrictEqual(built, [{ blob: 'pdf', filename: 'vault-emergency-kit.pdf' }]);
+});
+
+test('a page that already carries the bundle loads nothing', async () => {
+  const { kit, appended } = helper({ vaultOnboardingTools: {} });
+  await kit.load('/static/kit.js');
+  assert.equal(appended.length, 0);
+});
+
+test('the bundle is fetched once, however many callers wait for it', async () => {
+  const { kit, helperCtx, appended } = helper();
+  const first = kit.load('/static/kit.js');
+  const second = kit.load('/static/kit.js');
+  assert.equal(appended.length, 1);
+  assert.equal(appended[0].src, '/static/kit.js');
+  helperCtx.vaultOnboardingTools = {};
+  appended[0].onload();
+  await Promise.all([first, second]);
+});
+
+test('a bundle that failed to load is tried again on the next call', async () => {
+  const { kit, helperCtx, appended } = helper();
+  const failed = kit.load('/static/kit.js');
+  appended[0].onerror();
+  await assert.rejects(failed, /failed to load/);
+  const retried = kit.load('/static/kit.js');
+  assert.equal(appended.length, 2);
+  helperCtx.vaultOnboardingTools = {};
+  appended[1].onload();
+  await retried;
+});
+
+test('a script that loads without registering the builder is a failure', async () => {
+  const { kit, appended } = helper();
+  const pending = kit.load('/static/kit.js');
+  appended[0].onload();
+  await assert.rejects(pending, /did not register/);
+});

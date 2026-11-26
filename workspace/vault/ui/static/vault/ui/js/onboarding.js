@@ -55,7 +55,7 @@ window.vaultOnboarding = function vaultOnboarding() {
     },
 
     groupedSecret() {
-      return (this.secretText.match(/.{1,4}/g) || []).join('-');
+      return window.vaultEmergencyKit.grouped(this.secretText);
     },
 
     // Written from the kit screen, in the grouped spelling the sheet shows:
@@ -345,13 +345,10 @@ window.vaultOnboarding = function vaultOnboarding() {
     },
 
     downloadKit() {
-      const blob = window.vaultOnboardingTools.buildEmergencyKitPdf({
+      window.vaultEmergencyKit.download({
         email: this.$root.dataset.email,
-        serverUrl: window.location.origin,
-        secretText: this.groupedSecret(),
-        createdAt: new Date().toISOString().slice(0, 10),
+        secretText: this.secretText,
       });
-      window.downloadBlob(blob, 'vault-emergency-kit.pdf');
     },
 
     post(url, body) {

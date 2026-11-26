@@ -12,6 +12,7 @@ function component(extra = {}) {
   const ctx = loadScripts([
     'workspace/vault/ui/static/vault/ui/js/session.js',
     'workspace/vault/ui/static/vault/ui/js/vault_password_floor.js',
+    'workspace/vault/ui/static/vault/ui/js/emergency_kit.js',
     'workspace/vault/ui/static/vault/ui/js/onboarding.js',
   ], {
     crypto: globalThis.crypto,
@@ -425,6 +426,7 @@ test('the kit is built from the account state and handed to the shared download 
       },
     },
     downloadBlob: (blob, filename) => { handedOff = { blob, filename }; },
+    userTzDayKey: () => '2026-08-22',
   });
   app.$root = { dataset: { email: 'owner@example.com' } };
   app.secretText = 'SECRET';
@@ -432,6 +434,7 @@ test('the kit is built from the account state and handed to the shared download 
   assert.equal(builtWith.email, 'owner@example.com');
   assert.equal(builtWith.serverUrl, 'https://workspace.example');
   assert.equal(builtWith.secretText, 'SECR-ET');
+  assert.equal(builtWith.createdAt, '2026-08-22');
   assert.deepEqual(handedOff, { blob: kitBlob, filename: 'vault-emergency-kit.pdf' });
 });
 

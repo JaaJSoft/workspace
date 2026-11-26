@@ -309,7 +309,7 @@ test('a success rotates against the envelope read, hands the device the new key,
   // The page hears that a rotation is out before it leaves, the device is
   // handed the key before the page hears it landed, and the lock comes last.
   assert.deepStrictEqual(h.order, [
-    ['told', 'unknown'],
+    ['told', 'sending'],
     ['rotate'],
     ['remember', NEW_KEY_GROUPED],
     ['told', 'landed'],
@@ -377,7 +377,7 @@ test('a 409 says this attempt replaced nothing, withdraws the new key and keeps 
   assert.equal(h.component.canReplace(), false);
   assert.equal(h.session.remembered, OLD_KEY);
   assert.equal(h.session.locks, 0);
-  assert.deepStrictEqual(told(h), ['unknown', 'absent']);
+  assert.deepStrictEqual(told(h), ['sending', 'absent']);
 });
 
 test('a throttled rotation keeps the key on screen for a later attempt', async () => {
@@ -405,7 +405,7 @@ test('a rotation whose answer was lost, and landed, is a replacement', async () 
     await h.component.replace();
     assert.equal(h.component.error, '', `status ${status}`);
     assert.deepStrictEqual(acts(h), [['remember', NEW_KEY_GROUPED], ['lock']]);
-    assert.deepStrictEqual(told(h), ['unknown', 'landed']);
+    assert.deepStrictEqual(told(h), ['sending', 'landed']);
   }
 });
 
@@ -417,7 +417,7 @@ test('a failed rotation the server never saw replaces nothing', async () => {
   assert.equal(h.component.step, 'kit');
   assert.equal(h.session.remembered, OLD_KEY);
   assert.deepStrictEqual(acts(h), []);
-  assert.deepStrictEqual(told(h), ['unknown', 'absent']);
+  assert.deepStrictEqual(told(h), ['sending', 'absent']);
 });
 
 test('a rotation nobody answered, with the server out of reach, is not called a failure', async () => {
@@ -434,7 +434,9 @@ test('a rotation nobody answered, with the server out of reach, is not called a 
   assert.equal(h.component.canReplace(), true, 'the key cannot be tried again');
   assert.equal(h.session.remembered, OLD_KEY);
   assert.equal(h.session.locks, 0);
-  assert.deepStrictEqual(h.windowEvents, [['unknown', 'new-kex'], ['unknown', 'new-kex']]);
+  assert.deepStrictEqual(h.windowEvents, [['sending', 'new-kex'], ['unknown', 'new-kex']]);
+  // The step can no longer say that nothing has changed.
+  assert.equal(h.component.outcomeUnknown, true);
 });
 
 test('trying again settles a rotation nobody answered, whichever way it went', async () => {
@@ -465,6 +467,26 @@ test('trying again settles a rotation nobody answered, whichever way it went', a
   }
 });
 
+test('the step says nothing has changed again once the server confirms it', async () => {
+  // Unknown first, then an attempt the server answers for: refused, with an
+  // envelope that is not this dialog's. What was in doubt no longer is.
+  let calls = 0;
+  const h = await shown({
+    rotateEnvelope: async () => {
+      calls += 1;
+      throw calls === 1 ? new TypeError('network error') : gone(429);
+    },
+  });
+  h.session.offline = true;
+  h.component.acknowledged = true;
+  await h.component.replace();
+  assert.equal(h.component.outcomeUnknown, true);
+  h.session.offline = false;
+  await h.component.replace();
+  assert.equal(h.component.outcomeUnknown, false);
+  assert.match(h.component.error, /Too many changes/);
+});
+
 test('an unanswered rotation is reported to the page even after a lock took the dialog', async () => {
   // The lock could only assume the key was never sent. Left at that, the page
   // would tell its owner to throw away a key that may open the account.
@@ -480,7 +502,7 @@ test('an unanswered rotation is reported to the page even after a lock took the 
   h.component.destroy();
   release();
   await pending;
-  assert.deepStrictEqual(told(h), ['unknown', 'unknown']);
+  assert.deepStrictEqual(told(h), ['sending', 'unknown']);
   assert.equal(h.session.remembered, OLD_KEY);
 });
 
@@ -547,7 +569,7 @@ test('a dialog that went away before the rotation left tells the page nothing wa
   release();
   await pending;
   assert.deepStrictEqual(h.posts, []);
-  assert.deepStrictEqual(told(h), ['unknown', 'absent']);
+  assert.deepStrictEqual(told(h), ['sending', 'absent']);
 });
 
 // --- the dialog and the page together, across a lock
@@ -585,6 +607,36 @@ test('a lock while the rotation is still out does not say the key opens nothing'
     await pending;
     assert.equal(mixin.recoveryKeyNotice, lands ? 'replaced' : 'discarded');
     assert.equal(mixin.recoveryKeyUnsettled, null);
+  }
+});
+
+test('an unlock while the rotation is still out does not settle it on a stale read', async () => {
+  // The envelope read by that unlock is the old one, and the request may land
+  // a moment later: comparing now would call void a key about to be in place.
+  for (const lands of [true, false]) {
+    let settle;
+    const { h, mixin, lock } = await wired({
+      remembered: OLD_KEY,
+      rotateEnvelope: () => new Promise((resolve, reject) => {
+        settle = () => (lands ? resolve(null) : reject(gone(409)));
+      }),
+    });
+    let reads = 0;
+    const served = h.ctx.vaultApi.fetchEnvelope;
+    h.ctx.vaultApi.fetchEnvelope = async () => { reads += 1; return served(); };
+    h.component.acknowledged = true;
+    const pending = h.component.replace();
+    await tick();
+    lock();
+    mixin.recoveryKeyUnlocked();
+    await tick();
+    assert.equal(mixin.recoveryKeyNotice, 'unsettled', `before the request settles, lands ${lands}`);
+    assert.equal(reads, 0, 'the envelope was compared while the rotation was still out');
+    settle();
+    await pending;
+    assert.equal(mixin.recoveryKeyNotice, lands ? 'replaced' : 'discarded');
+    assert.equal(mixin.recoveryKeyUnsettled, null);
+    assert.equal(mixin.recoveryKeyInFlight, false);
   }
 });
 

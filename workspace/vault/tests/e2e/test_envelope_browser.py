@@ -524,8 +524,10 @@ class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
             timeout=60000,
         )
         # Nothing is known, so nothing is claimed: the key stays on screen for
-        # another attempt and the session stays open.
+        # another attempt, the step stops saying that nothing has changed, and
+        # the session stays open.
         self.assertEqual(self.page.locator(RECOVERY_KEY).count(), 1)
+        self.assertFalse(self.page.get_by_text("Nothing has changed yet").is_visible())
         self.assertTrue(self.page.evaluate("() => window.vaultSession.isUnlocked()"))
 
     def test_an_unanswered_rotation_that_landed_is_found_by_the_next_unlock(self):
@@ -601,7 +603,16 @@ class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
         self.page.wait_for_selector(KEY_UNSETTLED_NOTICE)
         self.assertEqual(self.page.locator(KEY_DISCARDED_NOTICE).count(), 0)
 
-        # The answer arrives after the lock: the gate then says what it is.
+        # Unlocking does not settle it either: the envelope that unlock read
+        # is the old one, and the request is still on its way.
+        self._unlock_on(self.page)
+        self._wait_unlocked(self.page)
+        self.page.wait_for_selector(KEY_UNSETTLED_NOTICE)
+        self.assertEqual(self.page.locator(KEY_DISCARDED_NOTICE).count(), 0)
+
+        # The answer arrives at last: the key is in place, so the vault locks
+        # and asks for it.
         held[0].continue_()
         self.page.wait_for_selector(KEY_REPLACED_NOTICE, timeout=60000)
+        self.assertFalse(self.page.evaluate("() => window.vaultSession.isUnlocked()"))
         self.assertEqual(self._remembered(), new_secret)

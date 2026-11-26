@@ -114,7 +114,8 @@
           x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
         >
           <div class="flex flex-col gap-3">
-            <inline-alert type="warning">
+            {# Hidden once a rotation went unanswered: this key may then be the one in place. #}
+            <inline-alert type="warning" x-show="!outcomeUnknown">
             {% blocktranslate trimmed %}
               Nothing has changed yet. This key replaces your current one when
               you confirm below; your vault then locks and asks for it. Confirm

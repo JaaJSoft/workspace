@@ -28,11 +28,14 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
     // A new key is on screen, and a kit may have been saved with it, while
     // the account still opens with the old one.
     recoveryKeyShown: false,
-    // The sealed key of a rotation that was sent and that nobody could vouch
-    // for: no answer, and the server out of reach to ask. Ciphertext, so it
-    // may wait across a lock for an unlock to compare it with the envelope
-    // in place.
+    // The sealed key of a rotation that was sent and that nobody can vouch
+    // for yet: still out, or unanswered with the server out of reach to ask.
+    // Ciphertext, so it may wait across a lock for an unlock to compare it
+    // with the envelope in place.
     recoveryKeyUnsettled: null,
+    // Whether that rotation is still out. Comparing envelopes then proves
+    // nothing: the request may land a moment after the read.
+    recoveryKeyInFlight: false,
 
     openRecoveryKeyDialog() {
       this.recoveryKeyNotice = '';
@@ -69,22 +72,23 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
       return '';
     },
 
-    // What the dialog knows of the rotation it sent: 'unknown' from the
+    // What the dialog knows of the rotation it sent: 'sending' from the
     // moment the request leaves, then 'landed' or 'absent' once the server
-    // has said, or 'unknown' still when it cannot be asked. Heard on the
-    // window, because a lock may have taken the dialog while the request was
-    // out and a detached element reaches nothing else.
+    // has said, or 'unknown' when it cannot be asked. Heard on the window,
+    // because a lock may have taken the dialog while the request was out and
+    // a detached element reaches nothing else.
     recoveryKeyOutcome(outcome, sealedKex) {
       if (outcome === 'landed') {
         this.recoveryKeyReplaced();
         return;
       }
-      this.recoveryKeyUnsettled = outcome === 'unknown' ? sealedKex : null;
+      this.recoveryKeyInFlight = outcome === 'sending';
+      this.recoveryKeyUnsettled = outcome === 'absent' ? null : sealedKex;
       // An open dialog says it itself. The notice is for a page the dialog
       // has left, where the lock that took it could only assume the key was
       // never sent.
       if (!this.recoveryKeyDialogOpen) {
-        this.recoveryKeyNotice = outcome === 'unknown' ? 'unsettled' : 'discarded';
+        this.recoveryKeyNotice = outcome === 'absent' ? 'discarded' : 'unsettled';
       }
     },
 
@@ -93,6 +97,7 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
     recoveryKeyReplaced() {
       this.recoveryKeyShown = false;
       this.recoveryKeyUnsettled = null;
+      this.recoveryKeyInFlight = false;
       this.recoveryKeyDialogOpen = false;
       this.recoveryKeyNotice = 'replaced';
       this.readRememberedSecret();
@@ -104,6 +109,12 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
       this.recoveryKeyNotice = '';
       const sealedKex = this.recoveryKeyUnsettled;
       if (!sealedKex) return;
+      // Still out: its own answer will say, and reading the envelope now
+      // could call void a key the request is about to put in place.
+      if (this.recoveryKeyInFlight) {
+        this.recoveryKeyNotice = 'unsettled';
+        return;
+      }
       const self = this;
       window.vaultApi.fetchEnvelope().then(function (envelope) {
         // Settled in the meantime, by a dialog opened again.
@@ -146,6 +157,9 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
     pending: null,
     acknowledged: false,
     remember: false,
+    // A rotation was sent and nobody could say what became of it: the step
+    // can no longer tell its reader that nothing has changed.
+    outcomeUnknown: false,
     busy: false,
     error: '',
     // Bumped by destroy(): a step still awaiting when the dialog went away
@@ -301,6 +315,7 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
       this.pending = null;
       this.nextSecretText = '';
       this.acknowledged = false;
+      this.outcomeUnknown = false;
       this.readDevice();
       this.step = 'credentials';
     },
@@ -317,7 +332,7 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
       try {
         // In flight from here. Until the server's word is in, a lock that
         // takes the dialog must not be read as proof that nothing was sent.
-        this.tellPage('unknown', pending);
+        this.tellPage('sending', pending);
         try {
           if (!(await window.vaultEnvelopeRotation.commit(pending, gone))) {
             // The dialog went away before the rotation left.
@@ -331,6 +346,7 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
           if (outcome !== 'landed') {
             this.tellPage(outcome, pending);
             if (gone()) return;
+            this.outcomeUnknown = outcome === 'unknown';
             if (outcome === 'unknown') {
               this.error = gettext('This page could not check whether your recovery key was replaced. Keep this key and try again.');
             } else if (err && err.status === 409) {

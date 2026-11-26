@@ -46,7 +46,7 @@
   x-data="vaultBrowser()"
   @vault-password-changed="passwordChangeSucceeded()"
   @vault-recovery-key-shown="recoveryKeyWasShown()"
-  @vault-recovery-key-replaced.window="recoveryKeyReplaced()"
+  @vault-recovery-key-outcome.window="recoveryKeyOutcome($event.detail.outcome, $event.detail.sealed)"
 {% endblock %}
 
 {% comment %}
@@ -115,9 +115,24 @@
               x-if, not x-show: the dismiss button takes the element out of
               the DOM, and only x-if builds it again for the next notice.
           {% endcomment %}
-          <template x-if="recoveryKeyNotice === 'discarded'">
+          <template
+            x-if="recoveryKeyNotice === 'discarded' || recoveryKeyNotice === 'unsettled'"
+          >
             <inline-alert type="warning" icon="key-round" dismissible class="mx-5 mt-4">
-            <span x-text="recoveryKeyDiscardedText()" data-testid="recovery-discarded"></span>
+            <span
+              x-text="recoveryKeyNoticeText()"
+              data-testid="recovery-notice"
+              :data-notice="recoveryKeyNotice"
+            ></span>
+            </inline-alert>
+          </template>
+          <template x-if="recoveryKeyNotice === 'landed'">
+            <inline-alert type="success" dismissible class="mx-5 mt-4">
+            <span
+              x-text="recoveryKeyNoticeText()"
+              data-testid="recovery-notice"
+              :data-notice="recoveryKeyNotice"
+            ></span>
             </inline-alert>
           </template>
 

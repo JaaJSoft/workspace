@@ -411,13 +411,33 @@ msgstr "Cette préférence n’a pas pu être enregistrée. Réessayez."
 
 #: ui/static/vault/ui/js/vault_recovery_key.js
 msgid ""
-"Your recovery key was not replaced: the one you had still works. The new key "
-"you were shown opens nothing - discard it, and any emergency kit saved with "
-"it."
+"Your recovery key was not replaced: nothing changed. The new key you were "
+"shown opens nothing - discard it, and any emergency kit saved with it."
 msgstr ""
-"Votre clé de récupération n’a pas été remplacée : celle que vous aviez "
-"fonctionne toujours. La nouvelle clé qui vous a été montrée n’ouvre rien - "
-"jetez-la, ainsi que tout kit de secours enregistré avec elle."
+"Votre clé de récupération n’a pas été remplacée : rien n’a changé. La "
+"nouvelle clé qui vous a été montrée n’ouvre rien - jetez-la, ainsi que tout "
+"kit de secours enregistré avec elle."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"This page could not check whether your recovery key was replaced. Keep the "
+"new key and its emergency kit with the old ones for now: your next unlock on "
+"this page will say which is in place."
+msgstr ""
+"Cette page n’a pas pu vérifier si votre clé de récupération a été remplacée. "
+"Gardez pour l’instant la nouvelle clé et son kit de secours avec les "
+"anciens : votre prochain déverrouillage sur cette page dira laquelle est en "
+"place."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"Your recovery key was replaced after all - the answer had been lost on the "
+"way. Keep the new key and its emergency kit, and unlock with it from now on: "
+"that is what retires the old one."
+msgstr ""
+"Votre clé de récupération a bien été remplacée - la réponse s’était perdue "
+"en route. Gardez la nouvelle clé et son kit de secours, et déverrouillez "
+"désormais avec elle : c’est ce qui retire l’ancienne."
 
 #: ui/static/vault/ui/js/vault_recovery_key.js
 msgid "Master password is incorrect."
@@ -445,14 +465,22 @@ msgstr ""
 
 #: ui/static/vault/ui/js/vault_recovery_key.js
 msgid ""
-"Your account changed in another tab or on another device, so nothing was "
-"replaced: the recovery key you had still works. The key shown here opens "
-"nothing - discard it, and try again for a new one."
+"This page could not check whether your recovery key was replaced. Keep this "
+"key and try again."
 msgstr ""
-"Votre compte a changé dans un autre onglet ou sur un autre appareil : rien "
-"n’a donc été remplacé, et la clé de récupération que vous aviez fonctionne "
-"toujours. La clé affichée ici n’ouvre rien - jetez-la, puis réessayez pour "
-"en obtenir une nouvelle."
+"Cette page n’a pas pu vérifier si votre clé de récupération a été remplacée. "
+"Gardez cette clé et réessayez."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"Your account changed in another tab or on another device, so this attempt "
+"replaced nothing and left your recovery key as it was. The key shown here "
+"opens nothing - discard it, and try again for a new one."
+msgstr ""
+"Votre compte a changé dans un autre onglet ou sur un autre appareil : cette "
+"tentative n’a rien remplacé et a laissé votre clé de récupération telle "
+"qu’elle était. La clé affichée ici n’ouvre rien - jetez-la, puis réessayez "
+"pour en obtenir une nouvelle."
 
 #: ui/static/vault/ui/js/vault_recovery_key.js
 msgid ""

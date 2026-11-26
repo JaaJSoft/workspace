@@ -313,10 +313,22 @@ changed nothing, and the next screen says that the key it showed opens nothing.
 The other way round, a page lost after the rotation would leave the current
 envelope under a key nobody ever saw.
 
-A 409 means the envelope moved since step 1: nothing was written, the key shown
-is withdrawn and the user starts again. Before reporting a refused or unanswered
-rotation, the client reads the envelope back: when it is the one it sent, the
-request landed and only its answer was lost, and the replacement completes.
+A refused or unanswered rotation is not reported before the client has read
+the envelope back, and that read has three answers:
+
+- **the envelope is the one it sent**: the request landed and only its answer
+  was lost, and the replacement completes;
+- **it is another one**: nothing was written. After a 409 the envelope moved
+  since step 1, so the key shown is withdrawn and the user starts again. The
+  message does not vouch for the old key: the change made elsewhere may be a
+  replacement of it;
+- **it cannot be read**, the usual company of a request that died on the wire:
+  the outcome is unknown and is not called a failure. The dialog keeps the key
+  for another attempt, which settles it either way. If the dialog is closed or
+  locked first, the page keeps the sealed key it sent, says that it could not
+  check, and compares at the next unlock. A rotation found in place then has
+  the device forget an old key it just unlocked with, so that the next unlock
+  is made with the new one.
 
 On success the key this device remembers is replaced or dropped, the session
 locks, and the next unlock opens the current envelope with the new key and sends

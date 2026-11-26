@@ -33,6 +33,7 @@ ENVELOPE_COLUMNS = (
     "previous_wrapped_sig_priv",
 )
 ROTATE_ROUTE = "**/api/v1/vault/account/rotate"
+ENVELOPE_ROUTE = "**/api/v1/vault/account/envelope"
 
 
 def _envelope(user):
@@ -272,7 +273,9 @@ class PasswordChangeBrowserTests(EnvelopeBrowserCase):
 
 RECOVERY_KEY = "[data-recovery-key]"
 KEY_REPLACED_NOTICE = "text=Recovery key replaced"
-KEY_DISCARDED_NOTICE = "[data-testid=recovery-discarded]"
+KEY_DISCARDED_NOTICE = "[data-testid=recovery-notice][data-notice=discarded]"
+KEY_UNSETTLED_NOTICE = "[data-testid=recovery-notice][data-notice=unsettled]"
+KEY_LANDED_NOTICE = "[data-testid=recovery-notice][data-notice=landed]"
 
 
 class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
@@ -467,7 +470,7 @@ class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
         self.page.route(ROTATE_ROUTE, lambda route: route.fulfill(status=409))
         self._confirm()
         self.page.wait_for_selector(
-            "text=so nothing was replaced: the recovery key you had still works",
+            "text=this attempt replaced nothing and left your recovery key as it was",
             timeout=60000,
         )
         # The key that was shown is void, so it leaves the screen.
@@ -496,4 +499,91 @@ class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
         self.assertNotEqual(
             _envelope(self.user)["wrapped_kex_priv"], before["wrapped_kex_priv"]
         )
+        self.assertEqual(self._remembered(), new_secret)
+
+    def _lose_the_connection(self, rotation_reaches_the_server):
+        """From here the rotation gets no answer, and neither does the read
+        that would say what became of it."""
+
+        def rotate(route):
+            if rotation_reaches_the_server:
+                route.fetch()
+            route.abort()
+
+        self.page.route(ROTATE_ROUTE, rotate)
+        self.page.route(ENVELOPE_ROUTE, lambda route: route.abort())
+
+    def _restore_the_connection(self):
+        self.page.unroute(ROTATE_ROUTE)
+        self.page.unroute(ENVELOPE_ROUTE)
+
+    def _confirm_with_no_answer(self):
+        self._confirm()
+        self.page.wait_for_selector(
+            "text=could not check whether your recovery key was replaced",
+            timeout=60000,
+        )
+        # Nothing is known, so nothing is claimed: the key stays on screen for
+        # another attempt and the session stays open.
+        self.assertEqual(self.page.locator(RECOVERY_KEY).count(), 1)
+        self.assertTrue(self.page.evaluate("() => window.vaultSession.isUnlocked()"))
+
+    def test_an_unanswered_rotation_that_landed_is_found_by_the_next_unlock(self):
+        before = _envelope(self.user)
+        new_secret = self._draw_a_new_key()
+        self._lose_the_connection(rotation_reaches_the_server=True)
+        self._confirm_with_no_answer()
+        self.assertNotEqual(
+            _envelope(self.user)["wrapped_kex_priv"], before["wrapped_kex_priv"]
+        )
+
+        # The lock takes the dialog. The gate must not say the key opens
+        # nothing: it is the one in place.
+        self.page.evaluate("() => window.vaultSession.lock()")
+        self.page.wait_for_selector(KEY_UNSETTLED_NOTICE)
+        self.assertEqual(self.page.locator(KEY_DISCARDED_NOTICE).count(), 0)
+
+        # The device still holds the old key, which opens through the previous
+        # envelope. With the server back in reach the page finds its rotation
+        # in place, says so, and stops the device offering the old key.
+        self._restore_the_connection()
+        self._unlock_on(self.page)
+        self._wait_unlocked(self.page)
+        self.page.wait_for_selector(KEY_LANDED_NOTICE, timeout=30000)
+        self.assertIsNone(self._remembered())
+
+        # The new key, typed from the kit, opens and retires the old one.
+        self.page.evaluate("() => window.vaultSession.lock()")
+        self._unlock_with(self.page, new_secret)
+        self._wait_unlocked(self.page)
+        self.page.evaluate("() => window.vaultSession.envelopeWrites()")
+        self.assertIsNone(_envelope(self.user)["previous_wrapped_kex_priv"])
+
+    def test_an_unanswered_rotation_that_never_left_is_found_by_the_next_unlock(self):
+        before = _envelope(self.user)
+        self._draw_a_new_key()
+        self._lose_the_connection(rotation_reaches_the_server=False)
+        self._confirm_with_no_answer()
+        self.assertEqual(_envelope(self.user), before)
+
+        self.page.evaluate("() => window.vaultSession.lock()")
+        self.page.wait_for_selector(KEY_UNSETTLED_NOTICE)
+
+        self._restore_the_connection()
+        self._unlock_on(self.page)
+        self._wait_unlocked(self.page)
+        self.page.wait_for_selector(KEY_DISCARDED_NOTICE, timeout=30000)
+        self.assertEqual(self._remembered(), self.secret)
+        self.assertEqual(_envelope(self.user), before)
+
+    def test_trying_again_completes_an_unanswered_rotation_that_landed(self):
+        new_secret = self._draw_a_new_key()
+        self._lose_the_connection(rotation_reaches_the_server=True)
+        self._confirm_with_no_answer()
+
+        # The second attempt meets a conflict - the envelope it names is no
+        # longer the current one - and reads back its own rotation.
+        self._restore_the_connection()
+        self.page.click("[data-testid=recovery-replace]")
+        self.page.wait_for_selector(KEY_REPLACED_NOTICE, timeout=60000)
         self.assertEqual(self._remembered(), new_secret)

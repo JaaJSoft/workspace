@@ -20,13 +20,19 @@
 window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
   return {
     recoveryKeyDialogOpen: false,
-    // '' | 'replaced' | 'discarded'. Both survive a lock on purpose: the lock
-    // that follows a replacement puts the first on screen, and a lock that
-    // took the dialog down is the case the second exists for.
+    // '' | 'replaced' | 'discarded' | 'unsettled' | 'landed'. They survive a
+    // lock on purpose: the lock that follows a replacement puts the first on
+    // screen, and a lock that took the dialog down is what the next two are
+    // for.
     recoveryKeyNotice: '',
     // A new key is on screen, and a kit may have been saved with it, while
     // the account still opens with the old one.
     recoveryKeyShown: false,
+    // The sealed key of a rotation that was sent and that nobody could vouch
+    // for: no answer, and the server out of reach to ask. Ciphertext, so it
+    // may wait across a lock for an unlock to compare it with the envelope
+    // in place.
+    recoveryKeyUnsettled: null,
 
     openRecoveryKeyDialog() {
       this.recoveryKeyNotice = '';
@@ -35,9 +41,11 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
 
     // Cancel, Escape and a lock all end here. A key that was shown and never
     // sent opens nothing, and a kit saved with it reads exactly like a valid
-    // one - so the page says it, where the dialog no longer can.
+    // one - so the page says it, where the dialog no longer can. A key that
+    // was sent with no answer is another matter: it may be the one in place.
     closeRecoveryKeyDialog() {
-      if (this.recoveryKeyShown) this.recoveryKeyNotice = 'discarded';
+      if (this.recoveryKeyUnsettled) this.recoveryKeyNotice = 'unsettled';
+      else if (this.recoveryKeyShown) this.recoveryKeyNotice = 'discarded';
       this.recoveryKeyShown = false;
       this.recoveryKeyDialogOpen = false;
     },
@@ -46,19 +54,76 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
       this.recoveryKeyShown = true;
     },
 
-    // A method, not a template string: the unlock gate and the open vault
-    // both show it, and one of the two copies would drift.
-    recoveryKeyDiscardedText() {
-      return gettext('Your recovery key was not replaced: the one you had still works. The new key you were shown opens nothing - discard it, and any emergency kit saved with it.');
+    // A method, not template strings: the unlock gate and the open vault
+    // both show these, and one of the two copies would drift.
+    recoveryKeyNoticeText() {
+      if (this.recoveryKeyNotice === 'discarded') {
+        return gettext('Your recovery key was not replaced: nothing changed. The new key you were shown opens nothing - discard it, and any emergency kit saved with it.');
+      }
+      if (this.recoveryKeyNotice === 'unsettled') {
+        return gettext('This page could not check whether your recovery key was replaced. Keep the new key and its emergency kit with the old ones for now: your next unlock on this page will say which is in place.');
+      }
+      if (this.recoveryKeyNotice === 'landed') {
+        return gettext('Your recovery key was replaced after all - the answer had been lost on the way. Keep the new key and its emergency kit, and unlock with it from now on: that is what retires the old one.');
+      }
+      return '';
+    },
+
+    // What the dialog learned of the rotation it sent: 'landed', 'absent' or
+    // 'unknown'. Heard on the window, because a lock may have taken the
+    // dialog while the request was out and a detached element reaches
+    // nothing else.
+    recoveryKeyOutcome(outcome, sealedKex) {
+      if (outcome === 'landed') {
+        this.recoveryKeyReplaced();
+        return;
+      }
+      this.recoveryKeyUnsettled = outcome === 'unknown' ? sealedKex : null;
+      // An open dialog says it itself. The notice is for a page the dialog
+      // has left, where the lock that took it could only assume the key was
+      // never sent.
+      if (!this.recoveryKeyDialogOpen) {
+        this.recoveryKeyNotice = outcome === 'unknown' ? 'unsettled' : 'discarded';
+      }
     },
 
     // The gate that follows must not offer the key this page loaded with:
     // the device remembers the new one now, or none.
     recoveryKeyReplaced() {
       this.recoveryKeyShown = false;
+      this.recoveryKeyUnsettled = null;
       this.recoveryKeyDialogOpen = false;
       this.recoveryKeyNotice = 'replaced';
       this.readRememberedSecret();
+    },
+
+    // Once a session is open: the notices have had their say, and the server
+    // is in reach again for the one question left open.
+    recoveryKeyUnlocked() {
+      this.recoveryKeyNotice = '';
+      const sealedKex = this.recoveryKeyUnsettled;
+      if (!sealedKex) return;
+      const self = this;
+      window.vaultApi.fetchEnvelope().then(function (envelope) {
+        // Settled in the meantime, by a dialog opened again.
+        if (self.recoveryKeyUnsettled !== sealedKex) return;
+        self.recoveryKeyUnsettled = null;
+        if (envelope.wrapped_kex_priv !== sealedKex) {
+          self.recoveryKeyNotice = 'discarded';
+          return;
+        }
+        // The rotation had landed. A device that just unlocked with the old
+        // key must not go on doing so: the new one would never be proved and
+        // the old one never retired. The dialog that knew the new key is
+        // gone, so the device is left remembering none.
+        if (window.vaultSession.openedWithPrevious()) {
+          window.vaultSession.forgetDevice();
+          self.readRememberedSecret();
+        }
+        self.recoveryKeyNotice = 'landed';
+      }, function () {
+        self.recoveryKeyNotice = 'unsettled';
+      });
     },
   };
 };
@@ -207,17 +272,26 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
       return !this.busy && this.acknowledged && this.pending !== null;
     },
 
-    // Whether the envelope on the server is the one this dialog sealed. A
-    // refused or unanswered rotation does not say: the request may have
-    // landed and its answer been lost, and calling that key void would have
-    // its owner throw away the one that now opens the account.
-    async rotationLanded(pending) {
+    // What became of a rotation that was refused or never answered: 'landed'
+    // when the envelope in place is the one this dialog sealed, 'absent' when
+    // it is another, 'unknown' when the server cannot be asked - the usual
+    // company of a request that died on the wire. Calling the last one a
+    // failure would have the key's owner throw away what may open the account.
+    async rotationOutcome(pending) {
       try {
         const envelope = await window.vaultApi.fetchEnvelope();
-        return envelope.wrapped_kex_priv === pending.sealed.wrapped_kex_priv;
+        return envelope.wrapped_kex_priv === pending.sealed.wrapped_kex_priv ? 'landed' : 'absent';
       } catch (err) {
-        return false;
+        return 'unknown';
       }
+    },
+
+    // On the window, which a detached element still reaches: a lock during
+    // the request takes the dialog, not the rotation.
+    tellPage(outcome, pending) {
+      window.dispatchEvent(new CustomEvent('vault-recovery-key-outcome', {
+        detail: { outcome: outcome, sealed: pending.sealed.wrapped_kex_priv },
+      }));
     },
 
     // The key on screen opens nothing and never will: back to the first
@@ -243,11 +317,17 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
         try {
           if (!(await window.vaultEnvelopeRotation.commit(pending, gone))) return;
         } catch (err) {
-          if (!(await this.rotationLanded(pending))) {
+          // A refusal does not say what the server holds: an earlier attempt
+          // may have landed with its answer lost. So the server is asked.
+          const outcome = await this.rotationOutcome(pending);
+          if (outcome !== 'landed') {
+            this.tellPage(outcome, pending);
             if (gone()) return;
-            if (err && err.status === 409) {
+            if (outcome === 'unknown') {
+              this.error = gettext('This page could not check whether your recovery key was replaced. Keep this key and try again.');
+            } else if (err && err.status === 409) {
               this.withdraw();
-              this.error = gettext('Your account changed in another tab or on another device, so nothing was replaced: the recovery key you had still works. The key shown here opens nothing - discard it, and try again for a new one.');
+              this.error = gettext('Your account changed in another tab or on another device, so this attempt replaced nothing and left your recovery key as it was. The key shown here opens nothing - discard it, and try again for a new one.');
             } else if (err && err.status === 429) {
               // Its own wording: the limit is counted by the hour, and "try
               // again" would send the user straight back into it.
@@ -259,12 +339,10 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
           }
         }
         // Past this point the account opens with the new key, whether or not
-        // this dialog is still on screen - a lock during the request takes
-        // the dialog, not the rotation. So nothing below asks gone(), and the
-        // page is told on the window, which a detached element still reaches.
+        // this dialog is still on screen. So nothing below asks gone().
         if (remember) window.vaultSession.rememberDevice(remembered);
         else window.vaultSession.forgetDevice();
-        window.dispatchEvent(new CustomEvent('vault-recovery-key-replaced'));
+        this.tellPage('landed', pending);
         window.vaultSession.lock();
       } catch (err) {
         if (!gone()) this.error = gettext('Your recovery key could not be replaced. Try again.');

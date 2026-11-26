@@ -111,7 +111,9 @@ It asks for the master password (and the current recovery key, unless this
 device remembers it), then shows the new key once, with a new emergency kit to
 download. Nothing changes until the key is confirmed as saved: closing the
 dialog before that leaves the old key in place, and a kit saved in the meantime
-opens nothing.
+opens nothing. If the connection drops at the moment of the replacement, the
+page says it could not check what happened, and the next unlock on that page
+says which key is in place.
 
 The vault then locks and asks for the new key. Until the new key has been used
 once, the old one still opens the account, with a banner saying so. After that,

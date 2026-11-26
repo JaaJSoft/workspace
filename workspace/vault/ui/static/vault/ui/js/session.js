@@ -195,10 +195,12 @@ window.vaultSession = (function () {
       }
     },
     // For a key that changed outside an unlock: the one a replacement just
-    // put in place. A storage that refuses leaves the device asking for the
-    // key, which its owner has just saved.
+    // put in place. The old value goes first, so a storage that refuses the
+    // write (a full quota) leaves the device asking for the key, which its
+    // owner has just saved, rather than offering the one that was replaced.
     rememberDevice: function (secretText) {
       try {
+        localStorage.removeItem(VAULT_SECRET_STORAGE_KEY);
         localStorage.setItem(VAULT_SECRET_STORAGE_KEY, secretText);
       } catch (err) {
         // Best-effort only, as in unlock().

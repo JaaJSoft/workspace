@@ -275,7 +275,7 @@ window.vaultBrowser = (function () {
 
       afterUnlock: async function () {
         this.passwordChangedNotice = false;
-        this.recoveryKeyNotice = '';
+        this.recoveryKeyUnlocked();
         this.unlockedWithPrevious = window.vaultSession.openedWithPrevious();
         await this.load();
         this.startMigration();

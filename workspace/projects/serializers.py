@@ -2,6 +2,7 @@ import re
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db.models import Q
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
@@ -544,6 +545,24 @@ class _Assignable(serializers.PrimaryKeyRelatedField):
         return _assignable(super().get_queryset(), self.context)
 
 
+class _Unassignable(serializers.PrimaryKeyRelatedField):
+    """A user who can hold a task of the project at hand: someone it reaches,
+    or someone who left it and is still assigned. Anyone else answers like an
+    unknown id."""
+
+    def get_queryset(self):
+        project = self.context["project"]
+        return (
+            super()
+            .get_queryset()
+            .filter(
+                Q(pk__in=project_users_qs(project).values("pk"))
+                | Q(assigned_tasks__project=project)
+            )
+            .distinct()
+        )
+
+
 class TaskReorderSerializer(UuidListSerializer):
     """The tasks of one column, in the order they should take."""
 
@@ -569,9 +588,7 @@ class TaskBatchEditSerializer(serializers.Serializer):
     """
 
     assign = _Assignable(queryset=User.objects.all(), many=True, required=False)
-    unassign = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), many=True, required=False
-    )
+    unassign = _Unassignable(queryset=User.objects.all(), many=True, required=False)
     add_labels = _InProject(queryset=Label.objects.all(), many=True, required=False)
     remove_labels = _InProject(queryset=Label.objects.all(), many=True, required=False)
     priority = serializers.ChoiceField(choices=Task.Priority.choices, required=False)

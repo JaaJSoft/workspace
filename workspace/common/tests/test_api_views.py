@@ -127,6 +127,8 @@ class BatchViewTests(ApiViewTestCase):
             ({"action": "explode", "uuids": [a]}, "action"),
             ({"uuids": [a]}, "action"),
             (["not", "an", "object"], "action"),
+            ({"action": [], "uuids": [a]}, "action"),
+            ({"action": {"move": 1}, "uuids": [a]}, "action"),
             ({"action": "delete"}, "uuids"),
             ({"action": "delete", "uuids": []}, "uuids"),
             ({"action": "delete", "uuids": ["nope"]}, "uuids"),

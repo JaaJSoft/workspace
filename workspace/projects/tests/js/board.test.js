@@ -1442,7 +1442,7 @@ test('handleKeydown ignores "?" while typing or with a dialog open', () => {
 
 test('searchLinkTasks: clearing the input invalidates an in-flight search', async () => {
   const panel = ctx.taskPanel();
-  panel.data = { uuid: 'anchor-uuid', link_search_url: '/api/v1/projects/tasks/search' };
+  panel.data = { uuid: 'anchor-uuid', link_search_url: '/api/v1/projects/tasks' };
   panel.links = [];
 
   let resolveFetch;
@@ -1465,6 +1465,32 @@ test('searchLinkTasks: clearing the input invalidates an in-flight search', asyn
   // The stale response must not reopen the dropdown nor restore results.
   assert.equal(panel.linkDropdown, false);
   assert.equal(panel.linkResults.length, 0);
+});
+
+test('searchLinkTasks: asks for enough tasks to offer ten after dropping its own', async () => {
+  const panel = ctx.taskPanel();
+  panel.data = { uuid: 'anchor', link_search_url: '/api/v1/projects/tasks' };
+  panel.links = [{ task: { uuid: 'linked-1' } }, { task: { uuid: 'linked-2' } }];
+  const urls = [];
+  // The anchor and the linked tasks rank first: a page of ten would hold
+  // only seven tasks that can be offered.
+  const ranked = ['anchor', 'linked-1', 'linked-2'].concat(
+    Array.from({ length: 12 }, (_, i) => 'free-' + i)
+  );
+  ctx.fetch = async (url) => {
+    urls.push(url);
+    const limit = Number(new URL(url, 'https://ws.example').searchParams.get('limit'));
+    return { ok: true, json: async () => ranked.slice(0, limit).map((uuid) => ({ uuid })) };
+  };
+
+  panel.linkQuery = 'free';
+  await panel.searchLinkTasks();
+
+  assert.equal(urls[0], '/api/v1/projects/tasks?limit=13&q=free');
+  assert.deepStrictEqual(
+    Array.from(panel.linkResults, (r) => r.uuid),
+    Array.from({ length: 10 }, (_, i) => 'free-' + i)
+  );
 });
 
 test('taskFiltersFromUrl and taskFilterUrl round-trip the epic filter', () => {
@@ -1815,13 +1841,28 @@ test('bulkEdit says how many tasks refused a due date, and that nothing changed'
   ctx.fetch = async () => ({
     ok: false,
     status: 400,
-    json: async () => ({ uuids: ['u2 starts after this due date.'] }),
+    json: async () => ({ data: { due_date: ['u2 starts after this due date.'] } }),
   });
   const board = bulkBoard([], ['set_due']);
   await board.bulkDueDate('2030-01-01');
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /1 task starts after that due date: nothing was changed/);
   assert.equal(errors.length, 0);
+});
+
+test('bulkEdit takes a task deleted meanwhile for a failure, even while dating', async () => {
+  const warnings = [];
+  const errors = [];
+  ctx.AppAlert = { warning: (m) => warnings.push(m), error: (m) => errors.push(m) };
+  ctx.fetch = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({ uuids: ['Invalid pk "u2" - object does not exist.'] }),
+  });
+  const board = bulkBoard([], ['set_due']);
+  await board.bulkDueDate('2030-01-01');
+  assert.equal(warnings.length, 0);
+  assert.equal(errors.length, 1);
 });
 
 test('bulkEdit reports any other refusal as a failure', async () => {

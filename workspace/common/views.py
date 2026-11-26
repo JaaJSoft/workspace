@@ -20,22 +20,31 @@ from rest_framework.response import Response
 from .serializers import ActionSerializer, UuidListSerializer
 
 
+def unknown_rows(uuids):
+    """The refusal of a request naming rows that are not there, one message
+    per row. A row the caller cannot see is refused in the same words."""
+    unknown = serializers.PrimaryKeyRelatedField.default_error_messages[
+        "does_not_exist"
+    ]
+    return ValidationError({"uuids": [unknown.format(pk_value=uuid) for uuid in uuids]})
+
+
 def rows_in_order(queryset, uuids):
     """The rows of *queryset* named by *uuids*, in the order asked.
 
-    One uuid outside *queryset* refuses the whole request, naming it: a row
-    the caller cannot see answers like one that does not exist, and a lot is
-    never applied to the part of it that was found.
+    One uuid outside *queryset* refuses the whole request, naming it: a lot
+    is never applied to the part of it that was found.
+
+    The rows are read, not locked - a module's services take their locks in
+    their own order, and locking here first would invert it. A view whose
+    service skips a row deleted since asks again once the service holds its
+    locks, and raises ``unknown_rows`` for what is gone: the transaction
+    around it undoes the rest.
     """
     found = {row.pk: row for row in queryset.filter(pk__in=uuids)}
     missing = [uuid for uuid in uuids if uuid not in found]
     if missing:
-        unknown = serializers.PrimaryKeyRelatedField.default_error_messages[
-            "does_not_exist"
-        ]
-        raise ValidationError(
-            {"uuids": [unknown.format(pk_value=uuid) for uuid in missing]}
-        )
+        raise unknown_rows(missing)
     return [found[uuid] for uuid in uuids]
 
 
@@ -85,7 +94,8 @@ class BatchView(GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         action = request.data.get("action") if isinstance(request.data, dict) else None
-        if action not in self.batch_requests:
+        # A list or an object for an action cannot even be looked up.
+        if not isinstance(action, str) or action not in self.batch_requests:
             invalid = serializers.ChoiceField.default_error_messages["invalid_choice"]
             raise ValidationError({"action": [invalid.format(input=action)]})
         body = self.batch_requests[action](

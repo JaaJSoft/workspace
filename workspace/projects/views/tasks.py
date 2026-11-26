@@ -11,7 +11,7 @@ from rest_framework.generics import (
 from rest_framework.response import Response
 
 from workspace.common.exceptions import Conflict
-from workspace.common.views import BatchView, LinkView, ReorderView
+from workspace.common.views import BatchView, LinkView, ReorderView, unknown_rows
 
 from ..filters import AllTasksFilter, TaskListFilter
 from ..models import Task, TaskEvent
@@ -49,6 +49,30 @@ def _with_relations(tasks):
     return tasks.select_related(
         "project", "status", "epic", "sprint", "created_by"
     ).prefetch_related("assignees", "labels")
+
+
+class TaskLotMixin:
+    """For the views acting on several tasks of a project at once."""
+
+    def get_queryset(self):
+        return self.project.tasks.all()
+
+    def refuse_if_gone(self, tasks):
+        """Refuse the request when one of *tasks* was deleted since it was read.
+
+        Called once the service has run, inside the request's transaction:
+        the service holds its locks by then, so what is left cannot change
+        anymore, and a service skips a task it does not find instead of
+        failing. Raising undoes what it did to the others.
+        """
+        left = set(
+            self.project.tasks.filter(pk__in=[task.pk for task in tasks]).values_list(
+                "pk", flat=True
+            )
+        )
+        gone = [task.pk for task in tasks if task.pk not in left]
+        if gone:
+            raise unknown_rows(gone)
 
 
 class TaskContextMixin(ProjectContextMixin):
@@ -229,13 +253,14 @@ class TaskDetailView(TaskContextMixin, RetrieveUpdateDestroyAPIView):
 
 
 @extend_schema(tags=["Projects - Tasks"], summary="Apply one action to several tasks")
-class TaskBatchView(ProjectContextMixin, BatchView):
+class TaskBatchView(TaskLotMixin, ProjectContextMixin, BatchView):
     """What the selection toolbars of a backlog and a task list do.
 
     ``move`` appends the tasks to a column, ``set_sprint`` plans them into a
     sprint or returns them to the pool, ``edit`` assigns, labels, prioritises
-    or dates them, ``delete`` deletes them. Each is set-oriented, so replaying
-    a request changes nothing more.
+    or dates them, ``delete`` deletes them. Each is set-oriented and answers
+    the tasks it changed, so replaying a request changes nothing more and
+    answers an empty list.
     """
 
     batch_name = "Task"
@@ -248,27 +273,26 @@ class TaskBatchView(ProjectContextMixin, BatchView):
     queryset = Task.objects.none()
     serializer_class = TaskSerializer
 
-    def get_queryset(self):
-        return self.project.tasks.all()
-
-    def _as_stored(self, tasks):
-        stored = _with_relations(self.project.tasks).in_bulk([t.pk for t in tasks])
+    def _changed(self, tasks, changed):
+        """The tasks the service changed, as stored, in the order asked."""
+        self.refuse_if_gone(tasks)
+        stored = _with_relations(self.project.tasks).in_bulk([t.pk for t in changed])
         return [stored[task.pk] for task in tasks if task.pk in stored]
 
     def perform_move(self, tasks, data):
         self._require_action("move")
-        move_tasks(
+        moved = move_tasks(
             self.project,
             data["status"],
             [task.uuid for task in tasks],
             actor=self.request.user,
         )
-        return self._as_stored(tasks)
+        return self._changed(tasks, moved)
 
     def perform_set_sprint(self, tasks, data):
         self._require_action("move")
         try:
-            assign_tasks_to_sprint(
+            planned = assign_tasks_to_sprint(
                 self.project,
                 data["sprint"],
                 [task.uuid for task in tasks],
@@ -276,7 +300,7 @@ class TaskBatchView(ProjectContextMixin, BatchView):
             )
         except ProjectRuleError as exc:
             raise Conflict(exc.detail) from exc
-        return self._as_stored(tasks)
+        return self._changed(tasks, planned)
 
     def perform_edit(self, tasks, data):
         self._require_bulk_edit(data)
@@ -289,15 +313,8 @@ class TaskBatchView(ProjectContextMixin, BatchView):
             and task.start_date > due_date
         ]
         if starting_later:
-            raise ValidationError(
-                {
-                    "uuids": [
-                        _("%(task)s starts after this due date.") % {"task": task.uuid}
-                        for task in starting_later
-                    ]
-                }
-            )
-        bulk_update_tasks(
+            raise self._due_date_refused(starting_later)
+        edited, skipped = bulk_update_tasks(
             self.project,
             [task.uuid for task in tasks],
             actor=self.request.user,
@@ -308,13 +325,40 @@ class TaskBatchView(ProjectContextMixin, BatchView):
             priority=data.get("priority"),
             due_date=data["due_date"] if "due_date" in data else UNSET,
         )
-        return self._as_stored(tasks)
+        if skipped:
+            # A start date moved past the due date after the check above: the
+            # service left that task alone under its lock.
+            later = self.project.tasks.filter(
+                pk__in=[task.pk for task in tasks], start_date__gt=due_date
+            )
+            raise self._due_date_refused(later)
+        return self._changed(tasks, edited)
+
+    @staticmethod
+    def _due_date_refused(tasks):
+        """Under the field that is refused, not under ``uuids``: the tasks
+        exist, and a client tells the two refusals apart by where they sit."""
+        return ValidationError(
+            {
+                "data": {
+                    "due_date": [
+                        _("%(task)s starts after this due date.") % {"task": task.uuid}
+                        for task in tasks
+                    ]
+                }
+            }
+        )
 
     def perform_delete(self, tasks, data):
         self._require_action("delete")
-        delete_tasks(
+        deleted = delete_tasks(
             self.project, [task.uuid for task in tasks], actor=self.request.user
         )
+        if deleted != len(tasks):
+            # Deleted by someone else since the lot was read. Which ones can
+            # no longer be told apart from the ones this request deleted, and
+            # raising brings every one of those back.
+            raise unknown_rows([task.pk for task in tasks])
 
 
 @extend_schema(
@@ -327,12 +371,9 @@ class TaskBatchView(ProjectContextMixin, BatchView):
         "the ones it lists."
     ),
 )
-class TaskReorderView(ProjectContextMixin, ReorderView):
+class TaskReorderView(TaskLotMixin, ProjectContextMixin, ReorderView):
     queryset = Task.objects.none()
     serializer_class = TaskReorderSerializer
-
-    def get_queryset(self):
-        return self.project.tasks.all()
 
     def perform_reorder(self, tasks, data):
         self._require_action("move")
@@ -342,6 +383,7 @@ class TaskReorderView(ProjectContextMixin, ReorderView):
             [task.uuid for task in tasks],
             actor=self.request.user,
         )
+        self.refuse_if_gone(tasks)
 
 
 @extend_schema(tags=["Projects - Tasks"])

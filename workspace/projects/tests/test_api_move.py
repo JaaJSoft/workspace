@@ -57,6 +57,7 @@ class BatchMoveApiTests(ProjectTestMixin, APITestCase):
         self._move([self.t1])
         again = self._move([self.t1])
         self.assertEqual(again.status_code, status.HTTP_200_OK)
+        self.assertEqual(again.data, [])
         self.assertEqual(self._titles(self.todo), ["t1"])
 
     def test_one_unknown_task_refuses_the_whole_lot(self):

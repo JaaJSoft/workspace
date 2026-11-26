@@ -88,6 +88,10 @@ function landAnimation(card) {
 // Uuids asked per POST /api/v1/projects/available-actions, under its cap.
 const ACTIONS_BATCH_SIZE = 200;
 
+// Tasks the link picker offers, and the most a page of the API holds.
+const LINK_SEARCH_RESULTS = 10;
+const LINK_SEARCH_MAX = 1000;
+
 // Action ids the whole selection offers with bulk support: the intersection
 // over every selected task of the ids answered with bulk=true. A task the
 // answer does not cover (unreachable, or lost to a failed slice) empties it.
@@ -1128,9 +1132,11 @@ function projectBoard(config) {
         });
         if (!resp.ok) {
           // A lot is all or nothing: one task starting after the new due
-          // date refuses it whole, and the answer names each of them.
+          // date refuses it whole, and the answer names each of them under
+          // the field it refuses.
           const refused = await resp.json().catch(() => ({}));
-          const starting = 'due_date' in patch && Array.isArray(refused.uuids) ? refused.uuids.length : 0;
+          const late = refused.data && refused.data.due_date;
+          const starting = Array.isArray(late) ? late.length : 0;
           if (!starting) throw new Error('Bulk edit failed');
           if (window.AppAlert) {
             AppAlert.warning(
@@ -2243,16 +2249,20 @@ function taskPanel() {
         return;
       }
       try {
+        // A task links to another one: neither itself nor one it already
+        // holds. Those are dropped here, so the page asks for as many more.
+        const taken = new Set(this.links.map((l) => l.task.uuid));
+        taken.add(this.data.uuid);
+        const limit = Math.min(LINK_SEARCH_MAX, LINK_SEARCH_RESULTS + taken.size);
         const resp = await fetch(
-          this.data.link_search_url + '?limit=10&q=' + encodeURIComponent(query)
+          this.data.link_search_url + '?limit=' + limit + '&q=' + encodeURIComponent(query)
         );
         if (!resp.ok) throw new Error('Search failed');
         const results = await resp.json();
         if (generation !== this._linkSearchGeneration) return;
-        // A task links to another one: neither itself nor one it already holds.
-        const taken = new Set(this.links.map((l) => l.task.uuid));
-        taken.add(this.data.uuid);
-        this.linkResults = results.filter((r) => !taken.has(r.uuid));
+        this.linkResults = results
+          .filter((r) => !taken.has(r.uuid))
+          .slice(0, LINK_SEARCH_RESULTS);
         this.linkDropdown = true;
       } catch (e) {
         if (generation !== this._linkSearchGeneration) return;

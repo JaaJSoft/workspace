@@ -2,6 +2,7 @@
 
 import datetime
 import uuid as uuid_module
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -20,7 +21,7 @@ from workspace.projects.services.bulk import bulk_update_tasks, delete_tasks
 from workspace.projects.services.file_links import link_files
 from workspace.projects.services.members import add_member
 from workspace.projects.services.projects import create_project
-from workspace.projects.services.tasks import create_task
+from workspace.projects.services.tasks import create_task, move_tasks, reorder_tasks
 from workspace.users.services.settings import set_setting
 
 from .base import ProjectTestMixin
@@ -196,8 +197,9 @@ class BulkEditTests(BulkTestsBase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(list(response.data), ["uuids"])
-        (refusal,) = response.data["uuids"]
+        # Under the field that is refused: the tasks exist.
+        self.assertEqual(list(response.data), ["data"])
+        (refusal,) = response.data["data"]["due_date"]
         self.assertIn(str(self.t1.uuid), refusal)
         for task in (self.t1, self.t2):
             task.refresh_from_db()
@@ -319,6 +321,144 @@ class BulkEditTests(BulkTestsBase):
             response.status_code,
             (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
         )
+
+
+class BulkAnswerTests(BulkTestsBase):
+    """A lot answers the tasks it changed, and only those."""
+
+    def test_a_task_already_as_asked_is_left_out_of_the_answer(self):
+        self.t1.priority = "high"
+        self.t1.save(update_fields=["priority"])
+        response = self._post(
+            {"tasks": self._uuids(self.t1, self.t2), "priority": "high"}
+        )
+        self.assertEqual([task["title"] for task in response.data], ["t2"])
+
+    def test_a_replayed_lot_answers_an_empty_list(self):
+        payload = {"tasks": self._uuids(self.t1, self.t2), "priority": "high"}
+        self._post(payload)
+        again = self._post(payload)
+        self.assertEqual(again.status_code, status.HTTP_200_OK)
+        self.assertEqual(again.data, [])
+
+
+class BulkUnassignScopeTests(BulkTestsBase):
+    """Who may be named in ``unassign``: a user the project reaches, or one
+    who left it and still holds a task. Anyone else answers like an id that
+    does not exist."""
+
+    def _unassign(self, user_id):
+        return self._post({"tasks": self._uuids(self.t1), "unassign": [user_id]})
+
+    def test_a_user_outside_the_project_answers_like_an_unknown_one(self):
+        absent = User.objects.order_by("-pk").first().pk + 1000
+        outsider = self._unassign(self.outsider.pk)
+        unknown = self._unassign(absent)
+        self.assertEqual(outsider.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            outsider.content.replace(str(self.outsider.pk).encode(), b"<pk>"),
+            unknown.content.replace(str(absent).encode(), b"<pk>"),
+        )
+
+    def test_a_member_who_left_while_assigned_can_still_be_unassigned(self):
+        self.t1.assignees.add(self.member)
+        self.membership.left_at = timezone.now()
+        self.membership.save(update_fields=["left_at"])
+
+        response = self._post(
+            {"tasks": self._uuids(self.t1), "unassign": [self.member.pk]},
+            user=self.admin,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertFalse(self.t1.assignees.exists())
+
+
+class BulkRaceTests(BulkTestsBase):
+    """A task changed by someone else between the read of a lot and the lock
+    of its service still refuses the lot whole. Each test runs the other
+    writer just before the service, where the service can only skip."""
+
+    def _racing(self, service, other_writer):
+        target = f"workspace.projects.views.tasks.{service.__name__}"
+
+        def run(*args, **kwargs):
+            other_writer()
+            return service(*args, **kwargs)
+
+        return mock.patch(target, side_effect=run)
+
+    def _delete_t2(self):
+        self.project.tasks.filter(pk=self.t2.pk).delete()
+
+    def test_a_task_deleted_meanwhile_refuses_a_move(self):
+        todo = self.project.statuses.get(name="To do")
+        with self._racing(move_tasks, self._delete_t2):
+            response = self.client_post(
+                "move", self._uuids(self.t1, self.t2), {"status": str(todo.uuid)}
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(str(self.t2.uuid), response.data["uuids"][0])
+        self.t1.refresh_from_db()
+        self.assertNotEqual(self.t1.status, todo)
+
+    def test_a_task_deleted_meanwhile_refuses_an_edit(self):
+        with self._racing(bulk_update_tasks, self._delete_t2):
+            response = self.client_post(
+                "edit", self._uuids(self.t1, self.t2), {"priority": "urgent"}
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.t1.refresh_from_db()
+        self.assertEqual(self.t1.priority, "medium")
+
+    def test_a_start_date_moved_meanwhile_refuses_an_edit(self):
+        def start_later():
+            self.project.tasks.filter(pk=self.t2.pk).update(
+                start_date=datetime.date(2030, 6, 1)
+            )
+
+        with self._racing(bulk_update_tasks, start_later):
+            response = self.client_post(
+                "edit", self._uuids(self.t1, self.t2), {"due_date": "2030-01-15"}
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        (refusal,) = response.data["data"]["due_date"]
+        self.assertIn(str(self.t2.uuid), refusal)
+        self.t1.refresh_from_db()
+        self.assertIsNone(self.t1.due_date)
+
+    def test_a_task_deleted_meanwhile_refuses_a_delete(self):
+        with self._racing(delete_tasks, self._delete_t2):
+            response = self.client_post("delete", self._uuids(self.t1, self.t2))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(self.project.tasks.filter(pk=self.t1.pk).exists())
+
+    def test_a_task_deleted_meanwhile_refuses_a_reorder(self):
+        backlog = self.project.statuses.get(name="Backlog")
+        self.client.force_authenticate(self.member)
+        with self._racing(reorder_tasks, self._delete_t2):
+            response = self.client.post(
+                f"/api/v1/projects/{self.project.uuid}/tasks/reorder",
+                {
+                    "status": str(backlog.uuid),
+                    "uuids": self._uuids(self.t3, self.t2, self.t1),
+                },
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        titles = list(
+            self.project.tasks.filter(status=backlog)
+            .order_by("position")
+            .values_list("title", flat=True)
+        )
+        self.assertEqual(titles[0], "t1")
+
+    def client_post(self, action, uuids, data=None):
+        self.client.force_authenticate(self.member)
+        body = {"action": action, "uuids": uuids}
+        if data is not None:
+            body["data"] = data
+        return self.client.post(self.url, body, format="json")
 
 
 class BulkDeleteTests(BulkTestsBase):

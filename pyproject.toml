@@ -46,7 +46,7 @@ dependencies = [
     "cryptography>=50.0.2",
     "nh3>=0.3.7",
     "python-dateutil>=2.9",
-    "icalendar>=7.3.0",
+    "icalendar>=7.3.2",
     # calendar: feeds that publish UTC times plus an X-WR-TIMEZONE (LGPL-3.0+,
     # installed unmodified from PyPI and never vendored)
     "x-wr-timezone>=2.0.1",

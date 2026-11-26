@@ -8,6 +8,7 @@ from workspace.imports.providers.base import (
     KIND_FILES,
     AuthenticationFailed,
     ConnectionFailed,
+    LoginFlowStart,
     Provider,
     RemoteAddressBook,
     RemoteEntry,
@@ -121,6 +122,7 @@ class FakeContactSource:
 class FakeProvider(Provider):
     slug = "fake"
     name = "Fake cloud"
+    login_flow = True
     kinds = frozenset({KIND_FILES, KIND_CONTACTS})
 
     def __init__(self):
@@ -147,6 +149,16 @@ class FakeProvider(Provider):
         self.fail_refs = set()
         self.fail_fetch = set()
         self.vanished = set()
+        self.login_flow_start = LoginFlowStart(
+            login_url="https://cloud.example.org/login/v2/flow/approve-me",
+            poll_endpoint="https://cloud.example.org/login/v2/poll",
+            poll_token="poll-token-never-shown",
+        )
+        # None while the user has not approved; a LoginFlowGrant once they did.
+        self.login_flow_grant = None
+        self.login_flow_error = None
+        self.login_flow_starts = []
+        self.login_flow_polls = []
         self.tree = {
             "/": [
                 RemoteEntry(id="/b.txt", name="b.txt", is_dir=False, size=2),
@@ -184,6 +196,18 @@ class FakeProvider(Provider):
             self.favorites or [], self.tags, fail=self.fail_metadata
         )
         return self.last_metadata
+
+    def start_login_flow(self, base_url):
+        self.login_flow_starts.append(base_url)
+        if self.login_flow_error:
+            raise self.login_flow_error
+        return self.login_flow_start
+
+    def poll_login_flow(self, base_url, poll_endpoint, poll_token):
+        self.login_flow_polls.append((base_url, poll_endpoint, poll_token))
+        if self.login_flow_error:
+            raise self.login_flow_error
+        return self.login_flow_grant
 
     def contact_source(self, connection):
         self.last_contacts = FakeContactSource(

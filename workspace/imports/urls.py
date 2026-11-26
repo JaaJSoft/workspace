@@ -28,6 +28,16 @@ urlpatterns = [
         views.ConnectionBrowseView.as_view(),
         name="imports-connection-browse",
     ),
+    path(
+        "api/v1/imports/login-flows",
+        views.LoginFlowListView.as_view(),
+        name="imports-login-flows",
+    ),
+    path(
+        "api/v1/imports/login-flows/<uuid:uuid>",
+        views.LoginFlowDetailView.as_view(),
+        name="imports-login-flow-detail",
+    ),
     path("api/v1/imports/jobs", views.JobListView.as_view(), name="imports-jobs"),
     path(
         "api/v1/imports/jobs/<uuid:uuid>",

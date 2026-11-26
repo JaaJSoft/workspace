@@ -154,6 +154,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "imports.purge_old_jobs",
         "schedule": crontab(hour=3, minute=45),  # Every day at 3:45 AM
     },
+    "purge-import-login-flows": {
+        "task": "imports.purge_login_flows",
+        "schedule": crontab(hour=3, minute=50),  # Every day at 3:50 AM
+    },
     "recover-stale-import-jobs": {
         "task": "imports.recover_stale_jobs",
         "schedule": 600.0,  # Every 10 minutes

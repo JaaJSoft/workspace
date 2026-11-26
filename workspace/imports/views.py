@@ -1,13 +1,15 @@
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.exceptions import NotFound
+from rest_framework.generics import GenericAPIView, RetrieveDestroyAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .errors import REPORTED_ERRORS
+from .models import ImportLoginFlow
 from .providers.base import KIND_CONTACTS
 from .providers.registry import provider_registry
-from .queries import user_connections_qs, user_jobs_qs
+from .queries import user_connections_qs, user_jobs_qs, user_login_flows_qs
 from .serializers import (
     BrowseQuerySerializer,
     ConnectionCreateSerializer,
@@ -17,10 +19,13 @@ from .serializers import (
     JobItemSerializer,
     JobItemsQuerySerializer,
     JobSerializer,
+    LoginFlowCreateSerializer,
+    LoginFlowSerializer,
     PageQuerySerializer,
 )
 from .services import connections as connections_service
 from .services import jobs as jobs_service
+from .services import login_flows as login_flows_service
 
 
 def _bad_remote(exc):
@@ -57,6 +62,54 @@ class ConnectionListView(APIView):
         return Response(
             ConnectionSerializer(connection).data, status=status.HTTP_201_CREATED
         )
+
+
+@extend_schema(tags=["Imports"])
+class LoginFlowListView(GenericAPIView):
+    serializer_class = LoginFlowCreateSerializer
+
+    @extend_schema(
+        summary="Start signing in to a remote that hands out its own credentials",
+        description=(
+            "Open the returned login_url for the user to approve Workspace, then "
+            "read the flow until it is completed (its connection is saved) or "
+            "failed. The flow expires after 20 minutes."
+        ),
+        request=LoginFlowCreateSerializer,
+        responses={202: LoginFlowSerializer},
+    )
+    def post(self, request):
+        ser = self.get_serializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            flow = login_flows_service.start_login_flow(
+                request.user, **ser.validated_data
+            )
+        except REPORTED_ERRORS as exc:
+            return _bad_remote(exc)
+        return Response(LoginFlowSerializer(flow).data, status=status.HTTP_202_ACCEPTED)
+
+
+@extend_schema(tags=["Imports"])
+@extend_schema_view(delete=extend_schema(summary="Give up on a sign-in flow"))
+class LoginFlowDetailView(RetrieveDestroyAPIView):
+    serializer_class = LoginFlowSerializer
+    queryset = ImportLoginFlow.objects.none()
+    lookup_field = "uuid"
+
+    def get_queryset(self):
+        return user_login_flows_qs(self.request.user).select_related("connection")
+
+    @extend_schema(
+        summary="Read a sign-in flow; while pending, the remote is asked whether "
+        "the user approved it"
+    )
+    def get(self, request, *args, **kwargs):
+        flow = login_flows_service.advance_login_flow(self.get_object())
+        return Response(self.get_serializer(flow).data)
+
+    def perform_destroy(self, instance):
+        login_flows_service.discard_login_flow(instance)
 
 
 class _ConnectionView(APIView):

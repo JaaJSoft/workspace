@@ -176,3 +176,67 @@ class ImportJobItem(models.Model):
 
     def __str__(self):
         return f"{self.kind}:{self.remote_id} ({self.status})"
+
+
+class ImportLoginFlow(models.Model):
+    """A sign-in started on a remote that hands out its own credentials once
+    the user approves Workspace there (Nextcloud Login Flow v2).
+
+    Lives as long as the remote keeps the flow open; the poll token is dropped
+    as soon as the flow ends, and the row itself by the daily purge.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", pgettext_lazy("sign-in status", "pending")
+        COMPLETED = "completed", pgettext_lazy("sign-in status", "completed")
+        FAILED = "failed", pgettext_lazy("sign-in status", "failed")
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="import_login_flows",
+    )
+    provider = models.CharField(max_length=50)
+    label = models.CharField(max_length=255)
+    base_url = models.URLField(max_length=2000)
+    login_url = models.URLField(max_length=2000)
+    poll_endpoint = models.URLField(max_length=2000)
+    poll_token_encrypted = models.BinaryField(null=True, blank=True)
+
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    error = models.TextField(blank=True, default="")
+    connection = models.ForeignKey(
+        ImportConnection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # Claimed by whoever polls the remote, so two reads never ask it at once.
+    polled_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["expires_at"], name="importloginflow_expires"),
+        ]
+
+    def __str__(self):
+        return f"ImportLoginFlow {self.uuid} ({self.status})"
+
+    def set_poll_token(self, plaintext):
+        from workspace.common.encryption import encrypt
+
+        self.poll_token_encrypted = encrypt(plaintext)
+
+    def get_poll_token(self):
+        from workspace.common.encryption import decrypt
+
+        if not self.poll_token_encrypted:
+            return ""
+        return decrypt(bytes(self.poll_token_encrypted))

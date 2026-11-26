@@ -20,7 +20,7 @@ const PAGE_DATA = {
   ],
 };
 
-function app(fetchStub) {
+function app(fetchStub, extraGlobals = {}) {
   const ctx = loadScript('workspace/imports/ui/static/imports/ui/js/imports.js', {
     document: {
       getElementById: (id) => (id in PAGE_DATA ? { textContent: JSON.stringify(PAGE_DATA[id]) } : null),
@@ -29,6 +29,7 @@ function app(fetchStub) {
     getCSRFToken: () => 'x',
     formatFileSize: (b) => `${b} B`,
     fetch: fetchStub || (() => Promise.reject(new Error('no network in tests'))),
+    ...extraGlobals,
   });
   const component = ctx.importsApp();
   component.$nextTick = (fn) => fn();
@@ -279,4 +280,135 @@ test('status and conflict labels come from the page, unknown values as sent', ()
   assert.equal(component.isActive({ status: 'pending' }), true);
   assert.equal(component.isActive({ status: 'failed' }), false);
   assert.equal(component.isActive({ status: 'paused' }), false);
+});
+
+// A page with a Nextcloud-like provider offering the sign-in flow, a scripted
+// API, a fake tab and timers the test fires by hand.
+function signInApp(answers) {
+  const requests = [];
+  const timers = [];
+  const tabs = [];
+  const alerts = [];
+  const fetchStub = (url, options) => {
+    const method = (options && options.method) || 'GET';
+    requests.push(`${method} ${url}`);
+    const [status, data] = answers.shift();
+    return Promise.resolve({ ok: status < 400, status, json: async () => data });
+  };
+  const { component } = app(fetchStub, {
+    open: () => {
+      const tab = { opener: 'page', location: { href: '' }, closed: false, close() { this.closed = true; } };
+      tabs.push(tab);
+      return tab;
+    },
+    setTimeout: (fn) => { timers.push(fn); return timers.length; },
+    clearTimeout: () => {},
+    AppAlert: { success: (message) => alerts.push(message) },
+  });
+  component.providers = [
+    { slug: 'nextcloud', name: 'Nextcloud', auth: 'credentials', login_flow: true },
+    { slug: 'webdav', name: 'WebDAV', auth: 'credentials', login_flow: false },
+  ];
+  let open = true;
+  component.$refs = {
+    connectionDialog: { showModal() { open = true; }, close() { open = false; component.onConnectionDialogClosed(); } },
+    wizardDialog: { open: false },
+  };
+  component.openConnectionDialog();
+  component.connForm.label = 'Old cloud';
+  component.connForm.base_url = 'https://cloud.example.org';
+  return { component, requests, timers, tabs, alerts, isOpen: () => open };
+}
+
+const PENDING = { uuid: 'f1', status: 'pending', login_url: 'https://cloud.example.org/login/v2/flow/x', error: '', connection: null };
+
+test('a provider with a sign-in flow starts in sign-in mode, others ask for a password', () => {
+  const { component } = signInApp([]);
+  assert.equal(component.connForm.provider, 'nextcloud');
+  assert.equal(component.signingIn(), true);
+  assert.equal(component.connectionSubmitLabel(), 'Sign in with Nextcloud');
+
+  component.connForm.provider = 'webdav';
+  component.onProviderChange();
+  assert.equal(component.signingIn(), false);
+  assert.equal(component.connectionSubmitLabel(), 'Connect');
+
+  component.openConnectionDialog({ uuid: 'c1', provider: 'nextcloud', label: 'x', base_url: 'https://a', username: 'me' });
+  assert.equal(component.offersSignIn(), false);
+});
+
+test('signing in opens the tab first, points it at the sign-in page, then waits', async () => {
+  const { component, requests, timers, tabs } = signInApp([[202, PENDING]]);
+
+  await component.saveConnection();
+
+  assert.deepStrictEqual(requests, ['POST /api/v1/imports/login-flows']);
+  assert.equal(tabs.length, 1);
+  assert.equal(tabs[0].opener, null);
+  assert.equal(tabs[0].location.href, PENDING.login_url);
+  assert.equal(component.loginFlow.uuid, 'f1');
+  assert.equal(timers.length, 1);
+});
+
+test('a sign-in the server refuses closes the tab and says why', async () => {
+  const { component, tabs, timers } = signInApp([[400, { detail: 'cloud.example.org did not answer.' }]]);
+
+  await component.saveConnection();
+
+  assert.equal(tabs[0].closed, true);
+  assert.equal(component.connError, 'cloud.example.org did not answer.');
+  assert.equal(component.loginFlow, null);
+  assert.equal(timers.length, 0);
+});
+
+test('the dialog waits while pending and adds the connection once approved', async () => {
+  const connection = { uuid: 'c9', label: 'Old cloud', provider: 'nextcloud' };
+  const { component, requests, timers, alerts, isOpen } = signInApp([
+    [202, PENDING],
+    [200, PENDING],
+    [200, { ...PENDING, status: 'completed', connection }],
+  ]);
+  await component.saveConnection();
+
+  await timers.shift()();
+  assert.equal(component.loginFlow.status, 'pending');
+  assert.equal(timers.length, 1);
+
+  await timers.shift()();
+  assert.deepStrictEqual(Array.from(component.connections, (c) => c.uuid), ['c9']);
+  assert.equal(component.loginFlow, null);
+  assert.equal(isOpen(), false);
+  assert.equal(alerts.length, 1);
+  assert.deepStrictEqual(requests, [
+    'POST /api/v1/imports/login-flows',
+    'GET /api/v1/imports/login-flows/f1',
+    'GET /api/v1/imports/login-flows/f1',
+  ]);
+});
+
+test('a failed sign-in goes back to the form with its reason', async () => {
+  const { component, timers } = signInApp([
+    [202, PENDING],
+    [200, { ...PENDING, status: 'failed', error: 'The sign-in expired. Start it again.' }],
+  ]);
+  await component.saveConnection();
+
+  await timers.shift()();
+
+  assert.equal(component.loginFlow, null);
+  assert.equal(component.connError, 'The sign-in expired. Start it again.');
+  assert.equal(timers.length, 0);
+});
+
+test('closing the dialog while waiting gives up on the flow', async () => {
+  const { component, requests, timers } = signInApp([[202, PENDING], [204, null]]);
+  await component.saveConnection();
+
+  component.closeConnectionDialog();
+
+  assert.equal(component.loginFlow, null);
+  assert.deepStrictEqual(requests, ['POST /api/v1/imports/login-flows', 'DELETE /api/v1/imports/login-flows/f1']);
+  // A poll already scheduled finds no flow and asks nothing.
+  await timers.shift()();
+  assert.equal(requests.length, 2);
 });

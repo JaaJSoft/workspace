@@ -6,6 +6,8 @@
 
 const IMPORTS_API = '/api/v1/imports';
 const JOBS_POLL_MS = 10000;
+// The server asks the remote at most every two seconds, whatever this is.
+const LOGIN_FLOW_POLL_MS = 3000;
 
 function readJson(id, fallback) {
   const el = document.getElementById(id);
@@ -75,6 +77,7 @@ const PROVIDER_HINTS = {
   nextcloud: {
     url: gettext('Instance URL, as in your browser (https://cloud.example.org). The WebDAV path is derived from it.'),
     secret: gettext('Use an app password (Settings → Security → Devices & sessions), not your login password.'),
+    signin: gettext('A Nextcloud tab opens: sign in there and grant access. Workspace then appears in your devices, where you can revoke it.'),
   },
   webdav: {
     url: gettext('Full WebDAV URL of the folder to import from.'),
@@ -164,6 +167,11 @@ window.importsApp = function importsApp() {
     connError: '',
     connSaving: false,
     connBusy: {},
+    // 'signin' approves Workspace in the remote's own page, 'password' types
+    // an app password; only a provider with a sign-in flow offers the first.
+    connMode: 'password',
+    loginFlow: null,
+    _loginFlowTimer: null,
 
     wizard: emptyWizard(),
     browse: { path: '/', entries: [], loading: false, error: '' },
@@ -202,6 +210,7 @@ window.importsApp = function importsApp() {
 
     destroy() {
       if (this._pollTimer) clearTimeout(this._pollTimer);
+      this._stopLoginFlowPoll();
       window.removeEventListener('sse:imports.job', this._onJobEvent);
       window.removeEventListener('sse:reconnect', this._onReconnect);
     },
@@ -214,7 +223,24 @@ window.importsApp = function importsApp() {
 
     hint(kind) {
       const h = PROVIDER_HINTS[this.connForm.provider];
-      return h ? h[kind] : '';
+      return (h && h[kind]) || '';
+    },
+
+    selectedProvider() {
+      return this.providers.find((p) => p.slug === this.connForm.provider);
+    },
+
+    offersSignIn() {
+      const provider = this.selectedProvider();
+      return !this.connEditing && !!provider && !!provider.login_flow;
+    },
+
+    signingIn() {
+      return this.offersSignIn() && this.connMode === 'signin';
+    },
+
+    onProviderChange() {
+      this.connMode = this.offersSignIn() ? 'signin' : 'password';
     },
 
     formatSize(bytes) {
@@ -286,8 +312,26 @@ window.importsApp = function importsApp() {
     },
 
     connectionSubmitLabel() {
+      if (this.signingIn()) {
+        const provider = this.selectedProvider();
+        return interpolate(gettext('Sign in with %(provider)s'), { provider: provider.name }, true);
+      }
       if (this.connSaving) return gettext('Checking…');
       return this.connEditing ? gettext('Save') : gettext('Connect');
+    },
+
+    signInInsteadLabel() {
+      const provider = this.selectedProvider();
+      return interpolate(gettext('Sign in with %(provider)s instead'), { provider: provider ? provider.name : '' }, true);
+    },
+
+    loginFlowWaitingLabel() {
+      const provider = this.selectedProvider();
+      return interpolate(
+        gettext('Waiting for you to grant access in the %(provider)s tab…'),
+        { provider: provider ? provider.name : '' },
+        true,
+      );
     },
 
     importBookLabel(book) {
@@ -474,6 +518,8 @@ window.importsApp = function importsApp() {
         const first = this.credentialProviders()[0];
         this.connForm = emptyConnectionForm(first ? first.slug : '');
       }
+      this.loginFlow = null;
+      this.onProviderChange();
       this.$refs.connectionDialog.showModal();
     },
 
@@ -481,7 +527,85 @@ window.importsApp = function importsApp() {
       this.$refs.connectionDialog.close();
     },
 
+    // The dialog closes by Cancel, Escape or the backdrop alike.
+    onConnectionDialogClosed() {
+      this._stopLoginFlowPoll();
+      const flow = this.loginFlow;
+      this.loginFlow = null;
+      if (flow && flow.status === 'pending') api(`/login-flows/${flow.uuid}`, { method: 'DELETE' });
+    },
+
+    addConnection(conn) {
+      const idx = this.connections.findIndex((c) => c.uuid === conn.uuid);
+      if (idx === -1) this.connections.unshift(conn);
+      else this.connections.splice(idx, 1, conn);
+      if (!this.connEditing && this.wizard.step === 1 && this.$refs.wizardDialog.open) {
+        this.wizard.connection = conn;
+      }
+    },
+
+    async startLoginFlow() {
+      this.connError = '';
+      this.connSaving = true;
+      // Opened now, while the click still counts as one: a tab opened once
+      // the request has returned is a popup the browser blocks.
+      const tab = window.open('', '_blank');
+      if (tab) tab.opener = null;
+      try {
+        const { provider, label, base_url } = this.connForm;
+        const res = await api('/login-flows', { method: 'POST', body: { provider, label, base_url } });
+        if (!res.ok) {
+          if (tab) tab.close();
+          this.connError = errorMessage(res.data, gettext('The sign-in could not be started.'));
+          return;
+        }
+        this.loginFlow = res.data;
+        if (tab) tab.location.href = res.data.login_url;
+        this._scheduleLoginFlowPoll();
+      } finally {
+        this.connSaving = false;
+      }
+    },
+
+    async pollLoginFlow() {
+      const flow = this.loginFlow;
+      if (!flow) return;
+      const res = await api(`/login-flows/${flow.uuid}`);
+      // The dialog was closed, or another sign-in started, meanwhile.
+      if (this.loginFlow !== flow) return;
+      if (!res.ok) {
+        this.loginFlow = null;
+        this.connError = res.status === 404
+          ? gettext('The sign-in expired. Start it again.')
+          : errorMessage(res.data, gettext('The sign-in could not be checked.'));
+        return;
+      }
+      if (res.data.status === 'completed') {
+        this.loginFlow = null;
+        this.addConnection(res.data.connection);
+        this.closeConnectionDialog();
+        AppAlert.success(gettext('Connected - you can revoke the access from your devices on the remote.'));
+      } else if (res.data.status === 'failed') {
+        this.loginFlow = null;
+        this.connError = res.data.error;
+      } else {
+        this.loginFlow = res.data;
+        this._scheduleLoginFlowPoll();
+      }
+    },
+
+    _scheduleLoginFlowPoll() {
+      this._stopLoginFlowPoll();
+      this._loginFlowTimer = setTimeout(() => this.pollLoginFlow(), LOGIN_FLOW_POLL_MS);
+    },
+
+    _stopLoginFlowPoll() {
+      if (this._loginFlowTimer) clearTimeout(this._loginFlowTimer);
+      this._loginFlowTimer = null;
+    },
+
     async saveConnection() {
+      if (this.signingIn()) return this.startLoginFlow();
       this.connError = '';
       this.connSaving = true;
       try {
@@ -496,16 +620,11 @@ window.importsApp = function importsApp() {
           this.connError = errorMessage(res.data, gettext('The connection could not be verified.'));
           return;
         }
-        const idx = this.connections.findIndex((c) => c.uuid === res.data.uuid);
-        if (idx === -1) this.connections.unshift(res.data);
-        else this.connections.splice(idx, 1, res.data);
+        this.addConnection(res.data);
         this.closeConnectionDialog();
         AppAlert.success(this.connEditing
           ? gettext('Connection updated.')
           : gettext('Connected - the server answered with your credentials.'));
-        if (!this.connEditing && this.wizard.step === 1 && this.$refs.wizardDialog.open) {
-          this.wizard.connection = res.data;
-        }
       } finally {
         this.connSaving = false;
       }

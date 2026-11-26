@@ -6,7 +6,7 @@ from django.conf import settings
 from workspace.common.task_priority import BACKGROUND_PRIORITY, LOW_PRIORITY
 
 from .importers.base import Outcome
-from .services import jobs
+from .services import jobs, login_flows
 
 logger = logging.getLogger(__name__)
 
@@ -66,4 +66,15 @@ def recover_stale_jobs():
 def purge_old_jobs():
     deleted = jobs.purge_old_jobs()
     logger.info("Purged %d import job items past retention", deleted)
+    return {"deleted": deleted}
+
+
+@shared_task(
+    name="imports.purge_login_flows",
+    priority=BACKGROUND_PRIORITY,
+    ignore_result=True,
+)
+def purge_login_flows():
+    deleted = login_flows.purge_expired_login_flows()
+    logger.info("Purged %d expired import sign-in flows", deleted)
     return {"deleted": deleted}

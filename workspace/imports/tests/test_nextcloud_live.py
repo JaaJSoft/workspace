@@ -14,7 +14,9 @@ what the unit tests assume about Nextcloud's answers is checked here.
 
 import base64
 import io
+import json
 import os
+import re
 import secrets
 import unittest
 from urllib.parse import urlparse
@@ -27,9 +29,9 @@ from django.test import TestCase, override_settings
 from PIL import Image
 
 from workspace.common.booleans import is_truthy
-from workspace.imports.models import ImportJob
+from workspace.imports.models import ImportJob, ImportLoginFlow
 from workspace.imports.providers.webdav import DAV, parse_dav_xml
-from workspace.imports.services import connections, jobs
+from workspace.imports.services import connections, jobs, login_flows
 from workspace.people.models import Person, PersonList
 
 URL = os.environ.get("WORKSPACE_NEXTCLOUD_URL", "").rstrip("/")
@@ -260,3 +262,96 @@ class LiveNextcloudContactsTests(TestCase):
         self.assertTrue(
             Person.objects.filter(owner=self.user, display_name="Robert Baker").exists()
         )
+
+
+@unittest.skipUnless(
+    URL or REQUIRED, "set WORKSPACE_NEXTCLOUD_URL to run the live Nextcloud tests"
+)
+@override_settings(IMPORTS_ALLOWED_HOSTS=[urlparse(URL).hostname or ""])
+class LiveNextcloudLoginFlowTests(TestCase):
+    """Login Flow v2 end to end. The flow is approved the way a desktop client
+    already signed in approves one, with a device password: nothing here can
+    type into Nextcloud's own sign-in page."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not (URL and ADMIN_PASSWORD):
+            raise AssertionError(
+                "WORKSPACE_NEXTCLOUD_TESTS=1 but WORKSPACE_NEXTCLOUD_URL or "
+                "WORKSPACE_NEXTCLOUD_ADMIN_PASSWORD is not set."
+            )
+        cls.nc_user = f"ws-{secrets.token_hex(4)}"
+        cls.nc_password = secrets.token_urlsafe(18)
+        with _client(ADMIN_USER, ADMIN_PASSWORD) as admin:
+            response = admin.post(
+                "/ocs/v2.php/cloud/users",
+                params={"format": "json"},
+                data={"userid": cls.nc_user, "password": cls.nc_password},
+                headers={"OCS-APIRequest": "true"},
+            )
+            if response.status_code != 200:
+                raise AssertionError(
+                    f"Could not create the Nextcloud user: {response.text[:500]}"
+                )
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        with _client(ADMIN_USER, ADMIN_PASSWORD) as admin:
+            admin.delete(
+                f"/ocs/v2.php/cloud/users/{cls.nc_user}",
+                headers={"OCS-APIRequest": "true"},
+            )
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="alice", password="pw")
+
+    def _approve(self, login_url):
+        """Grant the flow; answers the client name Nextcloud showed for it."""
+        with _client(self.nc_user, self.nc_password) as nc:
+            device_password = nc.get(
+                "/ocs/v2.php/core/getapppassword",
+                headers={"OCS-APIRequest": "true", "Accept": "application/json"},
+            ).json()["ocs"]["data"]["apppassword"]
+        with httpx2.Client(follow_redirects=True, timeout=60) as browser:
+            page = browser.get(login_url).text
+            states = dict(
+                re.findall(r'id="initial-state-([^"]+)" value="([^"]+)"', page)
+            )
+            flow_page = json.loads(base64.b64decode(states["core-loginFlowAuth"]))
+            request_token = re.search(r'data-requesttoken="([^"]+)"', page).group(1)
+            granted = browser.post(
+                flow_page["appTokenUrl"],
+                data={
+                    "stateToken": flow_page["stateToken"],
+                    "user": self.nc_user,
+                    "password": device_password,
+                    "requesttoken": request_token,
+                },
+            )
+        self.assertEqual(granted.status_code, 200)
+        return flow_page["client"]
+
+    def test_an_approved_flow_saves_a_working_connection(self):
+        flow = login_flows.start_login_flow(
+            self.owner, provider="nextcloud", label="Old cloud", base_url=f"{URL}/"
+        )
+        flow = login_flows.advance_login_flow(flow)
+        self.assertEqual(flow.status, ImportLoginFlow.Status.PENDING, flow.error)
+
+        client_name = self._approve(flow.login_url)
+        ImportLoginFlow.objects.filter(pk=flow.pk).update(polled_at=None)
+        flow = login_flows.advance_login_flow(ImportLoginFlow.objects.get(pk=flow.pk))
+
+        # What the user reads, and revokes, in their Nextcloud devices.
+        self.assertEqual(client_name, "Workspace")
+        self.assertEqual(flow.status, ImportLoginFlow.Status.COMPLETED, flow.error)
+        connection = flow.connection
+        self.assertEqual(connection.username, self.nc_user)
+        self.assertEqual(
+            connection.base_url, f"{URL}/remote.php/dav/files/{self.nc_user}"
+        )
+        self.assertNotEqual(connection.get_secret(), self.nc_password)
+        connections.test_connection(connection)
+        self.assertEqual(connection.last_error, "")

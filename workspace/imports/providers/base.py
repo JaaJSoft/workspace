@@ -144,6 +144,25 @@ class FileMetadataSource(Protocol):
         """Release the underlying connection pool."""
 
 
+@dataclass(frozen=True)
+class LoginFlowStart:
+    """What the remote answers when a sign-in flow starts: the page the user
+    approves Workspace on, and where to poll for the outcome. ``poll_token``
+    is a credential: it never leaves the server."""
+
+    login_url: str
+    poll_endpoint: str
+    poll_token: str
+
+
+@dataclass(frozen=True)
+class LoginFlowGrant:
+    """The credentials a remote hands back once the user approved the flow."""
+
+    username: str
+    secret: str
+
+
 class ContactSource(Protocol):
     """Read access to a remote's address books."""
 
@@ -169,6 +188,9 @@ class Provider(ABC):
     name: ClassVar[str]
     #: "credentials" (URL + username + secret) or "oauth2" (#696).
     auth: ClassVar[str] = "credentials"
+    #: Whether the remote can hand out the credentials itself once the user
+    #: approves Workspace in its own page (Nextcloud Login Flow v2).
+    login_flow: ClassVar[bool] = False
     kinds: ClassVar[frozenset[str]] = frozenset()
 
     def is_available(self) -> bool:
@@ -195,10 +217,27 @@ class Provider(ABC):
     def contact_source(self, connection) -> ContactSource:
         raise NotImplementedError(f"{self.slug} does not provide contacts")
 
+    def login_flow_base_url(self, url: str) -> str:
+        """The address a sign-in flow starts from, out of what the user typed."""
+        return url.rstrip("/")
+
+    def start_login_flow(self, base_url: str) -> LoginFlowStart:
+        """Open a sign-in flow on the remote. Raises ``ProviderError`` when the
+        remote does not offer one or answers something unusable."""
+        raise NotImplementedError(f"{self.slug} has no sign-in flow")
+
+    def poll_login_flow(
+        self, base_url: str, poll_endpoint: str, poll_token: str
+    ) -> LoginFlowGrant | None:
+        """The credentials once the user approved, ``None`` while they have
+        not. Raises ``ProviderError`` when the remote cannot be asked."""
+        raise NotImplementedError(f"{self.slug} has no sign-in flow")
+
     def describe(self) -> dict:
         return {
             "slug": self.slug,
             "name": self.name,
             "auth": self.auth,
+            "login_flow": self.login_flow,
             "kinds": sorted(self.kinds),
         }

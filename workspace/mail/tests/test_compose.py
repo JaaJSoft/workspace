@@ -139,6 +139,42 @@ class BuildReplyRecipientsTests(ComposeFixtures):
         )
         self.assertEqual(build_reply(message, self.user).to, [])
 
+    def test_reply_goes_to_the_reply_to_address(self):
+        message = self._message(
+            from_email="no-reply@example.com",
+            reply_to_addresses=[{"name": "Support", "email": "support@example.com"}],
+        )
+        reply = build_reply(message, self.user)
+        self.assertEqual(reply.to, ["support@example.com"])
+        self.assertEqual(reply.cc, [])
+
+    def test_reply_goes_to_every_reply_to_address(self):
+        message = self._message(
+            reply_to_addresses=[
+                {"name": "", "email": "list@example.com"},
+                {"name": "Dan", "email": "dan@example.com"},
+            ],
+        )
+        reply = build_reply(message, self.user)
+        self.assertEqual(reply.to, ["list@example.com", "dan@example.com"])
+
+    def test_reply_all_puts_the_reply_to_addresses_in_place_of_the_sender(self):
+        message = self._message(
+            reply_to_addresses=[
+                {"email": "list@example.com"},
+                {"email": "dan@example.com"},
+            ],
+        )
+        reply = build_reply(message, self.user, reply_all=True)
+        self.assertEqual(
+            reply.to, ["list@example.com", "dan@example.com", "bob@example.com"]
+        )
+        self.assertEqual(reply.cc, ["carol@example.com"])
+
+    def test_a_reply_to_naming_only_the_account_answers_the_sender(self):
+        message = self._message(reply_to_addresses=[{"email": "ME@example.com"}])
+        self.assertEqual(build_reply(message, self.user).to, ["alice@example.com"])
+
     def test_reply_threads_under_its_parent(self):
         message = self._message()
         self.assertEqual(build_reply(message, self.user).reply_message_id, message.uuid)

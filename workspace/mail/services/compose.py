@@ -90,19 +90,27 @@ def _dedupe(addresses, exclude):
 def _recipients(message, account, reply_all):
     """The To and Cc of a reply, never the account's own address.
 
-    Answering a message the account sent itself (from the Sent folder)
-    writes again to the people it was sent to, as mail clients do.
+    Answers go to the Reply-To addresses when the message names any (a
+    mailing list, a contact form sent from a no-reply address), to its
+    sender otherwise. Answering a message the account sent itself (from the
+    Sent folder) writes again to the people it was sent to, as mail clients
+    do.
     """
     own = {account.email.casefold()} if account.email else set()
     sender = (message.from_email or "").strip()
     addressed = [_address(entry) for entry in message.to_addresses]
+    named = (_address(entry) for entry in message.reply_to_addresses)
+    # A Reply-To naming only the account itself leaves the sender to answer.
+    answer_to = [
+        address for address in named if address and address.casefold() not in own
+    ] or [sender]
 
     if sender.casefold() in own:
         to = addressed
     elif reply_all:
-        to = [sender, *addressed]
+        to = [*answer_to, *addressed]
     else:
-        to = [sender]
+        to = answer_to
     to = _dedupe(to, own)
 
     cc = []

@@ -270,7 +270,9 @@ class MailMessage(models.Model):
     to_addresses = models.JSONField(default=list)
     cc_addresses = models.JSONField(default=list)
     bcc_addresses = models.JSONField(default=list)
-    reply_to = models.CharField(max_length=255, blank=True, default="")
+    # Where answers go instead of the sender, same shape as to/cc: a list,
+    # a contact form or a ticketing system names it.
+    reply_to_addresses = models.JSONField(default=list)
 
     # Search-only flattening of to/cc, recomputed in save(); never write
     # it by hand. The JSON lists above stay the source of truth.

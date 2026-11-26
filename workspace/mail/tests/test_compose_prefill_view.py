@@ -85,6 +85,14 @@ class ComposePrefillViewTests(TestCase):
         self.assertEqual(data["to"], ["alice@example.com", "bob@example.com"])
         self.assertEqual(data["cc"], ["carol@example.com"])
 
+    def test_reply_goes_to_the_reply_to_addresses(self):
+        self.message.reply_to_addresses = [
+            {"name": "Support", "email": "support@example.com"}
+        ]
+        self.message.save(update_fields=["reply_to_addresses"])
+        data = self._get(self.message.uuid, "reply").json()
+        self.assertEqual(data["to"], ["support@example.com"])
+
     def test_forward_lists_the_attachments(self):
         report = MailAttachment.objects.create(
             message=self.message, filename="report.pdf", size=1200

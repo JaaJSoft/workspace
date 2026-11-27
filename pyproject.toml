@@ -23,7 +23,7 @@ dependencies = [
     "django-fast-update>=0.3.0",
     # celery
     "celery>=5.7.0",
-    "redis>=8.1.0",
+    "redis>=8.2.0",
     # C-accelerated RESP parser; redis-py auto-detects and uses it when present
     "hiredis>=3.5.0",
     # imaging

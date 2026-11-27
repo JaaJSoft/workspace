@@ -1,5 +1,5 @@
 from django.db import IntegrityError, transaction
-from django.utils import translation
+from django.utils import timezone, translation
 from django.utils.translation import gettext, gettext_noop, pgettext
 
 from workspace.users.services.settings import get_user_language
@@ -27,6 +27,9 @@ def create_project(
     groups=None,
     project_type=Project.Type.KANBAN,
     key_base=None,
+    done_retention_days=None,
+    estimate_unit="",
+    archived=False,
 ):
     """Create a project with its key, default statuses and creator as admin.
 
@@ -40,6 +43,9 @@ def create_project(
             description=description,
             project_type=project_type,
             key_base=key_base,
+            done_retention_days=done_retention_days,
+            estimate_unit=estimate_unit,
+            archived_at=timezone.now() if archived else None,
         )
         if groups:
             project.groups.set(groups)
@@ -62,7 +68,9 @@ def create_project(
     return project
 
 
-def _create_project_row(user, *, name, description, project_type, key_base=None):
+def _create_project_row(
+    user, *, name, description, project_type, key_base=None, **columns
+):
     """Insert the project row with a free key, retrying on key collisions.
 
     The unique constraint arbitrates concurrent creates: a loser regenerates
@@ -83,6 +91,7 @@ def _create_project_row(user, *, name, description, project_type, key_base=None)
                     type=project_type,
                     created_by=user,
                     key=key,
+                    **columns,
                 )
         except IntegrityError:
             taken.add(key)
@@ -92,6 +101,7 @@ def _create_project_row(user, *, name, description, project_type, key_base=None)
         type=project_type,
         created_by=user,
         key=unique_project_key(base, taken=taken),
+        **columns,
     )
 
 

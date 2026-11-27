@@ -37,7 +37,10 @@ class ProjectFilter(filters.FilterSet):
         field_name="archived_at", lookup_expr="isnull", exclude=True
     )
     group = MultiValueFilter(
-        field_name="groups", child=forms.IntegerField(), distinct=True
+        field_name="groups",
+        child=forms.IntegerField(),
+        allow_none=True,
+        distinct=True,
     )
     group_name = KeyFilter(field_name="groups__name", distinct=True)
     ordering = OrderingFilter(

@@ -458,6 +458,25 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
             [("", "Iteration 1"), ("Iteration 1", "Neighbour")],
         )
 
+    def test_a_rename_whose_snapshots_cannot_be_rewritten_does_not_land(self):
+        sprint = self.scrum.sprints.create(name="Renamable")
+        self.client.force_authenticate(self.admin)
+        with (
+            mock.patch(
+                "workspace.projects.views.sprints.propagate_sprint_rename",
+                side_effect=RuntimeError("snapshots"),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.patch(
+                f"{self.sprint_url}/{sprint.uuid}",
+                {"name": "Iteration 1"},
+                format="json",
+            )
+        sprint.refresh_from_db()
+        # Or a retry would find the name already changed and skip the rewrite.
+        self.assertEqual(sprint.name, "Renamable")
+
     def test_patch_without_a_rename_leaves_the_snapshots_alone(self):
         sprint = self.scrum.sprints.create(name="Renamable")
         create_task(self.scrum, self.admin, title="a", sprint=sprint)

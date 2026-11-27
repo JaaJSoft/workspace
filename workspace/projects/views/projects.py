@@ -63,12 +63,16 @@ class ProjectListView(ListCreateAPIView):
         data.pop("key", None)
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
+        asked = serializer.validated_data
         project = create_project(
             request.user,
-            name=serializer.validated_data["name"],
-            description=serializer.validated_data.get("description", ""),
-            groups=serializer.validated_data.get("groups"),
-            project_type=serializer.validated_data.get("type", Project.Type.KANBAN),
+            name=asked["name"],
+            description=asked.get("description", ""),
+            groups=asked.get("groups"),
+            project_type=asked.get("type", Project.Type.KANBAN),
+            done_retention_days=asked.get("done_retention_days"),
+            estimate_unit=asked.get("estimate_unit", ""),
+            archived=asked.get("is_archived", False),
         )
         project._my_role = ProjectMember.Role.ADMIN
         return Response(

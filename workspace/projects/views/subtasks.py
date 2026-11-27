@@ -38,8 +38,9 @@ class SubtaskListView(_ChecklistMixin, ListCreateAPIView):
     pagination_class = None
 
     def perform_create(self, serializer):
+        asked = serializer.validated_data
         serializer.instance = create_subtask(
-            self.task, serializer.validated_data["title"]
+            self.task, asked["title"], done=asked.get("done", False)
         )
 
 

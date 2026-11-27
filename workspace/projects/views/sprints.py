@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
@@ -77,9 +78,12 @@ class SprintDetailView(_OneSprintMixin, RetrieveUpdateDestroyAPIView):
 
     def perform_update(self, serializer):
         old_name = serializer.instance.name
-        super().perform_update(serializer)
-        if serializer.instance.name != old_name:
-            propagate_sprint_rename(serializer.instance)
+        # Together or not at all: a rename left without its snapshots would
+        # look done to a retry, which compares the names to know what to do.
+        with transaction.atomic():
+            super().perform_update(serializer)
+            if serializer.instance.name != old_name:
+                propagate_sprint_rename(serializer.instance)
 
     def perform_destroy(self, instance):
         delete_sprint(instance)

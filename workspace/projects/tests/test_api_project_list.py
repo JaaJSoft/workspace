@@ -57,6 +57,13 @@ class ProjectListFilterTests(ProjectTestMixin, APITestCase):
         self.assertEqual(self._names(group_name="devs"), ["Rocket"])
         self.assertEqual(self._names(group_name="nobody"), [])
 
+    def test_group_none_keeps_the_projects_attached_to_no_group(self):
+        self.assertEqual(self._names(group="none"), ["Old site", "Website"])
+        self.assertEqual(
+            self._names(group=f"none,{self.devs.pk}"),
+            ["Old site", "Rocket", "Website"],
+        )
+
     def test_ordering_on_a_declared_field(self):
         self.assertEqual(
             self._names(ordering="-name"), ["Website", "Rocket", "Old site"]

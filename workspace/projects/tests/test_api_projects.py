@@ -43,6 +43,43 @@ class ProjectListCreateTests(ProjectTestMixin, APITestCase):
         self.assertEqual(project.statuses.count(), 4)
         self.assertEqual(project.type, Project.Type.KANBAN)
 
+    def test_create_applies_every_setting_it_accepts(self):
+        self.client.force_authenticate(self.outsider)
+        response = self.client.post(
+            "/api/v1/projects",
+            {
+                "name": "Imported",
+                "estimate_unit": "hours",
+                "done_retention_days": 7,
+                "is_archived": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        project = Project.objects.get(uuid=response.data["uuid"])
+        self.assertEqual(
+            (project.estimate_unit, project.done_retention_days, project.is_archived),
+            ("hours", 7, True),
+        )
+        self.assertEqual(
+            (
+                response.data["estimate_unit"],
+                response.data["done_retention_days"],
+                response.data["is_archived"],
+            ),
+            ("hours", 7, True),
+        )
+        self.assertIsNotNone(response.data["archived_at"])
+
+    def test_create_leaves_the_settings_it_is_not_given_at_their_default(self):
+        self.client.force_authenticate(self.outsider)
+        response = self.client.post("/api/v1/projects", {"name": "New"}, format="json")
+        project = Project.objects.get(uuid=response.data["uuid"])
+        self.assertEqual(
+            (project.estimate_unit, project.done_retention_days, project.is_archived),
+            ("", None, False),
+        )
+
     def test_create_attaches_a_group_the_creator_is_not_in(self):
         group = Group.objects.create(name="devs")
         self.client.force_authenticate(self.outsider)

@@ -57,6 +57,15 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.data["position"], 1)
         self.assertFalse(response.data["is_done"])
 
+    def test_an_item_can_be_created_already_done(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.base_url, {"title": "Imported", "is_done": True}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data["is_done"])
+        self.assertTrue(self.task.subtasks.get(title="Imported").done)
+
     def test_title_is_trimmed(self):
         self.client.force_authenticate(self.member)
         response = self.client.post(self.base_url, {"title": "  padded  "})

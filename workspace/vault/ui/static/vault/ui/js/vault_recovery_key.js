@@ -17,10 +17,36 @@
 //
 // Never name the root mixin after a secret, for the reason vault_password.js
 // gives for its own: CodeQL would flag every localStorage write of the page.
-// How long after it left a rotation that got no answer may still be
-// committed: longer than any server or proxy holds a request. Until then an
-// envelope that is not the one sent proves nothing.
-const VAULT_ROTATION_LATE_COMMIT_MS = 2 * 60 * 1000;
+
+// What a failed attempt at a rotation proves: 'landed' when the envelope in
+// place is the one it sealed, 'absent' when a write is ruled out, 'unknown'
+// otherwise. Calling the last one a failure would have the key's owner throw
+// away what may open the account.
+//
+// Three things rule a write out: the rotation never left, the server itself
+// refused it, or the envelope in place is a third one - the rotation is
+// conditional on the envelope it read, and that one never comes back. A
+// request that got no answer, or a gateway's, may still be committed for as
+// long as that envelope is in place: no read rules it out, and no delay
+// either, since nothing bounds how long a request can be held on its way. Nor
+// does a refusal clear an earlier attempt still in doubt - unless it is a
+// conflict, which is the server saying the envelope has moved.
+window.vaultRecoveryKeyOutcome = async function vaultRecoveryKeyOutcome(pending, err, inDoubt) {
+  const sent = !!(err && err.rotationSent);
+  if (!sent && !inDoubt) return 'absent';
+  let envelope;
+  try {
+    envelope = await window.vaultApi.fetchEnvelope();
+  } catch (readError) {
+    return 'unknown';
+  }
+  if (envelope.wrapped_kex_priv === pending.sealed.wrapped_kex_priv) return 'landed';
+  if (envelope.wrapped_kex_priv !== pending.expected) return 'absent';
+  const status = err && err.status;
+  if (sent && status === 409) return 'absent';
+  const refused = sent && status >= 400 && status < 500;
+  return refused && !inDoubt ? 'absent' : 'unknown';
+};
 
 window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
   return {
@@ -33,18 +59,25 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
     // A new key is on screen, and a kit may have been saved with it, while
     // the account still opens with the old one.
     recoveryKeyShown: false,
-    // The sealed key of a rotation that was sent and that nobody can vouch
-    // for yet: still out, or unanswered with the server out of reach to ask.
-    // Ciphertext, so it may wait across a lock for an unlock to compare it
-    // with the envelope in place.
+    // A rotation that was sent and that nobody can vouch for yet: still out,
+    // or unanswered. The two sealed keys and the envelope they replace -
+    // ciphertext, so it may wait across a lock for the page to ask what
+    // became of it, and to send it again if that is what it takes.
     recoveryKeyUnsettled: null,
-    // Whether that rotation is still out. Comparing envelopes then proves
-    // nothing: the request may land a moment after the read.
+    // Whether a copy of that rotation is out right now, the dialog's or this
+    // page's own. Its answer will say, and a second copy would only race it.
     recoveryKeyInFlight: false,
-    // When it left, for the same reason once it is no longer out.
-    recoveryKeyUnsettledSince: 0,
 
+    // One rotation in doubt at a time. A second replacement started over it
+    // would leave two keys that may each be the one in place, and a page
+    // that can only answer for the last; so the first is settled before
+    // another dialog opens, and what became of it is said in its place.
     openRecoveryKeyDialog() {
+      if (this.recoveryKeyDialogOpen) return;
+      if (this.recoveryKeyUnsettled) {
+        this.recoveryKeySettle();
+        return;
+      }
       this.recoveryKeyNotice = '';
       this.recoveryKeyDialogOpen = true;
     },
@@ -74,24 +107,23 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
         return gettext('This page could not check whether your recovery key was replaced. Keep the new key and its emergency kit with the old ones for now: your next unlock on this page will say which is in place.');
       }
       if (this.recoveryKeyNotice === 'landed') {
-        return gettext('Your recovery key was replaced after all - the answer had been lost on the way. Keep the new key and its emergency kit, and unlock with it from now on: that is what retires the old one.');
+        return gettext('Your recovery key was replaced after all. Keep the new key and its emergency kit, and unlock with it from now on: that is what retires the old one.');
       }
       return '';
     },
 
     // What the dialog knows of the rotation it sent: 'sending' from the
     // moment the request leaves, then 'landed' or 'absent' once the server
-    // has said, or 'unknown' when it cannot be asked. Heard on the window,
-    // because a lock may have taken the dialog while the request was out and
-    // a detached element reaches nothing else.
-    recoveryKeyOutcome(outcome, sealedKex) {
+    // has said, or 'unknown' when it has not. Heard on the window, because a
+    // lock may have taken the dialog while the request was out and a
+    // detached element reaches nothing else.
+    recoveryKeyOutcome(outcome, rotation) {
       if (outcome === 'landed') {
         this.recoveryKeyReplaced();
         return;
       }
       this.recoveryKeyInFlight = outcome === 'sending';
-      if (outcome === 'sending') this.recoveryKeyUnsettledSince = Date.now();
-      this.recoveryKeyUnsettled = outcome === 'absent' ? null : sealedKex;
+      this.recoveryKeyUnsettled = outcome === 'absent' ? null : rotation;
       // An open dialog says it itself. The notice is for a page the dialog
       // has left, where the lock that took it could only assume the key was
       // never sent.
@@ -115,42 +147,72 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
     // is in reach again for the one question left open.
     recoveryKeyUnlocked() {
       this.recoveryKeyNotice = '';
-      const sealedKex = this.recoveryKeyUnsettled;
-      if (!sealedKex) return;
-      // Still out: its own answer will say, and reading the envelope now
-      // could call void a key the request is about to put in place.
+      if (this.recoveryKeyUnsettled) this.recoveryKeySettle();
+    },
+
+    // Asks what became of the rotation in doubt, and says it. The envelope
+    // in place settles it when it has moved: to the rotation's own, or to a
+    // third one, which the rotation can then never replace. While it is still
+    // the envelope the rotation names, only the server's answer to that
+    // rotation settles anything - a request held on its way can be committed
+    // at any time, and no wait rules that out. So the rotation is sent again:
+    // the one its owner confirmed, conditional on that same envelope, and the
+    // old key goes on opening the account until the new one unlocks.
+    async recoveryKeySettle() {
+      const rotation = this.recoveryKeyUnsettled;
+      // Emptied first, and set again only after an await: a notice that was
+      // dismissed is built again, so asking twice never looks like nothing.
+      this.recoveryKeyNotice = '';
       if (this.recoveryKeyInFlight) {
+        await null;
         this.recoveryKeyNotice = 'unsettled';
         return;
       }
-      const self = this;
-      window.vaultApi.fetchEnvelope().then(function (envelope) {
-        // Settled in the meantime, by a dialog opened again.
-        if (self.recoveryKeyUnsettled !== sealedKex) return;
-        if (envelope.wrapped_kex_priv !== sealedKex) {
-          // Not in place - not yet, perhaps. Only time rules a late commit
-          // out, and a later unlock asks again.
-          if (Date.now() - self.recoveryKeyUnsettledSince < VAULT_ROTATION_LATE_COMMIT_MS) {
-            self.recoveryKeyNotice = 'unsettled';
-            return;
+      this.recoveryKeyInFlight = true;
+      let outcome = 'unknown';
+      // Whether this page sent the rotation itself. It then landed under a
+      // session the old key had opened, whichever envelope that was.
+      let resent = false;
+      try {
+        // An unlock may be re-wrapping the envelope this rotation names:
+        // read before that lands, it would look untouched.
+        await window.vaultSession.envelopeWrites();
+        const envelope = await window.vaultApi.fetchEnvelope();
+        if (envelope.wrapped_kex_priv === rotation.sealed.wrapped_kex_priv) {
+          outcome = 'landed';
+        } else if (envelope.wrapped_kex_priv !== rotation.expected) {
+          outcome = 'absent';
+        } else {
+          resent = true;
+          try {
+            await window.vaultEnvelopeRotation.commit(rotation, function () { return false; });
+            outcome = 'landed';
+          } catch (err) {
+            outcome = await window.vaultRecoveryKeyOutcome(rotation, err, true);
           }
-          self.recoveryKeyUnsettled = null;
-          self.recoveryKeyNotice = 'discarded';
-          return;
         }
-        self.recoveryKeyUnsettled = null;
-        // The rotation had landed. A device that just unlocked with the old
-        // key must not go on doing so: the new one would never be proved and
-        // the old one never retired. The dialog that knew the new key is
-        // gone, so the device is left remembering none.
-        if (window.vaultSession.openedWithPrevious()) {
-          window.vaultSession.forgetDevice();
-          self.readRememberedSecret();
-        }
-        self.recoveryKeyNotice = 'landed';
-      }, function () {
-        self.recoveryKeyNotice = 'unsettled';
-      });
+      } catch (err) {
+        outcome = 'unknown';
+      }
+      this.recoveryKeyInFlight = false;
+      if (outcome === 'unknown') {
+        this.recoveryKeyNotice = 'unsettled';
+        return;
+      }
+      this.recoveryKeyUnsettled = null;
+      if (outcome === 'absent') {
+        this.recoveryKeyNotice = 'discarded';
+        return;
+      }
+      // A device that holds the old key must not go on offering it: the new
+      // one would never be proved and the old one never retired. The dialog
+      // that knew the new key is gone, so the device is left remembering
+      // none - unless the new key itself opened this session.
+      if (resent || window.vaultSession.openedWithPrevious()) {
+        window.vaultSession.forgetDevice();
+        this.readRememberedSecret();
+      }
+      this.recoveryKeyNotice = 'landed';
     },
   };
 };
@@ -302,38 +364,11 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
       return !this.busy && this.acknowledged && this.pending !== null;
     },
 
-    // What a failed attempt proves: 'landed' when the envelope in place is
-    // the one this dialog sealed, 'absent' when a write is ruled out,
-    // 'unknown' otherwise. Calling the last one a failure would have the
-    // key's owner throw away what may open the account.
-    //
-    // Two things rule a write out: the rotation never left, or the server
-    // itself refused it. A request that got no answer, or a gateway's, may
-    // still be committed after the envelope was read back, so an envelope
-    // that is not the one sent proves nothing then. Nor does a refusal clear
-    // an earlier attempt still in doubt - unless it is a conflict: the
-    // envelope both name has moved, and neither can land any more.
-    async rotationOutcome(pending, err, inDoubt) {
-      const sent = !!(err && err.rotationSent);
-      if (!sent && !inDoubt) return 'absent';
-      let envelope;
-      try {
-        envelope = await window.vaultApi.fetchEnvelope();
-      } catch (readError) {
-        return 'unknown';
-      }
-      if (envelope.wrapped_kex_priv === pending.sealed.wrapped_kex_priv) return 'landed';
-      const status = err && err.status;
-      if (sent && status === 409) return 'absent';
-      const refused = sent && status >= 400 && status < 500;
-      return refused && !inDoubt ? 'absent' : 'unknown';
-    },
-
     // On the window, which a detached element still reaches: a lock during
     // the request takes the dialog, not the rotation.
     tellPage(outcome, pending) {
       window.dispatchEvent(new CustomEvent('vault-recovery-key-outcome', {
-        detail: { outcome: outcome, sealed: pending.sealed.wrapped_kex_priv },
+        detail: { outcome: outcome, rotation: pending },
       }));
     },
 
@@ -372,7 +407,7 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
             return;
           }
         } catch (err) {
-          const outcome = await this.rotationOutcome(pending, err, inDoubt);
+          const outcome = await window.vaultRecoveryKeyOutcome(pending, err, inDoubt);
           if (outcome !== 'landed') {
             this.tellPage(outcome, pending);
             if (gone()) return;

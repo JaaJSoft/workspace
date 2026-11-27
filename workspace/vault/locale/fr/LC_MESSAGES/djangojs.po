@@ -431,13 +431,12 @@ msgstr ""
 
 #: ui/static/vault/ui/js/vault_recovery_key.js
 msgid ""
-"Your recovery key was replaced after all - the answer had been lost on the "
-"way. Keep the new key and its emergency kit, and unlock with it from now on: "
-"that is what retires the old one."
+"Your recovery key was replaced after all. Keep the new key and its emergency "
+"kit, and unlock with it from now on: that is what retires the old one."
 msgstr ""
-"Votre clé de récupération a bien été remplacée - la réponse s’était perdue "
-"en route. Gardez la nouvelle clé et son kit de secours, et déverrouillez "
-"désormais avec elle : c’est ce qui retire l’ancienne."
+"Votre clé de récupération a bien été remplacée. Gardez la nouvelle clé et "
+"son kit de secours, et déverrouillez désormais avec elle : c’est ce qui "
+"retire l’ancienne."
 
 #: ui/static/vault/ui/js/vault_recovery_key.js
 msgid "Master password is incorrect."

@@ -46,7 +46,7 @@
   x-data="vaultBrowser()"
   @vault-password-changed="passwordChangeSucceeded()"
   @vault-recovery-key-shown="recoveryKeyWasShown()"
-  @vault-recovery-key-outcome.window="recoveryKeyOutcome($event.detail.outcome, $event.detail.sealed)"
+  @vault-recovery-key-outcome.window="recoveryKeyOutcome($event.detail.outcome, $event.detail.rotation)"
 {% endblock %}
 
 {% comment %}

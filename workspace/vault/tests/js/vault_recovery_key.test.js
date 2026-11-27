@@ -19,6 +19,16 @@ const CURRENT = { algo: 'argon2id', params: { v: '1.3', m: 65536, t: 3, p: 2 } }
 const OLD_KEY = 'A'.repeat(53);
 const NEW_KEY = 'NEWKEY0123';
 const NEW_KEY_GROUPED = 'NEWK-EY01-23';
+// What prepare() hands the dialog against ENVELOPE, and the dialog the page.
+const ROTATION = {
+  sealed: { wrapped_kex_priv: 'new-kex', wrapped_sig_priv: 'new-sig' },
+  expected: 'old-kex',
+  confirmFirst: false,
+};
+const LANDED = { ...ENVELOPE, wrapped_kex_priv: 'new-kex' };
+// Another tab or device rotated first: the envelope is neither the one the
+// rotation names nor its own.
+const MOVED_ON = { ...ENVELOPE, wrapped_kex_priv: 'elsewhere-kex' };
 
 // The envelope helper and the crypto are stubbed - their own behaviour is
 // pinned by account_envelope.test.js and the vector suites - and the rotation
@@ -98,7 +108,7 @@ function harness(overrides = {}) {
       dispatchEvent: (event) => {
         assert.equal(event.type, 'vault-recovery-key-outcome');
         order.push(['told', event.detail.outcome]);
-        windowEvents.push([event.detail.outcome, event.detail.sealed]);
+        windowEvents.push([event.detail.outcome, event.detail.rotation.sealed.wrapped_kex_priv]);
       },
     }
   );
@@ -401,7 +411,7 @@ test('a rotation whose answer was lost, and landed, is a replacement', async () 
   for (const status of [undefined, 409]) {
     const h = await shown({ remembered: OLD_KEY, rotateEnvelope: async () => { throw gone(status); } });
     // What the server holds once the lost request has been applied.
-    h.session.envelope = { ...ENVELOPE, wrapped_kex_priv: 'new-kex' };
+    h.session.envelope = LANDED;
     h.component.acknowledged = true;
     await h.component.replace();
     assert.equal(h.component.error, '', `status ${status}`);
@@ -435,6 +445,22 @@ test('a rotation that got no answer is not called absent on an envelope read too
     assert.equal(h.component.step, 'kit', label);
     assert.equal(h.component.outcomeUnknown, true, label);
     assert.deepStrictEqual(told(h), ['sending', 'unknown'], label);
+    assert.deepStrictEqual(acts(h), [], label);
+  }
+});
+
+test('a rotation that got no answer is ruled out by an envelope that has moved on', async () => {
+  // The rotation is conditional on the envelope it read. With a third one in
+  // place it can never be committed, held on its way or not.
+  for (const failure of [new TypeError('network error'), gone(502)]) {
+    const h = await shown({ remembered: OLD_KEY, rotateEnvelope: async () => { throw failure; } });
+    h.session.envelope = MOVED_ON;
+    h.component.acknowledged = true;
+    await h.component.replace();
+    const label = `status ${failure.status}`;
+    assert.deepStrictEqual(told(h), ['sending', 'absent'], label);
+    assert.equal(h.component.outcomeUnknown, false, label);
+    assert.equal(h.component.error, 'Your recovery key could not be replaced. Try again.', label);
     assert.deepStrictEqual(acts(h), [], label);
   }
 });
@@ -634,7 +660,7 @@ function wired(overrides) {
     mixin.readRememberedSecret = () => {};
     mixin.openRecoveryKeyDialog();
     mixin.recoveryKeyWasShown();
-    h.ctx.dispatchEvent = (event) => mixin.recoveryKeyOutcome(event.detail.outcome, event.detail.sealed);
+    h.ctx.dispatchEvent = (event) => mixin.recoveryKeyOutcome(event.detail.outcome, event.detail.rotation);
     // What a lock does to the two of them.
     const lock = () => { h.component.destroy(); mixin.closeRecoveryKeyDialog(); };
     return { h, mixin, lock };
@@ -733,7 +759,7 @@ test('a replacement closes the dialog, says so, and has the gate read the device
   const { mixin, reads } = root(harness());
   mixin.openRecoveryKeyDialog();
   mixin.recoveryKeyWasShown();
-  mixin.recoveryKeyOutcome('landed', 'new-kex');
+  mixin.recoveryKeyOutcome('landed', ROTATION);
   assert.equal(mixin.recoveryKeyDialogOpen, false);
   assert.equal(mixin.recoveryKeyNotice, 'replaced');
   assert.deepStrictEqual(reads, ['read']);
@@ -749,7 +775,7 @@ test('a replacement heard after a lock took the dialog overrides the notice that
   mixin.recoveryKeyWasShown();
   mixin.closeRecoveryKeyDialog();
   assert.equal(mixin.recoveryKeyNotice, 'discarded');
-  mixin.recoveryKeyOutcome('landed', 'new-kex');
+  mixin.recoveryKeyOutcome('landed', ROTATION);
   assert.equal(mixin.recoveryKeyNotice, 'replaced');
 });
 
@@ -757,7 +783,7 @@ test('closing on a rotation nobody answered does not say the key opens nothing',
   const { mixin } = root(harness());
   mixin.openRecoveryKeyDialog();
   mixin.recoveryKeyWasShown();
-  mixin.recoveryKeyOutcome('unknown', 'new-kex');
+  mixin.recoveryKeyOutcome('unknown', ROTATION);
   // The dialog is still up and says it itself.
   assert.equal(mixin.recoveryKeyNotice, '');
   mixin.closeRecoveryKeyDialog();
@@ -772,7 +798,7 @@ test('an unanswered rotation heard after a lock replaces the notice that lock le
   mixin.recoveryKeyWasShown();
   mixin.closeRecoveryKeyDialog();
   assert.equal(mixin.recoveryKeyNotice, 'discarded');
-  mixin.recoveryKeyOutcome('unknown', 'new-kex');
+  mixin.recoveryKeyOutcome('unknown', ROTATION);
   assert.equal(mixin.recoveryKeyNotice, 'unsettled');
 });
 
@@ -780,103 +806,232 @@ test('a later attempt the server refused settles the earlier one it could not an
   const { mixin } = root(harness());
   mixin.openRecoveryKeyDialog();
   mixin.recoveryKeyWasShown();
-  mixin.recoveryKeyOutcome('unknown', 'new-kex');
-  mixin.recoveryKeyOutcome('absent', 'new-kex');
+  mixin.recoveryKeyOutcome('unknown', ROTATION);
+  mixin.recoveryKeyOutcome('absent', ROTATION);
   mixin.closeRecoveryKeyDialog();
   assert.equal(mixin.recoveryKeyNotice, 'discarded');
 });
 
-// The next unlock is the first moment the server is known to be in reach.
-async function unlockedAfterAnUnansweredRotation(options) {
-  const h = harness({ remembered: OLD_KEY });
-  h.session.envelope = options.envelope;
-  h.session.offline = !!options.offline;
+// --- what became of a rotation nobody answered for
+
+// The dialog is gone and the page holds the rotation it sent. The next unlock
+// is the first moment the server is known to be in reach.
+function unanswered(options = {}) {
+  const h = harness({ remembered: OLD_KEY, ...options });
   const { mixin, reads } = root(h, options);
   mixin.openRecoveryKeyDialog();
   mixin.recoveryKeyWasShown();
-  mixin.recoveryKeyOutcome('unknown', 'new-kex');
+  mixin.recoveryKeyOutcome('sending', ROTATION);
+  mixin.recoveryKeyOutcome('unknown', ROTATION);
   mixin.closeRecoveryKeyDialog();
+  assert.equal(mixin.recoveryKeyNotice, 'unsettled');
+  return { h, mixin, reads };
+}
+
+async function unlockedAfterAnUnansweredRotation(options) {
+  const { h, mixin, reads } = unanswered(options);
+  h.session.envelope = options.envelope;
+  h.session.offline = !!options.offline;
   mixin.recoveryKeyUnlocked();
   await tick();
   return { h, mixin, reads };
 }
 
 test('an unlock finds that the unanswered rotation had landed, and stops the device offering the old key', async () => {
-  const { h, mixin, reads } = await unlockedAfterAnUnansweredRotation({
-    envelope: { ...ENVELOPE, wrapped_kex_priv: 'new-kex' },
-    openedWithPrevious: true,
-  });
+  const { h, mixin, reads } = await unlockedAfterAnUnansweredRotation({ envelope: LANDED, openedWithPrevious: true });
   assert.equal(mixin.recoveryKeyNotice, 'landed');
   assert.match(mixin.recoveryKeyNoticeText(), /was replaced after all/);
   assert.equal(h.session.remembered, null, 'the device still offers the key that was replaced');
   assert.deepStrictEqual(reads, ['read']);
   assert.equal(mixin.recoveryKeyUnsettled, null);
+  assert.deepStrictEqual(h.posts, [], 'a rotation already in place was sent again');
 });
 
 test('an unlock the new key itself opened leaves the device as that unlock set it', async () => {
   // Typed from the kit and remembered by that unlock: forgetting it here
   // would undo what the user just asked for.
-  const { h, mixin } = await unlockedAfterAnUnansweredRotation({
-    envelope: { ...ENVELOPE, wrapped_kex_priv: 'new-kex' },
-    openedWithPrevious: false,
-  });
+  const { h, mixin } = await unlockedAfterAnUnansweredRotation({ envelope: LANDED, openedWithPrevious: false });
   assert.equal(mixin.recoveryKeyNotice, 'landed');
   assert.equal(h.session.remembered, OLD_KEY);
   assert.deepStrictEqual(h.order.filter(([name]) => name === 'forget'), []);
 });
 
-test('an unlock finds that the unanswered rotation never landed', async () => {
-  const { h, mixin } = await unlockedAfterAnUnansweredRotation({ envelope: ENVELOPE });
+test('an envelope that has moved on rules the rotation out at once', async () => {
+  const { h, mixin } = await unlockedAfterAnUnansweredRotation({ envelope: MOVED_ON });
   assert.equal(mixin.recoveryKeyNotice, 'discarded');
-  assert.equal(h.session.remembered, OLD_KEY);
   assert.equal(mixin.recoveryKeyUnsettled, null);
+  assert.equal(h.session.remembered, OLD_KEY);
+  assert.deepStrictEqual(h.posts, [], 'a rotation that can no longer land was sent again');
+});
+
+test('an unlock sends again a rotation still waiting on the envelope it names', async () => {
+  // The old envelope read back proves nothing: the first copy may be held on
+  // its way. Only the server's answer to the rotation does, so it is asked.
+  const { h, mixin, reads } = await unlockedAfterAnUnansweredRotation({ envelope: ENVELOPE });
+  assert.deepStrictEqual(h.posts, [{
+    wrapped_kex_priv: 'new-kex', wrapped_sig_priv: 'new-sig', expected_wrapped_kex_priv: 'old-kex',
+  }]);
+  assert.equal(mixin.recoveryKeyNotice, 'landed');
+  assert.equal(mixin.recoveryKeyUnsettled, null);
+  assert.equal(mixin.recoveryKeyInFlight, false);
+  // The session was opened by the old key, which the device must stop offering.
+  assert.equal(h.session.remembered, null);
+  assert.deepStrictEqual(reads, ['read']);
+  assert.equal(h.session.locks, 0);
+});
+
+test('the envelope is compared only once the unlock has written it back', async () => {
+  // A re-wrap that unlock is still sending replaces the envelope the rotation
+  // names: read before it lands, the rotation would look worth sending again.
+  let written;
+  const { h, mixin } = unanswered({ envelopeWrites: () => new Promise((resolve) => { written = resolve; }) });
+  let reads = 0;
+  const served = h.ctx.vaultApi.fetchEnvelope;
+  h.ctx.vaultApi.fetchEnvelope = async () => { reads += 1; return served(); };
+  mixin.recoveryKeyUnlocked();
+  await tick();
+  assert.equal(reads, 0);
+  h.session.envelope = MOVED_ON;
+  written();
+  await tick();
+  assert.equal(mixin.recoveryKeyNotice, 'discarded');
+  assert.deepStrictEqual(h.posts, []);
 });
 
 test('an unlock that still cannot ask keeps the question open', async () => {
-  const { mixin } = await unlockedAfterAnUnansweredRotation({ envelope: ENVELOPE, offline: true });
+  const { h, mixin } = await unlockedAfterAnUnansweredRotation({ envelope: ENVELOPE, offline: true });
   assert.equal(mixin.recoveryKeyNotice, 'unsettled');
-  assert.equal(mixin.recoveryKeyUnsettled, 'new-kex');
+  assert.equal(mixin.recoveryKeyUnsettled, ROTATION);
+  assert.equal(mixin.recoveryKeyInFlight, false);
+  assert.deepStrictEqual(h.posts, []);
 });
 
-test('an unlock too soon after the rotation left does not rule it out', async () => {
-  // The envelope is still the old one, and the request may be held somewhere
-  // between this page and the database. Only time rules that out.
+test('no delay rules out a rotation nobody answered for', async () => {
+  // Held on its way, a request can be committed at any time. However long
+  // ago it left, an old envelope and a second copy that got no answer either
+  // leave the question as open as it was.
+  for (const failure of [new TypeError('network error'), gone(502), gone(429)]) {
+    let calls = 0;
+    const { h, mixin } = unanswered({
+      rotateEnvelope: async (body) => {
+        calls += 1;
+        if (calls === 1) throw failure;
+        h.posts.push(body);
+        return null;
+      },
+    });
+    // The clock the script reads is its own realm's.
+    const clock = vm.runInContext('Date', h.ctx);
+    const real = clock.now;
+    clock.now = () => real() + 24 * 60 * 60 * 1000;
+    const label = `status ${failure.status}`;
+
+    mixin.recoveryKeyUnlocked();
+    await tick();
+    assert.equal(mixin.recoveryKeyNotice, 'unsettled', label);
+    assert.equal(mixin.recoveryKeyUnsettled, ROTATION, `the question was closed on a wait, ${label}`);
+    assert.equal(h.session.remembered, OLD_KEY, label);
+
+    // A later unlock asks again, and this time the server answers.
+    mixin.recoveryKeyUnlocked();
+    await tick();
+    assert.equal(mixin.recoveryKeyNotice, 'landed', label);
+    assert.equal(mixin.recoveryKeyUnsettled, null, label);
+    assert.equal(h.posts.length, 1, label);
+  }
+});
+
+test('a rotation sent again that meets a conflict is settled by the envelope in place', async () => {
+  // The envelope moved between the read and the second copy: to the first
+  // copy's own, which had been held until then, or to another tab's.
+  for (const [inPlace, notice] of [[LANDED, 'landed'], [MOVED_ON, 'discarded']]) {
+    const { h, mixin } = unanswered({
+      rotateEnvelope: async () => { h.session.envelope = inPlace; throw gone(409); },
+    });
+    mixin.recoveryKeyUnlocked();
+    await tick();
+    assert.equal(mixin.recoveryKeyNotice, notice);
+    assert.equal(mixin.recoveryKeyUnsettled, null);
+    assert.equal(h.session.remembered, inPlace === LANDED ? null : OLD_KEY);
+  }
+});
+
+test('an unlock during the check does not send the rotation a second time', async () => {
+  let answer;
+  let sent = 0;
+  const { mixin } = unanswered({
+    rotateEnvelope: () => { sent += 1; return new Promise((resolve) => { answer = resolve; }); },
+  });
+  mixin.recoveryKeyUnlocked();
+  await tick();
+  mixin.recoveryKeyUnlocked();
+  await tick();
+  assert.equal(sent, 1);
+  assert.equal(mixin.recoveryKeyNotice, 'unsettled');
+  answer(null);
+  await tick();
+  assert.equal(mixin.recoveryKeyNotice, 'landed');
+});
+
+// --- one rotation in doubt at a time
+
+test('asking for the dialog over a rotation in doubt settles that rotation instead', async () => {
+  // A second replacement would leave two keys that may each be the one in
+  // place, and a page that only answers for the last.
+  const { h, mixin } = unanswered();
+  h.session.envelope = MOVED_ON;
+  mixin.openRecoveryKeyDialog();
+  assert.equal(mixin.recoveryKeyDialogOpen, false);
+  await tick();
+  assert.equal(mixin.recoveryKeyDialogOpen, false);
+  assert.equal(mixin.recoveryKeyNotice, 'discarded');
+  // Settled: the next request opens the dialog.
+  mixin.openRecoveryKeyDialog();
+  assert.equal(mixin.recoveryKeyDialogOpen, true);
+  assert.equal(mixin.recoveryKeyNotice, '');
+});
+
+test('a rotation that stays in doubt keeps the dialog closed, and its key tracked', async () => {
+  const { h, mixin } = unanswered();
+  h.session.offline = true;
+  mixin.openRecoveryKeyDialog();
+  // Emptied while it asks, so a notice that was dismissed is built again.
+  assert.equal(mixin.recoveryKeyNotice, '');
+  await tick();
+  assert.equal(mixin.recoveryKeyDialogOpen, false);
+  assert.equal(mixin.recoveryKeyNotice, 'unsettled');
+  assert.equal(mixin.recoveryKeyUnsettled, ROTATION);
+});
+
+test('asking for the dialog while the rotation is still out sends and reads nothing', async () => {
   const h = harness({ remembered: OLD_KEY });
-  // The clock the script reads is its own realm's.
-  let now = 1_000_000;
-  vm.runInContext('Date', h.ctx).now = () => now;
+  let reads = 0;
+  h.ctx.vaultApi.fetchEnvelope = async () => { reads += 1; return ENVELOPE; };
   const { mixin } = root(h);
   mixin.openRecoveryKeyDialog();
   mixin.recoveryKeyWasShown();
-  mixin.recoveryKeyOutcome('sending', 'new-kex');
-  mixin.recoveryKeyOutcome('unknown', 'new-kex');
+  mixin.recoveryKeyOutcome('sending', ROTATION);
   mixin.closeRecoveryKeyDialog();
-
-  now += 5_000;
-  mixin.recoveryKeyUnlocked();
+  mixin.openRecoveryKeyDialog();
   await tick();
+  assert.equal(mixin.recoveryKeyDialogOpen, false);
   assert.equal(mixin.recoveryKeyNotice, 'unsettled');
-  assert.equal(mixin.recoveryKeyUnsettled, 'new-kex', 'the question was closed on a read made too early');
-
-  now += 10 * 60 * 1000;
-  mixin.recoveryKeyUnlocked();
-  await tick();
-  assert.equal(mixin.recoveryKeyNotice, 'discarded');
-  assert.equal(mixin.recoveryKeyUnsettled, null);
+  assert.equal(reads, 0);
+  assert.deepStrictEqual(h.posts, []);
 });
 
-test('a rotation found in place is found at once, however recent', async () => {
-  const h = harness({ remembered: OLD_KEY });
-  h.session.envelope = { ...ENVELOPE, wrapped_kex_priv: 'new-kex' };
-  const { mixin } = root(h, { openedWithPrevious: true });
+test('asking for a dialog that is already open changes nothing', async () => {
+  // Its own retry is the one that settles a rotation it still shows.
+  const h = harness();
+  const { mixin } = root(h);
   mixin.openRecoveryKeyDialog();
   mixin.recoveryKeyWasShown();
-  mixin.recoveryKeyOutcome('sending', 'new-kex');
-  mixin.recoveryKeyOutcome('unknown', 'new-kex');
-  mixin.closeRecoveryKeyDialog();
-  mixin.recoveryKeyUnlocked();
+  mixin.recoveryKeyOutcome('unknown', ROTATION);
+  mixin.openRecoveryKeyDialog();
   await tick();
-  assert.equal(mixin.recoveryKeyNotice, 'landed');
+  assert.equal(mixin.recoveryKeyDialogOpen, true);
+  assert.equal(mixin.recoveryKeyUnsettled, ROTATION);
+  assert.deepStrictEqual(h.posts, [], 'the page sent the rotation under its own dialog');
 });
 
 test('an unlock with nothing left open only clears the notices', async () => {

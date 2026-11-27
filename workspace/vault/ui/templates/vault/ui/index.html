@@ -112,17 +112,20 @@
           <inline-alert type="warning" icon="key-round" message="{% translate "Unlocked with your previous password or recovery key. The new one takes over the first time you use it." %}" class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
 
           {% comment %}
-              x-if, not x-show: the dismiss button takes the element out of
-              the DOM, and only x-if builds it again for the next notice.
+              Keyed by the notice, not x-if: the dismiss button takes the
+              element out of the DOM, and one notice replacing another has to
+              build it again - x-if would keep the element it believes is
+              still there.
           {% endcomment %}
           <template
-            x-if="recoveryKeyNotice === 'discarded' || recoveryKeyNotice === 'unsettled'"
+            x-for="notice in (recoveryKeyWarns() ? [recoveryKeyNotice] : [])"
+            :key="notice"
           >
             <inline-alert type="warning" icon="key-round" dismissible class="mx-5 mt-4">
             <span
               x-text="recoveryKeyNoticeText()"
               data-testid="recovery-notice"
-              :data-notice="recoveryKeyNotice"
+              :data-notice="notice"
             ></span>
             </inline-alert>
           </template>

@@ -449,20 +449,36 @@ test('a rotation that got no answer is not called absent on an envelope read too
   }
 });
 
-test('a rotation that got no answer is ruled out by an envelope that has moved on', async () => {
-  // The rotation is conditional on the envelope it read. With a third one in
-  // place it can never be committed, held on its way or not.
+test('a rotation that got no answer and can no longer land is not called void', async () => {
+  // A third envelope is in place: the rotation, conditional on the one it
+  // read, can never be committed now. Whether it was before that envelope
+  // arrived is beyond telling - a password change made since with the new
+  // key seals an envelope this key opens.
   for (const failure of [new TypeError('network error'), gone(502)]) {
     const h = await shown({ remembered: OLD_KEY, rotateEnvelope: async () => { throw failure; } });
     h.session.envelope = MOVED_ON;
     h.component.acknowledged = true;
     await h.component.replace();
     const label = `status ${failure.status}`;
-    assert.deepStrictEqual(told(h), ['sending', 'absent'], label);
+    assert.deepStrictEqual(told(h), ['sending', 'superseded'], label);
+    assert.match(h.component.error, /can no longer tell whether the new recovery key/, label);
+    assert.match(h.component.error, /Keep that key/, label);
+    assert.doesNotMatch(h.component.error, /opens nothing|discard|not replaced/, label);
+    // Nothing more to send: the step is over, and nothing was done to the device.
+    assert.equal(h.component.step, 'credentials', label);
     assert.equal(h.component.outcomeUnknown, false, label);
-    assert.equal(h.component.error, 'Your recovery key could not be replaced. Try again.', label);
     assert.deepStrictEqual(acts(h), [], label);
   }
+});
+
+test('a conflict on the only copy sent replaced nothing, whatever the envelope became', async () => {
+  // The server answered the one request there was: it was never applied.
+  const h = await shown({ remembered: OLD_KEY, rotateEnvelope: async () => { throw gone(409); } });
+  h.session.envelope = MOVED_ON;
+  h.component.acknowledged = true;
+  await h.component.replace();
+  assert.deepStrictEqual(told(h), ['sending', 'absent']);
+  assert.match(h.component.error, /this attempt replaced nothing/);
 });
 
 test('a confirm that failed with nothing sent replaced nothing, server in reach or not', async () => {
@@ -528,16 +544,18 @@ test('trying again settles a rotation nobody answered, whichever way it went', a
   }
 });
 
-test('a later refusal does not clear an earlier attempt still in doubt, unless it is a conflict', async () => {
+test('a later refusal does not clear an earlier attempt still in doubt, and a conflict only ends the doubt', async () => {
   // The first request may still land. A throttle on the second says nothing
-  // about it; a conflict does - the envelope both name has moved, so neither
-  // can be committed any more.
-  for (const [status, settled] of [[429, false], [400, false], [409, true]]) {
+  // about it. A conflict says the envelope both name has moved, so neither
+  // can be committed any more - but not that the first never was.
+  for (const [status, outcome] of [[429, 'unknown'], [400, 'unknown'], [409, 'superseded']]) {
     let calls = 0;
     const h = await shown({
       rotateEnvelope: async () => {
         calls += 1;
-        throw calls === 1 ? new TypeError('network error') : gone(status);
+        if (calls === 1) throw new TypeError('network error');
+        if (status === 409) h.session.envelope = MOVED_ON;
+        throw gone(status);
       },
     });
     h.session.offline = true;
@@ -546,10 +564,15 @@ test('a later refusal does not clear an earlier attempt still in doubt, unless i
     assert.equal(h.component.outcomeUnknown, true);
     h.session.offline = false;
     await h.component.replace();
-    assert.equal(told(h).at(-1), settled ? 'absent' : 'unknown', `status ${status}`);
-    assert.equal(h.component.outcomeUnknown, !settled, `status ${status}`);
-    if (settled) assert.equal(h.component.step, 'credentials');
-    else assert.match(h.component.error, /could not check/);
+    assert.equal(told(h).at(-1), outcome, `status ${status}`);
+    assert.equal(h.component.outcomeUnknown, outcome === 'unknown', `status ${status}`);
+    if (outcome === 'unknown') {
+      assert.match(h.component.error, /could not check/);
+    } else {
+      assert.equal(h.component.step, 'credentials');
+      assert.match(h.component.error, /can no longer tell/);
+      assert.doesNotMatch(h.component.error, /opens nothing|discard/);
+    }
   }
 });
 
@@ -802,14 +825,32 @@ test('an unanswered rotation heard after a lock replaces the notice that lock le
   assert.equal(mixin.recoveryKeyNotice, 'unsettled');
 });
 
-test('a later attempt the server refused settles the earlier one it could not answer for', () => {
+test('a rotation in doubt that can no longer land is said so, and its key is not called void', () => {
   const { mixin } = root(harness());
   mixin.openRecoveryKeyDialog();
   mixin.recoveryKeyWasShown();
   mixin.recoveryKeyOutcome('unknown', ROTATION);
-  mixin.recoveryKeyOutcome('absent', ROTATION);
+  mixin.recoveryKeyOutcome('superseded', ROTATION);
+  assert.equal(mixin.recoveryKeyUnsettled, null);
+  assert.equal(mixin.recoveryKeyNotice, 'superseded');
+  // The close that follows must not turn it into the notice for a key that
+  // was never sent.
   mixin.closeRecoveryKeyDialog();
-  assert.equal(mixin.recoveryKeyNotice, 'discarded');
+  assert.equal(mixin.recoveryKeyNotice, 'superseded');
+  assert.equal(mixin.recoveryKeyWarns(), true);
+  assert.match(mixin.recoveryKeyNoticeText(), /can no longer tell whether the new recovery key/);
+  assert.doesNotMatch(mixin.recoveryKeyNoticeText(), /opens nothing|discard|not replaced/);
+  // Nothing is in doubt any more: the dialog opens again.
+  mixin.openRecoveryKeyDialog();
+  assert.equal(mixin.recoveryKeyDialogOpen, true);
+});
+
+test('only the notices that warn are shown as warnings', () => {
+  const { mixin } = root(harness());
+  for (const [notice, warns] of [['', false], ['replaced', false], ['landed', false], ['discarded', true], ['unsettled', true], ['superseded', true]]) {
+    mixin.recoveryKeyNotice = notice;
+    assert.equal(mixin.recoveryKeyWarns(), warns, notice);
+  }
 });
 
 // --- what became of a rotation nobody answered for
@@ -856,9 +897,13 @@ test('an unlock the new key itself opened leaves the device as that unlock set i
   assert.deepStrictEqual(h.order.filter(([name]) => name === 'forget'), []);
 });
 
-test('an envelope that has moved on rules the rotation out at once', async () => {
+test('an envelope that has moved on ends the doubt without calling the key void', async () => {
+  // The rotation may have landed before that envelope arrived, and a password
+  // change made since with the new key seals an envelope the new key opens.
   const { h, mixin } = await unlockedAfterAnUnansweredRotation({ envelope: MOVED_ON });
-  assert.equal(mixin.recoveryKeyNotice, 'discarded');
+  assert.equal(mixin.recoveryKeyNotice, 'superseded');
+  assert.match(mixin.recoveryKeyNoticeText(), /Keep that key/);
+  assert.doesNotMatch(mixin.recoveryKeyNoticeText(), /opens nothing|discard|not replaced/);
   assert.equal(mixin.recoveryKeyUnsettled, null);
   assert.equal(h.session.remembered, OLD_KEY);
   assert.deepStrictEqual(h.posts, [], 'a rotation that can no longer land was sent again');
@@ -894,7 +939,7 @@ test('the envelope is compared only once the unlock has written it back', async 
   h.session.envelope = MOVED_ON;
   written();
   await tick();
-  assert.equal(mixin.recoveryKeyNotice, 'discarded');
+  assert.equal(mixin.recoveryKeyNotice, 'superseded');
   assert.deepStrictEqual(h.posts, []);
 });
 
@@ -944,7 +989,7 @@ test('no delay rules out a rotation nobody answered for', async () => {
 test('a rotation sent again that meets a conflict is settled by the envelope in place', async () => {
   // The envelope moved between the read and the second copy: to the first
   // copy's own, which had been held until then, or to another tab's.
-  for (const [inPlace, notice] of [[LANDED, 'landed'], [MOVED_ON, 'discarded']]) {
+  for (const [inPlace, notice] of [[LANDED, 'landed'], [MOVED_ON, 'superseded']]) {
     const { h, mixin } = unanswered({
       rotateEnvelope: async () => { h.session.envelope = inPlace; throw gone(409); },
     });
@@ -984,7 +1029,7 @@ test('asking for the dialog over a rotation in doubt settles that rotation inste
   assert.equal(mixin.recoveryKeyDialogOpen, false);
   await tick();
   assert.equal(mixin.recoveryKeyDialogOpen, false);
-  assert.equal(mixin.recoveryKeyNotice, 'discarded');
+  assert.equal(mixin.recoveryKeyNotice, 'superseded');
   // Settled: the next request opens the dialog.
   mixin.openRecoveryKeyDialog();
   assert.equal(mixin.recoveryKeyDialogOpen, true);

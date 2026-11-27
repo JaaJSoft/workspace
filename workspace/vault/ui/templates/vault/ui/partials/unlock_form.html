@@ -32,7 +32,7 @@
     <inline-alert type="success" x-show="recoveryKeyNotice === 'landed'" x-cloak>
     <span x-text="recoveryKeyNoticeText()"></span>
     </inline-alert>
-    <inline-alert type="warning" icon="key-round" x-show="recoveryKeyNotice === 'discarded' || recoveryKeyNotice === 'unsettled'" x-cloak>
+    <inline-alert type="warning" icon="key-round" x-show="recoveryKeyWarns()" x-cloak>
     <span
       x-text="recoveryKeyNoticeText()"
       data-testid="recovery-notice"

@@ -318,33 +318,37 @@ out what it proves:
 
 - **the envelope in place is the one it sent**: the request landed and only its
   answer was lost, and the replacement completes;
-- **a write is ruled out**: the rotation never left, the server itself refused
-  it, or the envelope in place is a third one. The rotation is conditional on
-  the envelope read in step 1, which never comes back once it is replaced.
-  After a 409 the key shown is withdrawn and the user starts again. The message
-  does not vouch for the old key: the change made elsewhere may be a
-  replacement of it;
-- **anything else is unknown**, and is not called a failure. A request that got
-  no answer, or a gateway's, may still be committed for as long as the envelope
-  of step 1 is in place. Reading that envelope back proves nothing, and neither
-  does waiting: nothing bounds how long a request can be held on its way. Only
-  the server's answer to the rotation settles it, so the dialog keeps the key
-  for another attempt and stops saying that nothing has changed. A second
-  attempt lands, or meets a conflict, and after a conflict neither copy can be
-  committed any more.
+- **it was never applied**: no copy is unanswered, because none left or because
+  the server itself refused the only one. After a 409 the key shown is
+  withdrawn and the user starts again. The message does not vouch for the old
+  key: the change made elsewhere may be a replacement of it;
+- **a copy is unanswered and the envelope of step 1 is still in place**: the
+  outcome is unknown, and is not called a failure. A request that got no
+  answer, or a gateway's, may be committed for as long as that envelope is
+  there. Reading it back proves nothing, and neither does waiting: nothing
+  bounds how long a request can be held on its way. Only the server's answer
+  to the rotation settles it, so the dialog keeps the key for another attempt
+  and stops saying that nothing has changed;
+- **a copy is unanswered and a third envelope is in place**: the rotation is
+  over, since it is conditional on the envelope of step 1 and that one never
+  comes back. Whether it was applied before the third envelope arrived cannot
+  be told, and it matters: a password change made since with the new key seals
+  an envelope that the new key opens. So the key is not called void. The user
+  is told to keep it with the others, and that whichever unlocks is the one in
+  use. A conflict met by a second attempt is this case, not the first.
 
 The page is told that a rotation is out before it leaves, so a lock or an unlock
 during the request claims nothing. If the dialog is closed or locked while the
 outcome is unknown, the page keeps the rotation it sent (ciphertext only), says
 that it could not check, and settles it at the next unlock by the same rule. It
-reads the envelope: its own means the rotation landed, a third one that it never
-will. With the envelope of step 1 still in place it sends the rotation again,
-the one its owner confirmed and conditional on that same envelope, and the
-answer decides. A rotation found or put in place has the device forget the old
-key it unlocked with, so that the next unlock is made with the new one. Until it
-is settled no second replacement starts from that page: asking for the dialog
-runs the same check instead, because a page with two keys in doubt could only
-answer for the last.
+reads the envelope: its own means the rotation landed, a third one that it is
+over and that nothing can be said of the key. With the envelope of step 1 still
+in place it sends the rotation again, the one its owner confirmed and
+conditional on that same envelope, and the answer decides. A rotation found or
+put in place has the device forget the old key it unlocked with, so that the
+next unlock is made with the new one. Until it is settled no second replacement
+starts from that page: asking for the dialog runs the same check instead,
+because a page with two keys in doubt could only answer for the last.
 
 On success the key this device remembers is replaced or dropped, the session
 locks, and the next unlock opens the current envelope with the new key and sends

@@ -276,6 +276,7 @@ KEY_REPLACED_NOTICE = "text=Recovery key replaced"
 KEY_DISCARDED_NOTICE = "[data-testid=recovery-notice][data-notice=discarded]"
 KEY_UNSETTLED_NOTICE = "[data-testid=recovery-notice][data-notice=unsettled]"
 KEY_LANDED_NOTICE = "[data-testid=recovery-notice][data-notice=landed]"
+KEY_SUPERSEDED_NOTICE = "[data-testid=recovery-notice][data-notice=superseded]"
 
 
 class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
@@ -700,6 +701,52 @@ class RecoveryKeyBrowserTests(EnvelopeBrowserCase):
 
         # Nothing is in doubt any more.
         self._open_dialog()
+
+    def test_a_key_put_in_place_and_then_used_elsewhere_is_not_called_void(self):
+        """The rotation landed unheard, and the account then moved on under
+        the new key: another device unlocked with it and changed the master
+        password. The third envelope this page finds was sealed with the key
+        it showed, so telling its owner to discard that key would leave them
+        with none that opens the account."""
+        new_secret = self._draw_a_new_key()
+        self._lose_the_connection(rotation_reaches_the_server=True)
+        self._confirm_with_no_answer()
+        landed = _envelope(self.user)
+        self.page.evaluate("() => window.vaultSession.lock()")
+        self.page.wait_for_selector(KEY_UNSETTLED_NOTICE)
+
+        elsewhere = self._second_page()
+        self._unlock_with(elsewhere, new_secret)
+        self._wait_unlocked(elsewhere)
+        elsewhere.evaluate("() => window.vaultSession.envelopeWrites()")
+        elsewhere.click(".drawer-side >> text=Change password")
+        elsewhere.fill("[data-testid=password-current]", GOOD_PASSWORD)
+        elsewhere.fill("[data-testid=password-secret]", new_secret)
+        elsewhere.fill("[data-testid=password-new]", NEW_PASSWORD)
+        elsewhere.fill("[data-testid=password-confirm]", NEW_PASSWORD)
+        elsewhere.wait_for_selector(
+            "[data-testid=password-submit]:not([disabled])", timeout=15000
+        )
+        elsewhere.click("[data-testid=password-submit]")
+        elsewhere.wait_for_selector("text=Password changed", timeout=60000)
+        moved_on = _envelope(self.user)
+        self.assertNotEqual(moved_on["wrapped_kex_priv"], landed["wrapped_kex_priv"])
+
+        # Back on the first page, the key it showed is the one that opens the
+        # account, under the new password. The page can only see that the
+        # envelope is neither the one it sent nor the one it replaced.
+        self._restore_the_connection()
+        # This device still offers the old key, which now opens nothing: its
+        # owner has it replaced by the one that does.
+        self.page.click("details > summary")
+        self.page.click("button:has-text('Replace')")
+        self._unlock_with(self.page, new_secret, password=NEW_PASSWORD)
+        self._wait_unlocked(self.page)
+        self.page.wait_for_selector(KEY_SUPERSEDED_NOTICE, timeout=30000)
+        self.assertEqual(self.page.locator(KEY_DISCARDED_NOTICE).count(), 0)
+        notice = self.page.inner_text(KEY_SUPERSEDED_NOTICE)
+        self.assertIn("Keep that key", notice)
+        self.assertNotIn("opens nothing", notice)
 
     def test_trying_again_completes_an_unanswered_rotation_that_landed(self):
         new_secret = self._draw_a_new_key()

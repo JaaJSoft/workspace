@@ -411,6 +411,18 @@ msgstr "Cette préférence n’a pas pu être enregistrée. Réessayez."
 
 #: ui/static/vault/ui/js/vault_recovery_key.js
 msgid ""
+"Your account was changed from another tab or another device, so this page "
+"can no longer tell whether the new recovery key it showed you was put in "
+"place. Keep that key and its emergency kit with the old ones: whichever "
+"unlocks your vault is the one in use."
+msgstr ""
+"Votre compte a été modifié depuis un autre onglet ou un autre appareil : "
+"cette page ne peut plus dire si la nouvelle clé de récupération qu’elle vous "
+"a montrée a été mise en place. Gardez cette clé et son kit de secours avec "
+"les anciens : celle qui déverrouille votre coffre est celle en usage."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
 "Your recovery key was not replaced: nothing changed. The new key you were "
 "shown opens nothing - discard it, and any emergency kit saved with it."
 msgstr ""

@@ -19,18 +19,22 @@
 // gives for its own: CodeQL would flag every localStorage write of the page.
 
 // What a failed attempt at a rotation proves: 'landed' when the envelope in
-// place is the one it sealed, 'absent' when a write is ruled out, 'unknown'
-// otherwise. Calling the last one a failure would have the key's owner throw
-// away what may open the account.
+// place is the one it sealed, 'absent' when it was never applied, and
+// otherwise 'unknown' or 'superseded'. Calling either of those a failure
+// would have the key's owner throw away what may open the account.
 //
-// Three things rule a write out: the rotation never left, the server itself
-// refused it, or the envelope in place is a third one - the rotation is
-// conditional on the envelope it read, and that one never comes back. A
-// request that got no answer, or a gateway's, may still be committed for as
-// long as that envelope is in place: no read rules it out, and no delay
-// either, since nothing bounds how long a request can be held on its way. Nor
-// does a refusal clear an earlier attempt still in doubt - unless it is a
-// conflict, which is the server saying the envelope has moved.
+// Never applied means that no copy is unanswered: none left, or the server
+// itself refused the only one. A copy that got no answer, or a gateway's, may
+// be committed for as long as the envelope it names is in place - no read
+// rules that out, and no delay either, since nothing bounds how long a
+// request is held on its way. That is 'unknown', and only the server's answer
+// to the rotation settles it.
+//
+// With a third envelope in place the rotation can no longer be committed: it
+// is conditional on the envelope it read, which never comes back. Whether it
+// was, before that envelope arrived, is beyond telling - a password change
+// made since with the new key seals a third envelope that this key opens.
+// That is 'superseded': over, and nothing may be said of the key.
 window.vaultRecoveryKeyOutcome = async function vaultRecoveryKeyOutcome(pending, err, inDoubt) {
   const sent = !!(err && err.rotationSent);
   if (!sent && !inDoubt) return 'absent';
@@ -41,20 +45,24 @@ window.vaultRecoveryKeyOutcome = async function vaultRecoveryKeyOutcome(pending,
     return 'unknown';
   }
   if (envelope.wrapped_kex_priv === pending.sealed.wrapped_kex_priv) return 'landed';
-  if (envelope.wrapped_kex_priv !== pending.expected) return 'absent';
   const status = err && err.status;
-  if (sent && status === 409) return 'absent';
-  const refused = sent && status >= 400 && status < 500;
-  return refused && !inDoubt ? 'absent' : 'unknown';
+  if (!inDoubt && sent && status >= 400 && status < 500) return 'absent';
+  return envelope.wrapped_kex_priv === pending.expected ? 'unknown' : 'superseded';
+};
+
+// Said by the dialog while it is open and by the page afterwards: one text,
+// so that the two cannot drift.
+window.vaultRecoveryKeySupersededText = function vaultRecoveryKeySupersededText() {
+  return gettext('Your account was changed from another tab or another device, so this page can no longer tell whether the new recovery key it showed you was put in place. Keep that key and its emergency kit with the old ones: whichever unlocks your vault is the one in use.');
 };
 
 window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
   return {
     recoveryKeyDialogOpen: false,
-    // '' | 'replaced' | 'discarded' | 'unsettled' | 'landed'. They survive a
-    // lock on purpose: the lock that follows a replacement puts the first on
-    // screen, and a lock that took the dialog down is what the next two are
-    // for.
+    // '' | 'replaced' | 'discarded' | 'unsettled' | 'superseded' | 'landed'.
+    // They survive a lock on purpose: the lock that follows a replacement
+    // puts the first on screen, and a lock that took the dialog down is what
+    // the next two are for.
     recoveryKeyNotice: '',
     // A new key is on screen, and a kit may have been saved with it, while
     // the account still opens with the old one.
@@ -99,7 +107,12 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
 
     // A method, not template strings: the unlock gate and the open vault
     // both show these, and one of the two copies would drift.
+    recoveryKeyWarns() {
+      return ['discarded', 'unsettled', 'superseded'].includes(this.recoveryKeyNotice);
+    },
+
     recoveryKeyNoticeText() {
+      if (this.recoveryKeyNotice === 'superseded') return window.vaultRecoveryKeySupersededText();
       if (this.recoveryKeyNotice === 'discarded') {
         return gettext('Your recovery key was not replaced: nothing changed. The new key you were shown opens nothing - discard it, and any emergency kit saved with it.');
       }
@@ -113,13 +126,17 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
     },
 
     // What the dialog knows of the rotation it sent: 'sending' from the
-    // moment the request leaves, then 'landed' or 'absent' once the server
-    // has said, or 'unknown' when it has not. Heard on the window, because a
-    // lock may have taken the dialog while the request was out and a
-    // detached element reaches nothing else.
+    // moment the request leaves, then what vaultRecoveryKeyOutcome made of
+    // its answer. Heard on the window, because a lock may have taken the
+    // dialog while the request was out and a detached element reaches
+    // nothing else.
     recoveryKeyOutcome(outcome, rotation) {
       if (outcome === 'landed') {
         this.recoveryKeyReplaced();
+        return;
+      }
+      if (outcome === 'superseded') {
+        this.recoveryKeySuperseded();
         return;
       }
       this.recoveryKeyInFlight = outcome === 'sending';
@@ -143,6 +160,16 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
       this.readRememberedSecret();
     },
 
+    // Nothing is in doubt any more, and nothing is known of the key either.
+    // Said under an open dialog too, and the key no longer counts as shown:
+    // the close that follows must not call void a key that may be in use.
+    recoveryKeySuperseded() {
+      this.recoveryKeyUnsettled = null;
+      this.recoveryKeyInFlight = false;
+      this.recoveryKeyShown = false;
+      this.recoveryKeyNotice = 'superseded';
+    },
+
     // Once a session is open: the notices have had their say, and the server
     // is in reach again for the one question left open.
     recoveryKeyUnlocked() {
@@ -151,13 +178,14 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
     },
 
     // Asks what became of the rotation in doubt, and says it. The envelope
-    // in place settles it when it has moved: to the rotation's own, or to a
-    // third one, which the rotation can then never replace. While it is still
-    // the envelope the rotation names, only the server's answer to that
-    // rotation settles anything - a request held on its way can be committed
-    // at any time, and no wait rules that out. So the rotation is sent again:
-    // the one its owner confirmed, conditional on that same envelope, and the
-    // old key goes on opening the account until the new one unlocks.
+    // in place ends the doubt when it has moved: to the rotation's own, which
+    // landed, or to a third one, which the rotation can never replace and
+    // which says nothing of the key. While it is still the envelope the
+    // rotation names, only the server's answer to that rotation settles
+    // anything - a request held on its way can be committed at any time, and
+    // no wait rules that out. So the rotation is sent again: the one its
+    // owner confirmed, conditional on that same envelope, and the old key
+    // goes on opening the account until the new one unlocks.
     async recoveryKeySettle() {
       const rotation = this.recoveryKeyUnsettled;
       // Emptied first, and set again only after an await: a notice that was
@@ -181,7 +209,7 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
         if (envelope.wrapped_kex_priv === rotation.sealed.wrapped_kex_priv) {
           outcome = 'landed';
         } else if (envelope.wrapped_kex_priv !== rotation.expected) {
-          outcome = 'absent';
+          outcome = 'superseded';
         } else {
           resent = true;
           try {
@@ -195,15 +223,16 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
         outcome = 'unknown';
       }
       this.recoveryKeyInFlight = false;
-      if (outcome === 'unknown') {
+      if (outcome === 'superseded') {
+        this.recoveryKeySuperseded();
+        return;
+      }
+      // Anything short of an answer leaves the question as open as it was.
+      if (outcome !== 'landed') {
         this.recoveryKeyNotice = 'unsettled';
         return;
       }
       this.recoveryKeyUnsettled = null;
-      if (outcome === 'absent') {
-        this.recoveryKeyNotice = 'discarded';
-        return;
-      }
       // A device that holds the old key must not go on offering it: the new
       // one would never be proved and the old one never retired. The dialog
       // that knew the new key is gone, so the device is left remembering
@@ -372,8 +401,8 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
       }));
     },
 
-    // The key on screen opens nothing and never will: back to the first
-    // step, where another attempt draws another one.
+    // This rotation is over and the key on screen has no more to wait for:
+    // back to the first step, where another attempt draws another one.
     withdraw() {
       this.pending = null;
       this.nextSecretText = '';
@@ -414,6 +443,9 @@ window.vaultRecoveryKeyChange = function vaultRecoveryKeyChange() {
             this.outcomeUnknown = outcome === 'unknown';
             if (outcome === 'unknown') {
               this.error = gettext('This page could not check whether your recovery key was replaced. Keep this key and try again.');
+            } else if (outcome === 'superseded') {
+              this.withdraw();
+              this.error = window.vaultRecoveryKeySupersededText();
             } else if (err && err.status === 409) {
               this.withdraw();
               this.error = gettext('Your account changed in another tab or on another device, so this attempt replaced nothing and left your recovery key as it was. The key shown here opens nothing - discard it, and try again for a new one.');

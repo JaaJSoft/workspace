@@ -32,16 +32,24 @@ def db_maintenance(self, integrity_check=False):
     t0 = time.monotonic()
     result = run_maintenance(with_integrity_check=integrity_check)
     result["total_ms"] = round((time.monotonic() - t0) * 1000, 1)
+    checkpoint = result["wal_checkpoint"]
     logger.info(
         "SQLite maintenance finished in %s ms (freed %s pages in %s steps, "
-        "%s free pages left, size %s -> %s bytes)",
+        "%s free pages left, size %s -> %s bytes, WAL %s/%s pages copied)",
         result["total_ms"],
         result["pages_freed"],
         result["steps"],
         result["freelist_count"],
         result["size_before"],
         result["size_after"],
+        checkpoint["pages_checkpointed"],
+        checkpoint["pages_written"],
     )
+    if not checkpoint["complete"]:
+        logger.warning(
+            "SQLite WAL checkpoint left pages behind for a reader still open: "
+            "the file shrinks at a later checkpoint"
+        )
     return result
 
 

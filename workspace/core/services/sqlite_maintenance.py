@@ -91,23 +91,26 @@ def optimize(db=None):
     return {"optimize_ms": _elapsed_ms(start)}
 
 
-def wal_checkpoint(db=None):
-    """Copy the WAL into the database and truncate it.
+def wal_checkpoint(db=None, mode="PASSIVE"):
+    """Copy the WAL into the database.
 
     In WAL mode this is also where the pages an incremental vacuum freed leave
-    the file: the database is truncated when the commit that shrank it is
-    checkpointed.
+    the file: the database is truncated once the commit that shrank it is
+    copied. PASSIVE copies what no reader still needs and returns: the other
+    modes wait for readers, and hold writers out while they wait. What is left
+    behind is copied by a later checkpoint.
     """
     db = db or default_connection
     start = time.monotonic()
     with db.cursor() as cursor:
-        cursor.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-        row = cursor.fetchone()
+        cursor.execute(f"PRAGMA wal_checkpoint({mode});")
+        busy, frames, copied = cursor.fetchone()
     return {
         "wal_checkpoint": {
-            "return_code": row[0],
-            "pages_written": row[1],
-            "pages_checkpointed": row[2],
+            "return_code": busy,
+            "pages_written": frames,
+            "pages_checkpointed": copied,
+            "complete": not busy and frames == copied,
         },
         "wal_checkpoint_ms": _elapsed_ms(start),
     }
@@ -123,8 +126,8 @@ def incremental_vacuum(
     """Return free pages to the filesystem, a bounded step at a time.
 
     Does nothing on a database still in ``auto_vacuum = NONE``: its free pages
-    only leave the file through ``switch_to_incremental``. Always runs at least one step
-    when there are free pages, then stops once the budget is spent.
+    only leave the file through ``switch_to_incremental``. Always runs at least
+    one step when there are free pages, then stops once the budget is spent.
     """
     db = db or default_connection
     if db.in_atomic_block:
@@ -145,12 +148,12 @@ def incremental_vacuum(
             # The pragma frees one page per step of the statement: it only
             # runs to the end once every row is fetched, and until then it
             # keeps the statement - and the write lock - open.
+            # One row per page freed: the freelist count also moves with
+            # what other connections delete meanwhile.
             cursor.execute(f"PRAGMA incremental_vacuum({int(step_pages)});")
-            cursor.fetchall()
+            result["pages_freed"] += len(cursor.fetchall())
         result["steps"] += 1
-        remaining = _pragma(db, "freelist_count")
-        result["pages_freed"] += free - remaining
-        free = remaining
+        free = _pragma(db, "freelist_count")
         if not free or time.monotonic() + pause_seconds >= deadline:
             break
         time.sleep(pause_seconds)
@@ -201,14 +204,15 @@ def sqlite_temp_dir():
 def ensure_free_space(needs):
     """Raise ``NotEnoughSpace`` unless each disk can take what is written to it.
 
-    ``needs`` maps a directory to the bytes written there. Directories on the
-    same filesystem add up.
+    ``needs`` pairs a directory with the bytes written there. What lands on
+    the same filesystem adds up, the same directory named twice included.
     """
     dirs_by_device = defaultdict(list)
     needed_by_device = defaultdict(int)
-    for directory, needed in needs.items():
+    for directory, needed in needs:
         device = os.stat(directory).st_dev
-        dirs_by_device[device].append(directory)
+        if directory not in dirs_by_device[device]:
+            dirs_by_device[device].append(directory)
         needed_by_device[device] += needed
 
     for device, dirs in dirs_by_device.items():
@@ -240,10 +244,10 @@ def switch_to_incremental(db=None):
         return None
     database_dir = os.path.dirname(os.path.abspath(db.settings_dict["NAME"]))
     ensure_free_space(
-        {
-            sqlite_temp_dir(): before["used_bytes"],
-            database_dir: before["used_bytes"],
-        }
+        [
+            (sqlite_temp_dir(), before["used_bytes"]),  # the new copy
+            (database_dir, before["used_bytes"]),  # that copy again, in the WAL
+        ]
     )
 
     start = time.monotonic()
@@ -252,7 +256,8 @@ def switch_to_incremental(db=None):
         cursor.execute("PRAGMA auto_vacuum = INCREMENTAL;")
         cursor.execute("VACUUM;")
     result = {"vacuum_ms": _elapsed_ms(start)}
-    result.update(wal_checkpoint(db))
+    # Nothing else runs during migrate: wait for the WAL to empty.
+    result.update(wal_checkpoint(db, mode="TRUNCATE"))
 
     after = database_stats(db)
     result.update(
@@ -305,7 +310,7 @@ def snapshot(destination, db=None):
         raise FileNotFoundError(directory)
 
     db.ensure_connection()
-    ensure_free_space({directory: database_stats(db)["used_bytes"]})
+    ensure_free_space([(directory, database_stats(db)["used_bytes"])])
     start = time.monotonic()
     with db.cursor() as cursor:
         cursor.execute("VACUUM INTO %s;", [destination])
@@ -334,7 +339,8 @@ def run_maintenance(db=None, *, with_integrity_check=False):
     if result["auto_vacuum"] != "incremental":
         logger.warning(
             "SQLite auto_vacuum is %s: free pages stay in the file until "
-            "the next 'manage.py migrate' switches it to incremental",
+            "'manage.py migrate' switches it to incremental, which needs about "
+            "twice the database's size in free disk",
             result["auto_vacuum"],
         )
     result.update(wal_checkpoint(db))

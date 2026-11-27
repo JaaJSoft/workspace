@@ -11,6 +11,7 @@ import os
 import re
 import sqlite3
 import tempfile
+import time
 from collections import namedtuple
 from pathlib import Path
 from unittest import TestCase, mock, skipUnless
@@ -151,6 +152,52 @@ class IncrementalVacuumTests(TestCase):
         self.assertEqual(result["pages_freed"], 50)
         self.assertEqual(result["freelist_count"], free - 50)
 
+    def test_the_checkpoint_does_not_wait_for_a_reader(self):
+        # A checkpoint that waits for readers holds writers out while it waits.
+        with file_connection() as db:
+            _fill_and_free(db)
+            reader = sqlite3.connect(db.settings_dict["NAME"], isolation_level=None)
+            reader.execute("BEGIN;")
+            reader.execute("SELECT count(*) FROM blob;").fetchone()
+            with db.cursor() as cursor:
+                cursor.execute("INSERT INTO blob VALUES (zeroblob(100));")
+                cursor.execute("PRAGMA busy_timeout = 2000;")
+            try:
+                start = time.monotonic()
+                result = run_maintenance(db)
+                elapsed = time.monotonic() - start
+            finally:
+                reader.close()
+
+        self.assertLess(elapsed, 1)
+        self.assertFalse(result["wal_checkpoint"]["complete"])
+
+    def test_counts_the_pages_it_freed_while_others_delete(self):
+        # Rows deleted between two steps add free pages that the next steps
+        # free too: the count is what the vacuum did, not the freelist's net
+        # change.
+        with file_connection() as db:
+            _fill_and_free(db, rows=400)
+            free_before = _pragma(db, "freelist_count")
+            other = sqlite3.connect(db.settings_dict["NAME"], isolation_level=None)
+            deletes = iter(range(5, 0, -1))
+
+            def delete_between_steps(_seconds):
+                keep = next(deletes, None)
+                if keep is not None:
+                    other.execute("DELETE FROM blob WHERE rowid > ?;", (keep,))
+
+            try:
+                with mock.patch.object(
+                    sqlite_maintenance.time, "sleep", side_effect=delete_between_steps
+                ):
+                    result = incremental_vacuum(db, step_pages=50)
+            finally:
+                other.close()
+
+        self.assertEqual(result["freelist_count"], 0)
+        self.assertGreater(result["pages_freed"], free_before)
+
     def test_refuses_to_run_inside_a_transaction(self):
         with file_connection() as db:
             _fill_and_free(db)
@@ -196,6 +243,26 @@ class SwitchToIncrementalTests(TestCase):
             statements, result = _capture_sql(db, lambda: switch_to_incremental(db))
         self.assertIsNone(result)
         self.assertFalse(_full_vacuums(statements))
+
+    def test_counts_both_copies_when_the_temp_dir_is_the_database_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "db.sqlite3"
+            _legacy_database(path)
+            with file_connection(path) as db:
+                used = sqlite_maintenance.database_stats(db)["used_bytes"]
+                # Room for one copy and its margin, not for two.
+                free = DiskUsage(0, 0, int(used * 1.5))
+                with (
+                    mock.patch.object(
+                        sqlite_maintenance, "sqlite_temp_dir", return_value=tmp
+                    ),
+                    mock.patch.object(
+                        sqlite_maintenance, "disk_usage", return_value=free
+                    ),
+                    self.assertRaises(NotEnoughSpace),
+                ):
+                    switch_to_incremental(db)
+                self.assertEqual(_pragma(db, "auto_vacuum"), 0)
 
     def test_refuses_to_start_without_enough_free_disk(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -254,9 +321,9 @@ class FreeSpaceTests(SimpleTestCase):
             with mock.patch.object(
                 sqlite_maintenance, "disk_usage", return_value=DiskUsage(0, 0, 100)
             ):
-                ensure_free_space({a: 60})
+                ensure_free_space([(a, 60)])
                 with self.assertRaises(NotEnoughSpace):
-                    ensure_free_space({a: 60, b: 60})
+                    ensure_free_space([(a, 60), (b, 60)])
 
 
 @skipUnless(_IS_SQLITE, "maintenance only runs on SQLite")

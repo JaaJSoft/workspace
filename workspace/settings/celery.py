@@ -118,7 +118,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     # Every day at 3:00 AM: optimize, incremental vacuum, WAL checkpoint. The
     # vacuum frees pages in short write transactions with pauses between them,
-    # so writers barely wait. A full VACUUM is never scheduled: it holds the
+    # and the checkpoint is PASSIVE, which never waits for a reader. A full VACUUM is never scheduled: it holds the
     # write lock for the whole rewrite and needs twice the database in free
     # disk; the one a database needs to switch modes runs after migrate.
     "db-maintenance": {

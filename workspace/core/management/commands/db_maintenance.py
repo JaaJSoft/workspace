@@ -33,7 +33,8 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.WARNING(
                     f"  Incremental vacuum: skipped, auto_vacuum is "
-                    f"{result['auto_vacuum']}. The next migrate switches it."
+                    f"{result['auto_vacuum']}. 'manage.py migrate' switches it "
+                    "once the disk has room for about twice the database."
                 )
             )
         elif result["steps"]:
@@ -49,6 +50,7 @@ class Command(BaseCommand):
             f"  WAL checkpoint: {result['wal_checkpoint_ms']} ms "
             f"(code={wal['return_code']}, written={wal['pages_written']}, "
             f"checkpointed={wal['pages_checkpointed']})"
+            + ("" if wal["complete"] else ", left for a later checkpoint")
         )
         before, after = result["size_before"], result["size_after"]
         if before is not None and after is not None:

@@ -23,7 +23,7 @@ dependencies = [
     "django-fast-update>=0.3.0",
     # celery
     "celery>=5.7.0",
-    "redis>=8.1.0",
+    "redis>=8.2.0",
     # C-accelerated RESP parser; redis-py auto-detects and uses it when present
     "hiredis>=3.5.0",
     # imaging
@@ -82,7 +82,7 @@ dependencies = [
     # and the feature is off by default)
     "clamdpy>=0.2.0",
     # ai
-    "openai>=3.57.0",
+    "openai>=3.58.0",
     # Every text request goes through it: the bots' agent and the one-shot
     # prompts (workspace/ai/services/llm.py, bot_runs.py). No extra: its
     # OpenAI models need the openai SDK above and nothing else (the `openai`
@@ -118,7 +118,7 @@ dependencies = [
     "fastembed>=0.9.1",
     # S3-compatible object storage (common/storage/s3.py), imported only when
     # STORAGE_BACKEND=s3: a filesystem deployment never loads it.
-    "boto3>=1.44.9",
+    "boto3>=1.44.10",
 ]
 
 [build-system]
@@ -127,7 +127,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "coverage[toml]>=7.17.4",
+    "coverage[toml]>=7.17.5",
     "django-debug-toolbar==8.0.0",
     # Fake data generation for scripts/seed_demo.py (dev/demo seeding only).
     "faker>=40.63.0",
@@ -175,7 +175,7 @@ dev = [
     # An in-process S3 for the object storage backend's tests
     # (common/tests/test_storage.py); the live S3 CI job runs the same cases
     # against a real server.
-    "moto[s3]>=5.2.5",
+    "moto[s3]>=5.2.6",
     # The dataset and the report of scripts/agent_evals.py. Each release pins
     # the pydantic-ai-slim of the same number, so the two are bumped together.
     "pydantic-evals>=2.71.0",

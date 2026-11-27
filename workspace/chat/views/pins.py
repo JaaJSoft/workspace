@@ -13,7 +13,10 @@ from workspace.common.uuids import parse_uuid_or_none
 from ..models import Message, PinnedConversation, PinnedMessage
 from ..serializers import PinnedMessageSerializer
 from ..services.conversations import get_active_membership, user_conversation_ids
-from ..services.notifications import notify_conversation_members
+from ..services.notifications import (
+    notify_conversation_members,
+    push_conversation_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +181,19 @@ class MessagePinToggleView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        notify_conversation_members(message.conversation, exclude_user=request.user)
+        push_conversation_event(
+            message.conversation,
+            {
+                "type": "message_unpinned",
+                "conversation_id": str(message.conversation_id),
+                "message_id": str(message.uuid),
+                "unpinned_by": {
+                    "id": request.user.id,
+                    "username": request.user.username,
+                },
+            },
+            exclude_user=request.user,
+        )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 

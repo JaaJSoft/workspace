@@ -137,7 +137,12 @@ class ProjectDetailView(_OneProjectMixin, RetrieveUpdateDestroyAPIView):
             self._require_action(project, "rename")
         if "groups" in fields:
             self._require_action(project, "attach_group")
-        serializer = self.get_serializer(project, data=request.data, partial=True)
+        serializer = self.get_serializer(
+            project,
+            data=request.data,
+            partial=True,
+            context={**self.get_serializer_context(), "project": project},
+        )
         serializer.is_valid(raise_exception=True)
         if "is_archived" in serializer.validated_data:
             self._require_archiving(project, serializer.validated_data["is_archived"])

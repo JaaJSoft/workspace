@@ -40,7 +40,10 @@ from ..services.conversations import (
 from ..services.deletion import soft_delete_message
 from ..services.editing import edit_message
 from ..services.message_lists import PAGE_SIZE
-from ..services.notifications import notify_conversation_members
+from ..services.notifications import (
+    notify_conversation_members,
+    push_conversation_event,
+)
 from ..services.posting import post_message
 from ..services.rendering import render_message_body
 from ..services.threads import (
@@ -451,6 +454,21 @@ class ReactionToggleView(APIView):
         if existing:
             existing.delete()
             action = "removed"
+            push_conversation_event(
+                message.conversation,
+                {
+                    "type": "reaction",
+                    "conversation_id": str(message.conversation_id),
+                    "message_id": str(message.uuid),
+                    "emoji": emoji,
+                    "user": {
+                        "id": request.user.id,
+                        "username": request.user.username,
+                    },
+                    "action": action,
+                },
+                exclude_user=request.user,
+            )
         else:
             Reaction.objects.create(
                 message=message,
@@ -458,13 +476,12 @@ class ReactionToggleView(APIView):
                 emoji=emoji,
             )
             action = "added"
+            notify_conversation_members(
+                message.conversation,
+                exclude_user=request.user,
+            )
 
         invalidate_quick_reactions(request.user.id)
-
-        notify_conversation_members(
-            message.conversation,
-            exclude_user=request.user,
-        )
 
         return Response(
             {

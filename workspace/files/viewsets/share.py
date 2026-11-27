@@ -1,7 +1,6 @@
 """Share-related actions for FileViewSet."""
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -30,6 +29,7 @@ from workspace.files.services.sharing import (
 )
 from workspace.projects.models import Project
 from workspace.projects.queries import user_project_ids
+from workspace.users.queries import nameable_groups
 
 User = get_user_model()
 
@@ -163,9 +163,17 @@ class ShareMixin:
             group_id, error = _parse_id(group_id, "group")
             if error:
                 return error
-            try:
-                target_group = Group.objects.get(pk=group_id)
-            except Group.DoesNotExist:
+            already_named = None
+            if request.method == "DELETE":
+                already_named = FileShare.objects.filter(file=file_obj).values(
+                    "shared_with_group_id"
+                )
+            target_group = (
+                nameable_groups(request.user, already_named=already_named)
+                .filter(pk=group_id)
+                .first()
+            )
+            if target_group is None:
                 return Response(
                     {"detail": _("Group not found.")},
                     status=status.HTTP_404_NOT_FOUND,

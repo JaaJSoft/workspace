@@ -15,6 +15,7 @@ from rest_framework.test import APITestCase
 
 from workspace.ai.models import BotProfile
 from workspace.chat.models import Conversation, ConversationMember
+from workspace.users.models import GroupVisibility
 
 from .test_chat import ChatTestMixin
 
@@ -608,6 +609,32 @@ class GroupConversationCreateTests(ChatTestMixin, APITestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 400)
+
+    def test_a_hidden_group_the_creator_is_not_in_answers_like_an_unknown_one(self):
+        GroupVisibility.objects.create(group=self.other_team, is_hidden=True)
+        gone = Group.objects.create(name="Gone")
+        missing_id = gone.pk
+        gone.delete()
+
+        def answer(group_id):
+            resp = self.client.post(
+                "/api/v1/chat/conversations",
+                {"group_ids": [self.team.pk, group_id]},
+                format="json",
+            )
+            return resp.status_code, resp.content
+
+        self.assertEqual(answer(self.other_team.pk), answer(missing_id))
+        self.assertFalse(Conversation.objects.filter(groups=self.other_team).exists())
+
+    def test_a_hidden_group_the_creator_is_in_is_accepted(self):
+        GroupVisibility.objects.create(group=self.team, is_hidden=True)
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": [self.team.pk]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
 
     def test_empty_group_ids_is_400(self):
         resp = self.client.post(

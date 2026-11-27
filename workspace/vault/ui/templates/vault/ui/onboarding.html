@@ -2,7 +2,7 @@
 {% load i18n static %}
 
 {% block title %}
-  {% translate "Set up your master password - Workspace" %}
+  {% translate "Set up your vault - Workspace" %}
 {% endblock %}
 
 {% comment %}
@@ -28,339 +28,356 @@
 {% block content %}
   {% url 'vault_ui:index' as vault_url %}
   <div
-    class="mx-auto max-w-4xl w-full py-8"
+    class="mx-auto max-w-2xl w-full px-4 py-8"
     x-data="vaultOnboarding()"
     data-email="{{ request.user.email }}"
     data-vault-url="{{ vault_url }}"
   >
-    <h1 class="text-2xl font-semibold mb-6">{% translate "Set up your master password" %}</h1>
+    <header class="flex items-start gap-3 mb-6">
+      <span
+        class="w-10 h-10 rounded-full bg-module/15 text-module flex items-center justify-center shrink-0"
+      >
+        <i data-lucide="lock" class="w-5 h-5"></i>
+      </span>
+      <div>
+        <h1 class="text-2xl font-semibold">{% translate "Set up your vault" %}</h1>
+        <p class="text-sm text-base-content/60">
+          {% translate "End-to-end encrypted: nobody but you can read what you store here." %}
+        </p>
+      </div>
+    </header>
 
     <div
       class="card bg-base-100 border border-base-300 shadow-xs overflow-hidden"
     >
-      <div class="flex flex-col md:flex-row">
-        {% comment %}
-          The rail carries the progress on its own, which is why there is no bar
-          and no dots anywhere else. It also keeps the third step in view from
-          the start: knowing a key is coming is what makes someone stop and find
-          something to write on.
-        {% endcomment %}
-        <aside
-          class="md:w-72 shrink-0 bg-base-200/40 border-b md:border-b-0 md:border-r border-base-300 p-5"
+      {% comment %}
+        All three steps are named from the start: knowing a key is coming is
+        what makes someone stop and find something to write on. Each circle is
+        drawn over the line that joins it to the previous one, so the lines
+        stay centred whatever the length of the labels.
+      {% endcomment %}
+      <ol
+        class="flex items-start px-4 sm:px-6 pt-5 pb-4 border-b border-base-300 bg-base-200/40"
+      >
+        <li
+          class="relative flex-1 flex flex-col items-center gap-1.5 text-center"
+          :aria-current="step === 1 ? 'step' : false"
         >
-          <ol>
-            <li class="flex gap-3">
-              <div class="flex flex-col items-center">
-                <span
-                  class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  :class="step === 1 ? 'bg-module text-module-content' : 'bg-success/20 text-success'"
-                >
-                  {% comment %}
-                    Two icons behind x-show rather than one bound data-lucide:
-                    Lucide swaps the i element for an svg and copies its inline
-                    style across, so a binding on the i is frozen at whatever
-                    the first render decided.
-                  {% endcomment %}
-                  <span x-show="step === 1">
-                    <i data-lucide="shield-alert" class="w-4 h-4"></i>
-                  </span>
-                  <span x-show="step > 1" x-cloak>
-                    <i data-lucide="check" class="w-4 h-4"></i>
-                  </span>
-                </span>
-                <span class="w-px flex-1 bg-base-300 my-1"></span>
-              </div>
-              <div class="pb-5">
-                <p class="text-sm font-medium">{% translate "How it works" %}</p>
-                <p class="text-xs text-base-content/50">{% translate "One password opens every vault" %}</p>
-              </div>
-            </li>
+          <span
+            class="relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+            :class="step === 1 ? 'bg-module text-module-content' : 'bg-success text-success-content'"
+          >
+            {% comment %}
+              Text and icon behind x-show rather than one bound data-lucide:
+              Lucide swaps the i element for an svg and copies its inline style
+              across, so a binding on the i is frozen at whatever the first
+              render decided.
+            {% endcomment %}
+            <span x-show="step === 1">1</span>
+            <span x-show="step > 1" x-cloak>
+              <i data-lucide="check" class="w-4 h-4"></i>
+            </span>
+          </span>
+          <span class="text-xs sm:text-sm font-medium px-1">{% translate "How it works" %}</span>
+        </li>
+        <li
+          class="relative flex-1 flex flex-col items-center gap-1.5 text-center"
+          :aria-current="step === 2 ? 'step' : false"
+        >
+          <span
+            class="absolute top-4 right-1/2 w-full h-0.5 -translate-y-1/2"
+            :class="{ 'bg-success': step > 1, 'bg-base-300': step <= 1 }"
+            aria-hidden="true"
+          ></span>
+          <span
+            class="relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+            :class="step === 2 ? 'bg-module text-module-content' : step > 2 ? 'bg-success text-success-content' : 'bg-base-300 text-base-content/60'"
+          >
+            <span x-show="step <= 2">2</span>
+            <span x-show="step > 2" x-cloak>
+              <i data-lucide="check" class="w-4 h-4"></i>
+            </span>
+          </span>
+          <span
+            class="text-xs sm:text-sm font-medium px-1"
+            :class="{ 'text-base-content/50': step < 2 }"
+          >
+            {% translate "Master password" %}
+          </span>
+        </li>
+        <li
+          class="relative flex-1 flex flex-col items-center gap-1.5 text-center"
+          :aria-current="step === 3 ? 'step' : false"
+        >
+          <span
+            class="absolute top-4 right-1/2 w-full h-0.5 -translate-y-1/2"
+            :class="{ 'bg-success': step > 2, 'bg-base-300': step <= 2 }"
+            aria-hidden="true"
+          ></span>
+          <span
+            class="relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+            :class="step === 3 ? 'bg-module text-module-content' : 'bg-base-300 text-base-content/60'"
+          >
+            3
+          </span>
+          <span
+            class="text-xs sm:text-sm font-medium px-1"
+            :class="{ 'text-base-content/50': step < 3 }"
+          >
+            {% translate "Recovery key" %}
+          </span>
+        </li>
+      </ol>
 
-            <li class="flex gap-3">
-              <div class="flex flex-col items-center">
-                <span
-                  class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  :class="step === 2 ? 'bg-module text-module-content' : step > 2 ? 'bg-success/20 text-success' : 'bg-base-200 text-base-content/40'"
-                >
-                  <span x-show="step <= 2">
+      <div class="px-5 sm:px-6 py-6 space-y-5">
+        <inline-alert type="error" x-show="error" x-cloak>
+        <span x-text="error"></span>
+        </inline-alert>
+
+        {# Step 1 - the two halves of the lock, before either is asked for #}
+        <template x-if="step === 1">
+          <section class="space-y-4">
+            <div>
+              <h2 class="text-lg font-semibold mb-1">{% translate "Two keys protect your vaults" %}</h2>
+              <p class="text-sm text-base-content/70">
+                {% blocktranslate trimmed %}
+                  Your data is encrypted in this browser before it is saved. The
+                  server only keeps what it cannot read, so unlocking takes two
+                  things that only you hold:
+                {% endblocktranslate %}
+              </p>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="rounded-lg border border-base-300 p-4">
+                <div class="flex items-center gap-2 mb-2">
+                  <span
+                    class="w-8 h-8 rounded-full bg-module/15 text-module flex items-center justify-center shrink-0"
+                  >
                     <i data-lucide="key-round" class="w-4 h-4"></i>
                   </span>
-                  <span x-show="step > 2" x-cloak>
-                    <i data-lucide="check" class="w-4 h-4"></i>
-                  </span>
-                </span>
-                <span class="w-px flex-1 bg-base-300 my-1"></span>
-              </div>
-              <div class="pb-5">
-                <p
-                  class="text-sm font-medium"
-                  :class="step < 2 && 'text-base-content/40'"
-                >
-                  {% translate "Master password" %}
-                </p>
-                <p class="text-xs text-base-content/50">{% translate "Typed every time you unlock" %}</p>
-              </div>
-            </li>
-
-            <li class="flex gap-3">
-              <span
-                class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                :class="step === 3 ? 'bg-module text-module-content' : 'bg-base-200 text-base-content/40'"
-              >
-                <i data-lucide="shield-check" class="w-4 h-4"></i>
-              </span>
-              <div>
-                <p
-                  class="text-sm font-medium"
-                  :class="step < 3 && 'text-base-content/40'"
-                >
-                  {% translate "Recovery key" %}
-                </p>
-                <p class="text-xs text-base-content/50">{% translate "Shown once, on this screen" %}</p>
-              </div>
-            </li>
-          </ol>
-
-          {% comment %}
-            In the rail, so it is on screen at every step rather than on the
-            first alone - the first being the one people click past.
-          {% endcomment %}
-          <p
-            class="flex items-start gap-2 mt-5 p-3 rounded-lg bg-base-100 border border-base-300 text-xs text-base-content/60"
-          >
-            <i data-lucide="lock" class="w-4 h-4 shrink-0 text-module"></i>
-            <span>
-              {% blocktranslate trimmed %}
-                Encrypted on this device. There is no password reset, and
-                unlocking takes both your password and your recovery key. Lose
-                your password and your vaults are gone. Lose your recovery key
-                and only a device that still remembers it can open them.
-              {% endblocktranslate %}
-            </span>
-          </p>
-        </aside>
-
-        <section class="flex-1 min-w-0 flex flex-col">
-          <div class="flex items-center gap-3 px-6 py-4 border-b border-base-300">
-            <div class="rounded-lg bg-module/15 p-2">
-              <span x-show="step === 1">
-                <i data-lucide="shield-alert" class="w-5 h-5 text-module"></i>
-              </span>
-              <span x-show="step === 2" x-cloak>
-                <i data-lucide="key-round" class="w-5 h-5 text-module"></i>
-              </span>
-              <span x-show="step === 3" x-cloak>
-                <i data-lucide="shield-check" class="w-5 h-5 text-module"></i>
-              </span>
-            </div>
-            <h2 class="font-bold text-lg flex-1">
-              <span x-show="step === 1">{% translate "How it works" %}</span>
-              <span x-show="step === 2" x-cloak>{% translate "Master password" %}</span>
-              <span x-show="step === 3" x-cloak>{% translate "Your recovery key" %}</span>
-            </h2>
-          </div>
-
-          <div class="px-6 py-6 flex-1">
-            <inline-alert type="error" x-show="error" x-cloak>
-            <span x-text="error"></span>
-            </inline-alert>
-
-            {# Step 1 - one password for every vault, and no way back once either half is lost #}
-            <template x-if="step === 1">
-              <section class="space-y-5">
-                <div>
-                  <h3 class="font-semibold mb-1">{% translate "One password opens everything" %}</h3>
-                  <p class="text-sm text-base-content/60">
-                    {% blocktranslate trimmed %}
-                      Your master password unlocks your account, and every vault
-                      in it - today's and the ones you create later. Vaults do not
-                      have their own passwords. It is not your Workspace password
-                      either, and changing one never changes the other.
-                    {% endblocktranslate %}
-                  </p>
+                  <h3 class="font-medium">{% translate "Master password" %}</h3>
                 </div>
-                <div>
-                  <h3 class="font-semibold mb-1">{% translate "It never leaves this browser" %}</h3>
-                  <p class="text-sm text-base-content/60">
-                    {% blocktranslate trimmed %}
-                      It is used here, on this device, to open the keys that
-                      decrypt your data. What we store, we cannot read - which is
-                      also why nobody here can reset it.
-                    {% endblocktranslate %}
-                  </p>
-                </div>
-                <div>
-                  <h3 class="font-semibold mb-1">{% translate "Your recovery key is the other half" %}</h3>
-                  <p class="text-sm text-base-content/60">
-                    {% blocktranslate trimmed %}
-                      We will create one on this device in a moment and show it
-                      once. It does not recover your password: it is the second
-                      half of the lock, the part you bring to a new device. Keep
-                      it offline.
-                    {% endblocktranslate %}
-                  </p>
-                </div>
-              </section>
-            </template>
-
-            {# Step 2 - the master password, behind the floor #}
-            <template x-if="step === 2">
-              <section
-                class="space-y-4"
-                x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
-                @strength-change="strengthChanged($event.detail)"
-              >
-                <p>{% translate "Pick your master password. It never leaves this browser." %}</p>
-                <label class="fieldset w-full">
-                  <span class="text-sm">{% translate "Master password" %}</span>
-                  {% comment %}
-                    On input, not change: the corpus check gates the step, and
-                    hanging it off change would leave the button disabled for
-                    anyone who never blurs the field. One call, because both
-                    lookups have to read the same generation token to discard a
-                    stale answer.
-                  {% endcomment %}
-                  <input
-                    type="password"
-                    class="input w-full"
-                    :class="passwordBlocked() && 'input-error'"
-                    :aria-invalid="passwordBlocked()"
-                    autocomplete="new-password"
-                    data-step-focus
-                    x-model="password"
-                    @input="passwordEdited()"
-                    @input.debounce.400ms="passwordChanged()"
-                    @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
-                  />
-                </label>
-                {% comment %}
-                  The bar and the verdict, under the field they measure, as on
-                  the account password form. The checklist below keeps the
-                  criterion - the floor is this page's - but the wording and the
-                  bands live in one component now. The meter only exists while
-                  this step does, so the estimator is fetched when the step
-                  opens and never on step one.
-                {% endcomment %}
-                {% include "ui/partials/password_strength.html" with password_expr="password" %}
-                <label class="fieldset w-full">
-                  <span class="text-sm">{% translate "Confirm it" %}</span>
-                  <input
-                    type="password"
-                    class="input w-full"
-                    autocomplete="new-password"
-                    x-model="confirmation"
-                    @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
-                  />
-                </label>
-
-                {% include "vault/ui/partials/password_floor_checklist.html" %}
-              </section>
-            </template>
-
-            {# Step 3 - the emergency kit, and the box that gates the end #}
-            <template x-if="step === 3">
-              <section
-                class="space-y-4"
-                x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
-              >
-                <p>
+                <p class="text-sm text-base-content/70">
                   {% blocktranslate trimmed %}
-                    Save it somewhere safe and offline. With your master password,
-                    it is the only way into your vaults.
+                    You choose it in the next step and type it each time you
+                    unlock. It opens all your vaults and is separate from your
+                    Workspace password.
                   {% endblocktranslate %}
                 </p>
-                {% comment %}
-                  The key takes the focus when the step opens, so a screen reader
-                  lands on the one thing this screen exists to hand over.
-                {% endcomment %}
-                <pre
-                  class="p-4 rounded-lg bg-base-200 font-mono text-sm whitespace-pre-wrap break-all"
-                  data-step-focus
-                  data-recovery-key
-                  tabindex="-1"
-                  x-text="groupedSecret()"
-                ></pre>
-                <button type="button" class="btn btn-outline btn-sm" @click="downloadKit()">
+              </div>
+              <div class="rounded-lg border border-base-300 p-4">
+                <div class="flex items-center gap-2 mb-2">
+                  <span
+                    class="w-8 h-8 rounded-full bg-module/15 text-module flex items-center justify-center shrink-0"
+                  >
+                    <i data-lucide="file-key" class="w-4 h-4"></i>
+                  </span>
+                  <h3 class="font-medium">{% translate "Recovery key" %}</h3>
+                </div>
+                <p class="text-sm text-base-content/70">
+                  {% blocktranslate trimmed %}
+                    Generated for you in the last step and shown only once. You
+                    need it, along with your password, to unlock on a new device.
+                    It does not replace a forgotten password.
+                  {% endblocktranslate %}
+                </p>
+              </div>
+            </div>
+          </section>
+        </template>
+
+        {# Step 2 - the master password, behind the floor #}
+        <template x-if="step === 2">
+          <section
+            class="space-y-4"
+            x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
+            @strength-change="strengthChanged($event.detail)"
+          >
+            <div>
+              <h2 class="text-lg font-semibold mb-1">{% translate "Choose your master password" %}</h2>
+              <p class="text-sm text-base-content/70">
+                {% blocktranslate trimmed %}
+                  A sentence of a few words works well: easy for you to remember,
+                  hard for anyone else to guess. It never leaves this browser.
+                {% endblocktranslate %}
+              </p>
+            </div>
+            <label class="fieldset w-full">
+              <span class="text-sm">{% translate "Master password" %}</span>
+              {% comment %}
+                On input, not change: the corpus check gates the step, and
+                hanging it off change would leave the button disabled for
+                anyone who never blurs the field. One call, because both
+                lookups have to read the same generation token to discard a
+                stale answer.
+              {% endcomment %}
+              <input
+                type="password"
+                class="input w-full"
+                :class="passwordBlocked() && 'input-error'"
+                :aria-invalid="passwordBlocked()"
+                autocomplete="new-password"
+                data-step-focus
+                x-model="password"
+                @input="passwordEdited()"
+                @input.debounce.400ms="passwordChanged()"
+                @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
+              />
+            </label>
+            {% comment %}
+              The bar and the verdict, under the field they measure, as on
+              the account password form. The checklist below keeps the
+              criterion - the floor is this page's - but the wording and the
+              bands live in one component now. The meter only exists while
+              this step does, so the estimator is fetched when the step
+              opens and never on step one.
+            {% endcomment %}
+            {% include "ui/partials/password_strength.html" with password_expr="password" %}
+            <label class="fieldset w-full">
+              <span class="text-sm">{% translate "Confirm master password" %}</span>
+              <input
+                type="password"
+                class="input w-full"
+                autocomplete="new-password"
+                x-model="confirmation"
+                @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
+              />
+            </label>
+
+            <div class="rounded-lg bg-base-200/60 p-3">
+              {% include "vault/ui/partials/password_floor_checklist.html" %}
+            </div>
+          </section>
+        </template>
+
+        {# Step 3 - the emergency kit; the box that gates the end sits in the footer, next to the button it unlocks #}
+        <template x-if="step === 3">
+          <section
+            class="space-y-4"
+            x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
+          >
+            <div>
+              <h2 class="text-lg font-semibold mb-1">{% translate "Save your recovery key" %}</h2>
+              <p class="text-sm text-base-content/70">
+                {% blocktranslate trimmed %}
+                  It is shown only this once. Download the emergency kit or write
+                  the key down, and keep it somewhere you can still reach if you
+                  lose this device.
+                {% endblocktranslate %}
+              </p>
+            </div>
+            {% comment %}
+              The key takes the focus when the step opens, so a screen reader
+              lands on the one thing this screen exists to hand over. It wraps
+              at its hyphens only, never inside a group of four: a group split
+              over two lines is a group copied wrong.
+            {% endcomment %}
+            <div
+              class="rounded-lg border border-base-300 bg-base-200/60 p-4 space-y-3"
+            >
+              <pre
+                class="font-mono text-base sm:text-lg tracking-wide text-center whitespace-normal break-normal"
+                data-step-focus
+                data-recovery-key
+                tabindex="-1"
+                x-text="groupedSecret()"
+              ></pre>
+              <div class="flex justify-center">
+                <button type="button" class="btn btn-sm" @click="downloadKit()">
+                  <i data-lucide="download" class="w-4 h-4"></i>
                   {% translate "Download the emergency kit (PDF)" %}
                 </button>
-                <label class="label cursor-pointer justify-start gap-3 whitespace-normal">
-                  <input
-                    type="checkbox"
-                    id="recovery-key-acknowledged"
-                    class="checkbox"
-                    x-model="acknowledged"
-                  />
-                  <span>
-                    {% blocktranslate trimmed %}
-                      I have saved my recovery key. Without it, nobody can open my
-                      vaults.
-                    {% endblocktranslate %}
-                  </span>
-                </label>
-                <label class="label cursor-pointer justify-start gap-3 whitespace-normal">
-                  <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
-                  <span>
-                    {% blocktranslate trimmed %}
-                      Remember my recovery key on this device. Anything that can run
-                      code on this page can then read it, so leave it off on a shared
-                      computer.
-                    {% endblocktranslate %}
-                  </span>
-                </label>
-              </section>
-            </template>
-          </div>
+              </div>
+            </div>
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm mt-0.5"
+                x-model="remember"
+              />
+              <span>
+                <span class="block text-sm">{% translate "Remember the recovery key on this device" %}</span>
+                <span class="block text-xs text-base-content/60">
+                  {% blocktranslate trimmed %}
+                    You will not have to enter it to unlock here. Leave this off
+                    on a shared computer: any code running on this page could
+                    read it.
+                  {% endblocktranslate %}
+                </span>
+              </span>
+            </label>
+          </section>
+        </template>
 
-          <div
-            class="flex items-center justify-between gap-2 px-6 py-4 border-t border-base-300"
-          >
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm"
-              x-show="step === 2"
-              x-cloak
-              :disabled="busy"
-              @click="step = 1"
-            >
-              <i data-lucide="chevron-left" class="w-4 h-4"></i>
-              {% translate "Back" %}
-            </button>
-            <span x-show="step !== 2"></span>
+        {% comment %}
+          On every step rather than the first alone - the first being the one
+          people click past, and the last the one that hands over the key this
+          warning is about.
+        {% endcomment %}
+        <inline-alert type="warning" message="{% translate 'There is no password reset. Forget your master password and your vaults are lost for good. Lose your recovery key and only a device that remembers it can still open them.' %}"></inline-alert>
+      </div>
 
-            <button
-              type="button"
-              class="btn btn-module btn-sm"
-              x-show="step === 1"
-              @click="step = 2"
-            >
-              {% translate "I understand" %}
-              <i data-lucide="chevron-right" class="w-4 h-4"></i>
-            </button>
-            <button
-              type="button"
-              class="btn btn-module btn-sm"
-              x-show="step === 2"
-              x-cloak
-              :disabled="!passwordAcceptable() || busy"
-              @click="generateAndSeal()"
-            >
-              <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
-              {% translate "Set my master password" %}
-            </button>
-            <button
-              type="button"
-              class="btn btn-module btn-sm"
-              x-show="step === 3"
-              x-cloak
-              :disabled="!canFinish() || busy"
-              @click="finish()"
-            >
-              <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
-              {% translate "Create my first vault" %}
-              <i data-lucide="check" class="w-4 h-4"></i>
-            </button>
-          </div>
-        </section>
+      <div
+        class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-base-300"
+      >
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm self-start sm:self-auto"
+          x-show="step === 2"
+          x-cloak
+          :disabled="busy"
+          @click="step = 1"
+        >
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          {% translate "Back" %}
+        </button>
+        <label
+          class="flex items-start gap-3 cursor-pointer"
+          x-show="step === 3"
+          x-cloak
+        >
+          <input
+            type="checkbox"
+            id="recovery-key-acknowledged"
+            class="checkbox checkbox-sm mt-0.5"
+            x-model="acknowledged"
+          />
+          <span class="text-sm font-medium">{% translate "I have saved my recovery key somewhere safe" %}</span>
+        </label>
+        <span x-show="step === 1" class="hidden sm:block"></span>
+
+        <button
+          type="button"
+          class="btn btn-module btn-sm"
+          x-show="step === 1"
+          @click="step = 2"
+        >
+          {% translate "I understand" %}
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+        <button
+          type="button"
+          class="btn btn-module btn-sm"
+          x-show="step === 2"
+          x-cloak
+          :disabled="!passwordAcceptable() || busy"
+          @click="generateAndSeal()"
+        >
+          <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
+          {% translate "Set my master password" %}
+        </button>
+        <button
+          type="button"
+          class="btn btn-module btn-sm"
+          x-show="step === 3"
+          x-cloak
+          :disabled="!canFinish() || busy"
+          @click="finish()"
+        >
+          <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
+          {% translate "Create my first vault" %}
+          <i data-lucide="check" class="w-4 h-4"></i>
+        </button>
       </div>
     </div>
   </div>

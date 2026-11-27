@@ -167,6 +167,8 @@ function chatApp(currentUserId) {
     catchUpAfterReconnect() {
       this.resyncConversations();
       if (!this.activeConversation) return;
+      // An unpin made while the stream was down is not replayed to it.
+      this.loadPinnedMessages(this.activeConversation.uuid);
       this._refreshCurrentMessages();
       this._syncCallBanner();
     },

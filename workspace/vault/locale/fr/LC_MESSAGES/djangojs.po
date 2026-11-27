@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-24 21:09+0100\n"
+"POT-Creation-Date: 2026-11-27 08:14+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -37,7 +37,7 @@ msgid ""
 "key on this page does not open it."
 msgstr ""
 "Votre coffre-fort a déjà été configuré ailleurs, avec une autre clé de "
-"récupération. La clé de cette page ne l’ouvre pas."
+"récupération. La clé affichée ici ne permet pas de l’ouvrir."
 
 #: ui/static/vault/ui/js/onboarding.js
 msgid "Your vault has already been set up. Reload this page to open it."
@@ -49,9 +49,9 @@ msgid ""
 "Your vault is already set up, but we could not confirm from here whether "
 "this page holds its recovery key. Do not close this page - try again."
 msgstr ""
-"Votre coffre-fort est déjà configuré, mais nous n’avons pas pu vérifier "
-"d’ici si cette page détient sa clé de récupération. Ne fermez pas cette page "
-"- réessayez."
+"Votre coffre-fort est déjà configuré, mais impossible de vérifier que la clé "
+"de récupération affichée ici est la bonne. Ne fermez pas cette page et "
+"réessayez."
 
 #: ui/static/vault/ui/js/onboarding.js
 msgid "Your vault could not be created. Nothing was saved; try again."
@@ -199,6 +199,13 @@ msgstr ""
 "Ce dossier contient une entrée qui n’a pas pu être vérifiée. Il n’a pas été "
 "modifié."
 
+#: ui/static/vault/ui/js/vault_browser.js
+msgid ""
+"The folder was not deleted. Its entries and subfolders are unchanged - "
+"nothing was left half-moved."
+msgstr ""
+"Le dossier n’a pas été supprimé. Ses entrées et sous-dossiers sont "
+"inchangés : rien n’a été déplacé à moitié."
 
 #: ui/static/vault/ui/js/vault_browser.js
 msgid "That tag could not be created. Try again."
@@ -401,6 +408,27 @@ msgid "That preference could not be saved. Try again."
 msgstr "Cette préférence n’a pas pu être enregistrée. Réessayez."
 
 #: ui/static/vault/ui/js/vault_store.js
+msgid "%(count)s item"
+msgid_plural "%(count)s items"
+msgstr[0] "%(count)s élément"
+msgstr[1] "%(count)s d’éléments"
+msgstr[2] "%(count)s éléments"
+
+#: ui/static/vault/ui/js/vault_store.js
+msgid "%(count)s folder"
+msgid_plural "%(count)s folders"
+msgstr[0] "%(count)s dossier"
+msgstr[1] "%(count)s de dossiers"
+msgstr[2] "%(count)s dossiers"
+
+#: ui/static/vault/ui/js/vault_store.js
+msgid "%(count)s entry"
+msgid_plural "%(count)s entries"
+msgstr[0] "%(count)s entrée"
+msgstr[1] "%(count)s d’entrées"
+msgstr[2] "%(count)s entrées"
+
+#: ui/static/vault/ui/js/vault_store.js
 msgid "%(count)s selected"
 msgid_plural "%(count)s selected"
 msgstr[0] "%(count)s sélectionné"
@@ -446,6 +474,10 @@ msgid "Newer version"
 msgstr "Version plus récente"
 
 #: ui/static/vault/ui/js/vault_switcher.js
+msgid "Awaiting a key"
+msgstr "En attente d’une clé"
+
+#: ui/static/vault/ui/js/vault_switcher.js
 msgid "Unreadable vault"
 msgstr "Coffre-fort illisible"
 
@@ -454,6 +486,14 @@ msgid "Saved by a newer version of the app. Reload the page to read it."
 msgstr ""
 "Enregistré par une version plus récente de l’application. Rechargez la page "
 "pour le lire."
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid ""
+"Your account holds no key for this vault any more. A member who can still "
+"open it has to share it with you again."
+msgstr ""
+"Votre compte ne détient plus de clé pour ce coffre. Un membre qui peut "
+"encore l’ouvrir doit le partager de nouveau avec vous."
 
 #: ui/static/vault/ui/js/vault_switcher.js
 msgid "Delete this vault and everything in it?"
@@ -559,44 +599,3 @@ msgstr "Oublier la clé sur cet appareil"
 #: ui/static/vault/ui/js/vault_unlock.js
 msgid "Forget it"
 msgstr "L’oublier"
-
-#: ui/static/vault/ui/js/vault_store.js
-msgid "%(count)s item"
-msgid_plural "%(count)s items"
-msgstr[0] "%(count)s élément"
-msgstr[1] "%(count)s d’éléments"
-msgstr[2] "%(count)s éléments"
-
-#: ui/static/vault/ui/js/vault_store.js
-msgid "%(count)s folder"
-msgid_plural "%(count)s folders"
-msgstr[0] "%(count)s dossier"
-msgstr[1] "%(count)s de dossiers"
-msgstr[2] "%(count)s dossiers"
-
-#: ui/static/vault/ui/js/vault_store.js
-msgid "%(count)s entry"
-msgid_plural "%(count)s entries"
-msgstr[0] "%(count)s entrée"
-msgstr[1] "%(count)s d’entrées"
-msgstr[2] "%(count)s entrées"
-
-#: ui/static/vault/ui/js/vault_browser.js
-msgid ""
-"The folder was not deleted. Its entries and subfolders are unchanged - "
-"nothing was left half-moved."
-msgstr ""
-"Le dossier n’a pas été supprimé. Ses entrées et sous-dossiers sont inchangés : "
-"rien n’a été déplacé à moitié."
-
-#: ui/static/vault/ui/js/vault_switcher.js
-msgid "Awaiting a key"
-msgstr "En attente d’une clé"
-
-#: ui/static/vault/ui/js/vault_switcher.js
-msgid ""
-"Your account holds no key for this vault any more. A member who can still "
-"open it has to share it with you again."
-msgstr ""
-"Votre compte ne détient plus de clé pour ce coffre. Un membre qui peut "
-"encore l’ouvrir doit le partager de nouveau avec vous."

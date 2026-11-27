@@ -24,6 +24,7 @@
     @chat-message_deleted.window="handleSSEMessageDeleted($event.detail)"
     @chat-reaction.window="handleSSEReaction($event.detail)"
     @chat-message_pinned.window="handleSSEMessagePinned($event.detail)"
+    @chat-message_unpinned.window="handleSSEMessageUnpinned($event.detail)"
     @chat-link_preview.window="handleSSELinkPreview($event.detail)"
     @chat-read.window="handleSSERead($event.detail)"
     @chat-typing.window="handleSSETyping($event.detail)"

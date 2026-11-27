@@ -5,7 +5,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from workspace.common.uuids import parse_uuid_or_none
-from workspace.core.sse_registry import SSEProvider
+from workspace.core.sse_registry import SSEProvider, mailbox_head, read_user_events
 
 from .models import (
     Conversation,
@@ -22,6 +22,7 @@ from .serializers import (
     with_message_relations,
 )
 from .services.conversations import get_unread_counts, user_conversation_ids
+from .services.notifications import SSE_SLUG
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,9 @@ class ChatSSEProvider(SSEProvider):
         else:
             self._since = timezone.now()
 
+        # Removals queued before this connection are already reflected by the
+        # page that opened it, rendered from the database.
+        self._mailbox_cursor = mailbox_head(SSE_SLUG, user.id)
         self._conv_titles = self._current_titles()
         self._seen_message_ids = set()
         self._seen_edit_keys = set()
@@ -96,6 +100,14 @@ class ChatSSEProvider(SSEProvider):
 
         for envelope in drain_events(user_id):
             events.append((envelope["event"], envelope["data"], None))
+
+        # Removals (a reaction taken back, an unpin) delete their row, so the
+        # database queries below have nothing to find: the views queue them.
+        entries, self._mailbox_cursor = read_user_events(
+            SSE_SLUG, user_id, self._mailbox_cursor
+        )
+        for _, payload in entries:
+            events.append((payload["type"], payload, None))
 
         # Only query for new events if dirty flag changed
         if cache_value is None:

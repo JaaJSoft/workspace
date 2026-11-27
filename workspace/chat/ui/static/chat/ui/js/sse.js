@@ -193,6 +193,10 @@ window.chatSseMixin = function chatSseMixin() {
       if (this._isOpenConversation(detail)) this._scheduleSseRefresh({ pins: true });
     },
 
+    handleSSEMessageUnpinned(detail) {
+      if (this._isOpenConversation(detail)) this._scheduleSseRefresh({ pins: true });
+    },
+
     // A read only changes a receipt on the user's own messages that is still
     // waiting on readers (_read_receipt.html marks it). A refresh in flight
     // was answered before this read, so the receipts are judged once it has

@@ -177,6 +177,25 @@ class ReorderViewTests(ApiViewTestCase):
         self.assertEqual(self.calls, [])
 
 
+class _ReorderLosingARow(_Reorder):
+    """Its service finds one row deleted since the request was read."""
+
+    def perform_reorder(self, rows, data):
+        super().perform_reorder(rows, data)
+        self.rows.rows.remove(next(r for r in self.rows.rows if r.name == "a"))
+
+
+class ReorderRaceTests(ApiViewTestCase):
+    view_class = _ReorderLosingARow
+
+    def test_a_row_deleted_meanwhile_refuses_the_order(self):
+        gone = self.rows.named("a")
+        response = self._send("post", {"uuids": [str(self.rows.named("c")), str(gone)]})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(list(response.data), ["uuids"])
+        self.assertIn(str(gone), response.data["uuids"][0])
+
+
 class _Actions(AvailableActionsView):
     permission_classes = []
     rows = None

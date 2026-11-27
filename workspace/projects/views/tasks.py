@@ -10,7 +10,13 @@ from rest_framework.generics import (
 )
 from rest_framework.response import Response
 
-from workspace.common.views import BatchView, LinkView, ReorderView, unknown_rows
+from workspace.common.views import (
+    BatchView,
+    LinkView,
+    ReorderView,
+    refuse_if_gone,
+    unknown_rows,
+)
 
 from ..filters import AllTasksFilter, TaskListFilter
 from ..models import Task, TaskEvent
@@ -54,23 +60,6 @@ class TaskLotMixin:
 
     def get_queryset(self):
         return self.project.tasks.all()
-
-    def refuse_if_gone(self, tasks):
-        """Refuse the request when one of *tasks* was deleted since it was read.
-
-        Called once the service has run, inside the request's transaction:
-        the service holds its locks by then, so what is left cannot change
-        anymore, and a service skips a task it does not find instead of
-        failing. Raising undoes what it did to the others.
-        """
-        left = set(
-            self.project.tasks.filter(pk__in=[task.pk for task in tasks]).values_list(
-                "pk", flat=True
-            )
-        )
-        gone = [task.pk for task in tasks if task.pk not in left]
-        if gone:
-            raise unknown_rows(gone)
 
 
 class TaskContextMixin(ProjectContextMixin):
@@ -273,7 +262,7 @@ class TaskBatchView(TaskLotMixin, ProjectContextMixin, BatchView):
 
     def _changed(self, tasks, changed):
         """The tasks the service changed, as stored, in the order asked."""
-        self.refuse_if_gone(tasks)
+        refuse_if_gone(self.project.tasks, tasks)
         stored = _with_relations(self.project.tasks).in_bulk([t.pk for t in changed])
         return [stored[task.pk] for task in tasks if task.pk in stored]
 
@@ -378,7 +367,6 @@ class TaskReorderView(TaskLotMixin, ProjectContextMixin, ReorderView):
             [task.uuid for task in tasks],
             actor=self.request.user,
         )
-        self.refuse_if_gone(tasks)
 
 
 @extend_schema(tags=["Projects - Tasks"])

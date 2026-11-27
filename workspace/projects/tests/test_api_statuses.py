@@ -1,4 +1,5 @@
 import uuid as uuid_module
+from unittest import mock
 
 from django.utils import timezone
 from rest_framework import status
@@ -8,6 +9,7 @@ from workspace.projects.services.projects import (
     create_project,
     get_or_create_personal_project,
 )
+from workspace.projects.services.statuses import reorder_statuses
 from workspace.projects.services.tasks import create_task
 
 from .base import ProjectTestMixin
@@ -307,6 +309,33 @@ class StatusReorderApiTests(ProjectTestMixin, APITestCase):
         refused = reorder(elsewhere.uuid)
         self.assertEqual(refused[0], status.HTTP_400_BAD_REQUEST)
         self.assertEqual(refused, reorder(absent))
+        self.assertEqual(
+            self.project.statuses.order_by("position").first().name, "Backlog"
+        )
+
+    def test_a_column_deleted_meanwhile_refuses_the_order(self):
+        """Deleted between the read of the request and the lock of the
+        service, which can only skip it: the order asked for cannot be
+        given, so none is."""
+        statuses = {s.name: s for s in self.project.statuses.all()}
+        gone = statuses["To do"]
+
+        def delete_then_reorder(*args, **kwargs):
+            self.project.statuses.filter(pk=gone.pk).delete()
+            return reorder_statuses(*args, **kwargs)
+
+        self.client.force_authenticate(self.admin)
+        with mock.patch(
+            "workspace.projects.views.statuses.reorder_statuses",
+            side_effect=delete_then_reorder,
+        ):
+            response = self.client.post(
+                self._url(),
+                {"uuids": [str(statuses["Done"].uuid), str(gone.uuid)]},
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(str(gone.uuid), response.data["uuids"][0])
         self.assertEqual(
             self.project.statuses.order_by("position").first().name, "Backlog"
         )

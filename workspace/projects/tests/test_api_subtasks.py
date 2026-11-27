@@ -1,11 +1,12 @@
 import uuid as uuid_module
+from unittest import mock
 
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.projects.services.projects import create_project
-from workspace.projects.services.subtasks import create_subtask
+from workspace.projects.services.subtasks import create_subtask, reorder_subtasks
 from workspace.projects.services.tasks import create_task
 
 from .base import ProjectTestMixin
@@ -207,6 +208,29 @@ class SubtaskApiTests(ProjectTestMixin, APITestCase):
         refused = reorder(foreign.uuid)
         self.assertEqual(refused[0], status.HTTP_400_BAD_REQUEST)
         self.assertEqual(refused, reorder(absent))
+
+    def test_an_item_deleted_meanwhile_refuses_the_order(self):
+        a = create_subtask(self.task, "a")
+        b = create_subtask(self.task, "b")
+        c = create_subtask(self.task, "c")
+
+        def delete_then_reorder(*args, **kwargs):
+            self.task.subtasks.filter(pk=b.pk).delete()
+            return reorder_subtasks(*args, **kwargs)
+
+        self.client.force_authenticate(self.member)
+        with mock.patch(
+            "workspace.projects.views.subtasks.reorder_subtasks",
+            side_effect=delete_then_reorder,
+        ):
+            response = self.client.post(
+                f"{self.base_url}/reorder",
+                {"uuids": [str(c.uuid), str(b.uuid), str(a.uuid)]},
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(str(b.uuid), response.data["uuids"][0])
+        titles = [s.title for s in self.task.subtasks.order_by("position")]
+        self.assertEqual(titles[0], "a")
 
     def test_archived_project_rejects_reorder(self):
         self.project.archived_at = timezone.now()

@@ -1,92 +1,70 @@
 """Management command to run SQLite database maintenance."""
 
-import logging
+from django.core.management.base import BaseCommand, CommandError
 
-from django.core.management.base import BaseCommand
-
-logger = logging.getLogger(__name__)
+from workspace.core.services.sqlite_maintenance import (
+    integrity_check,
+    is_sqlite,
+    run_maintenance,
+)
 
 
 class Command(BaseCommand):
     help = (
-        "Run SQLite maintenance: PRAGMA optimize, WAL checkpoint, "
-        "VACUUM, and integrity check."
+        "Run the SQLite maintenance pass: PRAGMA optimize, incremental vacuum "
+        "and WAL checkpoint."
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--skip-vacuum",
+            "--integrity-check",
             action="store_true",
-            help="Skip VACUUM (can be slow on large databases).",
-        )
-        parser.add_argument(
-            "--skip-integrity-check",
-            action="store_true",
-            help="Skip PRAGMA integrity_check.",
+            help="Also run PRAGMA integrity_check (reads the whole database).",
         )
 
     def handle(self, *args, **options):
-        from workspace.core.tasks import _run_maintenance
-
-        self.stdout.write("Starting SQLite maintenance…")
-
-        result = _run_maintenance(
-            skip_vacuum=options["skip_vacuum"],
-            skip_integrity_check=options["skip_integrity_check"],
-        )
-
-        if result.get("skipped"):
-            self.stdout.write(self.style.WARNING(result["reason"]))
+        if not is_sqlite():
+            self.stdout.write(self.style.WARNING("Database backend is not SQLite."))
             return
 
-        # optimize
-        self.stdout.write(
-            self.style.SUCCESS(f"  PRAGMA optimize: {result['optimize_ms']} ms")
-        )
-
-        # WAL checkpoint
+        result = run_maintenance()
+        self.stdout.write(f"  PRAGMA optimize: {result['optimize_ms']} ms")
+        if result["auto_vacuum"] != "incremental":
+            self.stdout.write(
+                self.style.WARNING(
+                    f"  Incremental vacuum: skipped, auto_vacuum is "
+                    f"{result['auto_vacuum']}. 'manage.py migrate' switches it "
+                    "once the disk has room for about twice the database."
+                )
+            )
+        elif result["steps"]:
+            self.stdout.write(
+                f"  Incremental vacuum: {result['pages_freed']} pages freed in "
+                f"{result['steps']} steps, {result['freelist_count']} left "
+                f"({result['incremental_vacuum_ms']} ms)"
+            )
+        else:
+            self.stdout.write("  Incremental vacuum: no free pages")
         wal = result["wal_checkpoint"]
         self.stdout.write(
-            self.style.SUCCESS(
-                f"  WAL checkpoint: {result['wal_checkpoint_ms']} ms "
-                f"(code={wal['return_code']}, written={wal['pages_written']}, "
-                f"checkpointed={wal['pages_checkpointed']})"
-            )
+            f"  WAL checkpoint: {result['wal_checkpoint_ms']} ms "
+            f"(code={wal['return_code']}, written={wal['pages_written']}, "
+            f"checkpointed={wal['pages_checkpointed']})"
+            + ("" if wal["complete"] else ", left for a later checkpoint")
         )
+        before, after = result["size_before"], result["size_after"]
+        if before is not None and after is not None:
+            self.stdout.write(
+                f"  Size: {before / 2**20:.1f} MB -> {after / 2**20:.1f} MB"
+            )
 
-        # VACUUM
-        if result.get("vacuum_skipped"):
-            self.stdout.write(self.style.WARNING("  VACUUM: skipped"))
-        else:
-            size_info = ""
-            if result.get("size_before") is not None:
-                before_kb = result["size_before"] / 1024
-                after_kb = result["size_after"] / 1024
-                saved_kb = result.get("size_saved", 0) / 1024
-                size_info = (
-                    f" (before={before_kb:.1f} KB, after={after_kb:.1f} KB, "
-                    f"saved={saved_kb:.1f} KB)"
+        if options["integrity_check"]:
+            check = integrity_check()
+            if check["integrity_check"] != "ok":
+                raise CommandError(
+                    f"Integrity check failed: {check['integrity_check']}"
                 )
             self.stdout.write(
-                self.style.SUCCESS(f"  VACUUM: {result['vacuum_ms']} ms{size_info}")
+                f"  Integrity check: ok ({check['integrity_check_ms']} ms)"
             )
-
-        # Integrity check
-        if result.get("integrity_check_skipped"):
-            self.stdout.write(self.style.WARNING("  Integrity check: skipped"))
-        else:
-            check = result["integrity_check"]
-            if check == "ok":
-                self.stdout.write(
-                    self.style.SUCCESS(
-                        f"  Integrity check: ok ({result['integrity_check_ms']} ms)"
-                    )
-                )
-            else:
-                self.stderr.write(
-                    self.style.ERROR(
-                        f"  Integrity check FAILED ({result['integrity_check_ms']} ms): {check}"
-                    )
-                )
-
         self.stdout.write(self.style.SUCCESS("Maintenance complete."))

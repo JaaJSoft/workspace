@@ -11,36 +11,15 @@ by the requests in flight. Two ways that took a worker past its limit:
   mmap covers them; past it, or from a WAL a long reader keeps from being
   checkpointed, each connection fills up to its cache_size.
 
-The test database is in memory, where Django ignores ``close()`` and none of
-the PRAGMAs on the file apply, so the checks run against a SQLite file
-configured like the default database.
+The checks run against a SQLite file configured like the default database
+(see ``sqlite_files``).
 """
 
-import tempfile
 import unittest
-from contextlib import contextmanager
-from pathlib import Path
 
-from django.conf import settings
 from django.db import connection
-from django.db.utils import ConnectionHandler
 
-
-@contextmanager
-def file_connection():
-    """A connection to a fresh SQLite file, set up as the default database."""
-    with tempfile.TemporaryDirectory() as tmp:
-        config = {
-            **settings.DATABASES["default"],
-            "NAME": str(Path(tmp) / "db.sqlite3"),
-        }
-        config.pop("TEST", None)
-        db = ConnectionHandler({"default": config})["default"]
-        try:
-            db.ensure_connection()
-            yield db
-        finally:
-            db.close()
+from workspace.core.tests.sqlite_files import file_connection
 
 
 class SQLiteMemoryTests(unittest.TestCase):

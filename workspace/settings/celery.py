@@ -116,19 +116,21 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.reconcile_storage_usage",
         "schedule": crontab(hour=2, minute=55),  # Every day at 2:55 AM
     },
+    # Every day at 3:00 AM: optimize, incremental vacuum, WAL checkpoint. The
+    # vacuum frees pages in short write transactions with pauses between them,
+    # and the checkpoint is PASSIVE, which never waits for a reader. A full VACUUM is never scheduled: it holds the
+    # write lock for the whole rewrite and needs twice the database in free
+    # disk; the one a database needs to switch modes runs after migrate.
     "db-maintenance": {
         "task": "core.db_maintenance",
-        # Mon-Sat at 3:00 AM: cheap pass only (optimize + WAL checkpoint).
-        # VACUUM and integrity_check are skipped here - both scale with database
-        # size and VACUUM holds an exclusive lock plus needs ~2x the file size in
-        # free disk, so running them daily stalls every write on large SQLite files.
         "schedule": crontab(hour=3, minute=0, day_of_week="1-6"),
-        "kwargs": {"skip_vacuum": True, "skip_integrity_check": True},
     },
-    "db-maintenance-full": {
+    # Sunday at 3:00 AM: the same pass plus an integrity check, which scales
+    # with the database's size but only reads.
+    "db-maintenance-weekly": {
         "task": "core.db_maintenance",
-        # Sunday at 3:00 AM: full pass including VACUUM + integrity_check.
         "schedule": crontab(hour=3, minute=0, day_of_week=0),
+        "kwargs": {"integrity_check": True},
     },
     "sync-all-mail-accounts": {
         "task": "mail.sync_all_accounts",

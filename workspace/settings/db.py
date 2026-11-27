@@ -124,7 +124,13 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     #   transaction stops checkpoints from catching up, and the WAL grows.
     # - temp_store=FILE: a sort or temporary table spills past the page cache
     #   into a temporary file instead of holding all its rows in memory.
+    # - auto_vacuum=INCREMENTAL: lets core.db_maintenance hand free pages
+    #   back to the filesystem in short steps instead of a full VACUUM. SQLite
+    #   only applies it to a database with no table yet, and only ahead of
+    #   journal_mode=WAL, which writes the header. An existing database is
+    #   rewritten into it once, after migrate (core.services.sqlite_maintenance).
     DATABASES["default"]["OPTIONS"]["init_command"] = (
+        "PRAGMA auto_vacuum=INCREMENTAL; "
         "PRAGMA journal_mode=WAL; "
         "PRAGMA foreign_keys=ON; "
         "PRAGMA busy_timeout=60000; "

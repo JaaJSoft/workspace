@@ -75,6 +75,10 @@ window.shareModal = function shareModal() {
     linkGeneratorError: '',
     // A link that could not be created or revoked, reported the same way.
     linkError: '',
+    // The link whose QR code is unfolded under its row, one at a time, and
+    // whether its image failed to load.
+    qrLinkUuid: null,
+    qrFailed: false,
 
     // A share is addressed to a user or a group, and the two id spaces
     // overlap, so every entry is keyed by both.
@@ -325,6 +329,7 @@ window.shareModal = function shareModal() {
       this.pendingRemovals = new Set();
       this.pendingPermissionChanges = new Map();
       this.shareLinks = [];
+      this.qrLinkUuid = null;
       this.closeLinkForm();
     },
 
@@ -467,6 +472,18 @@ window.shareModal = function shareModal() {
       } catch (e) {
         this.linkError = gettext('The link could not be revoked.');
       }
+    },
+
+    // --- Link QR code ---
+
+    toggleLinkQr(linkUuid) {
+      this.qrLinkUuid = this.qrLinkUuid === linkUuid ? null : linkUuid;
+      this.qrFailed = false;
+    },
+
+    // svg on screen, png for a download that lands in a gallery or a print job.
+    linkQrUrl(link, kind = 'svg') {
+      return `${link.qrcode_url}?kind=${kind}`;
     },
 
     // The server's reason when it gave one: a detail, or the first message

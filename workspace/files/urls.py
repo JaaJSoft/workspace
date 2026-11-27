@@ -8,6 +8,7 @@ from .views.operations import (
     FileOperationListView,
     FileOperationView,
 )
+from .views.qrcodes import ShareLinkQRCodeView
 from .views.sensitive import SensitiveFilesView
 from .views.share_links import (
     SharedFileContentView,
@@ -67,6 +68,11 @@ urlpatterns = [
         "api/v1/files/operations/<uuid:uuid>/cancel",
         FileOperationCancelView.as_view(),
         name="file-operation-cancel",
+    ),
+    path(
+        "api/v1/files/share-links/<uuid:uuid>/qrcode",
+        ShareLinkQRCodeView.as_view(),
+        name="share-link-qrcode",
     ),
     path(
         "api/v1/files/shared/<str:token>",

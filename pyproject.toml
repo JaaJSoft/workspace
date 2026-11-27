@@ -179,6 +179,10 @@ dev = [
     # The dataset and the report of scripts/agent_evals.py. Each release pins
     # the pydantic-ai-slim of the same number, so the two are bumped together.
     "pydantic-evals>=2.71.0",
+    # An independent QR code reader. workspace/common/qr.py draws the codes
+    # itself, so the tests read them back with somebody else's decoder rather
+    # than trust the drawing. Never imported by application code.
+    "zxing-cpp>=3.2.0",
 ]
 
 [tool.djlint]

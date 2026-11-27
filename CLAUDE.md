@@ -623,7 +623,7 @@ events = Event.objects.filter(visible_events_q(user), title__icontains=query)
 
 ```python
 from workspace.files.queries import (
-    accessible_files_q, can_access, get_permission, owned_files_qs,
+    accessible_files_q, can_access, get_permission, owned_files_qs, owned_share_links,
     restorable_files_qs, user_files_qs, user_group_files_qs,
 )
 
@@ -635,6 +635,9 @@ qs = user_files_qs(user)
 
 # Nodes the user owns and still manages (personal + group nodes of groups they are still in), deleted_at NOT filtered:
 qs = owned_files_qs(user)
+
+# Public links the user manages: those of the live nodes they own (not a shared file's, not another member's):
+links = owned_share_links(user)
 
 # Trashed nodes the user may restore (personal + every node of their groups), deleted_at NOT filtered;
 # trash_permission(user, file_obj) is get_permission with EDIT on the group's trashed nodes for its members:

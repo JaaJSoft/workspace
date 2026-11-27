@@ -1,12 +1,14 @@
 from contextlib import contextmanager
 
 from django.db.models.manager import BaseManager
+from django.urls import reverse
 from django.utils.translation import gettext, gettext_lazy
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.exceptions import APIException, PermissionDenied
 
+from workspace.common.qr import QR_IMAGE_KINDS
 from workspace.common.services.mentions import render_comment_body
 from workspace.files.queries import (
     FilePermission,
@@ -42,6 +44,7 @@ from workspace.files.services.operations import (
 )
 from workspace.files.services.refusals import Refusal, Refused
 from workspace.files.services.scanning.policy import QuarantinedSource
+from workspace.files.services.sharing import share_link_url
 from workspace.files.services.shortcuts import (
     UNAVAILABLE,
     TargetUnreachable,
@@ -1291,6 +1294,7 @@ class ShareLinkCreateSerializer(serializers.Serializer):
 
 class ShareLinkSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
+    qrcode_url = serializers.SerializerMethodField()
     node_type = serializers.CharField(source="file.node_type", read_only=True)
     has_password = serializers.BooleanField(read_only=True)
 
@@ -1300,6 +1304,7 @@ class ShareLinkSerializer(serializers.ModelSerializer):
             "uuid",
             "token",
             "url",
+            "qrcode_url",
             "node_type",
             "mode",
             "max_file_bytes",
@@ -1314,5 +1319,15 @@ class ShareLinkSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_url(self, link) -> str:
-        request = self.context["request"]
-        return request.build_absolute_uri(f"/files/shared/{link.token}")
+        return share_link_url(self.context["request"], link)
+
+    def get_qrcode_url(self, link) -> str:
+        return reverse("share-link-qrcode", kwargs={"uuid": link.uuid})
+
+
+class ShareLinkQRCodeQuerySerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(
+        choices=QR_IMAGE_KINDS,
+        default="svg",
+        help_text="`svg` to show the code in a page, `png` to save or print it.",
+    )

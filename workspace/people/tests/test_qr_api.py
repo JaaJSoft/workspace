@@ -3,7 +3,9 @@ import uuid
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
+from workspace.common.tests.qr import read_qr
 from workspace.people.services.persons import create_person
+from workspace.people.services.vcard import person_to_qr_vcard
 
 User = get_user_model()
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -36,6 +38,10 @@ class QRCodeApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "image/png")
         self.assertTrue(response.content.startswith(PNG_MAGIC))
+
+    def test_scanning_the_code_gives_the_contacts_card(self):
+        response = self.get(person=self.person.uuid, kind="png")
+        self.assertEqual(read_qr(response.content), person_to_qr_vcard(self.person))
 
     def test_named_after_the_contact_and_shown_inline(self):
         response = self.get(person=self.person.uuid)

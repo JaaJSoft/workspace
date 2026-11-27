@@ -191,10 +191,11 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         response = self.client.get(f"/projects/{self.project.uuid}/board")
         self.assertIn(
             {
-                "id": str(self.member.pk),
+                "id": self.member.pk,
                 "username": "member1",
                 "first_name": "",
                 "last_name": "",
+                "avatar_url": f"/api/v1/users/{self.member.pk}/avatar",
             },
             response.context["members_data"],
         )
@@ -222,7 +223,7 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/board")
         ids = [m["id"] for m in response.context["members_data"]]
-        self.assertIn(str(grouper.pk), ids)
+        self.assertIn(grouper.pk, ids)
 
     def test_content_swap_skips_the_page_only_pickers_data(self):
         self.client.force_login(self.member)

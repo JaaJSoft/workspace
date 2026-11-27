@@ -669,7 +669,7 @@ role = get_project_role(user, project)
 users = project_users(project)
 ```
 
-Task-level queries filter with `project_id__in=user_project_ids(user)` - see `tasks_due_between` / `assigned_open_tasks` in the same module for the canonical pattern (they also exclude archived projects and done statuses).
+Task-level queries filter with `project_id__in=user_project_ids(user)` - see `assigned_open_tasks` in the same module for the canonical pattern (it also excludes archived projects and done statuses).
 
 #### Photos - `workspace.photos.queries`
 

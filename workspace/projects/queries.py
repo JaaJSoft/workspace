@@ -102,30 +102,6 @@ def due_open_tasks():
     )
 
 
-def tasks_due_between(user, start, end):
-    """Open tasks due in ``[start, end)`` across every project *user* can see.
-
-    Feeds the calendar module's task overlay, which queries this at render
-    time instead of mirroring due dates into ``Event`` rows - a due date
-    moved on the board shows up on the next fetch with nothing to sync and
-    nothing to drift. ``end`` is exclusive to match FullCalendar's range.
-
-    Accessible, non-archived projects only, with no assignee filter:
-    the calendar shows the whole team's deadlines, not just the viewer's.
-    """
-    return (
-        Task.objects.filter(
-            project_id__in=user_project_ids(user),
-            project__archived_at__isnull=True,
-            due_date__gte=start,
-            due_date__lt=end,
-        )
-        .exclude(status__category=TaskStatus.Category.DONE)
-        .select_related("project")
-        .order_by("due_date", "position")
-    )
-
-
 def assigned_open_tasks(user):
     """Open tasks assigned to *user*, most urgent first.
 

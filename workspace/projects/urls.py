@@ -1,9 +1,21 @@
 from django.urls import path
 
 from .views.actions import ProjectAvailableActionsView
-from .views.calendar import TaskCalendarView
+from .views.attachments import (
+    AttachmentContentView,
+    AttachmentDetailView,
+    AttachmentDownloadView,
+    AttachmentListView,
+)
+from .views.comments import CommentDetailView, CommentListView
 from .views.epics import EpicDetailView, EpicListView
 from .views.labels import LabelDetailView, LabelListView
+from .views.links import (
+    FileLinkDetailView,
+    FileLinkListView,
+    TaskLinkDetailView,
+    TaskLinkListView,
+)
 from .views.members import MemberDetailView, MemberListView, ProjectUserListView
 from .views.projects import (
     ProjectConvertView,
@@ -27,24 +39,6 @@ from .views.tasks import (
     TaskReorderView,
     TaskWatchView,
 )
-from .views.viewsets import (
-    TaskAttachmentViewSet,
-    TaskCommentViewSet,
-    TaskFileLinkViewSet,
-    TaskLinkViewSet,
-)
-
-task_comments = TaskCommentViewSet.as_view({"get": "list", "post": "create"})
-task_comment_detail = TaskCommentViewSet.as_view(
-    {"patch": "partial_update", "delete": "destroy"}
-)
-task_attachments = TaskAttachmentViewSet.as_view({"get": "list", "post": "create"})
-task_attachment_detail = TaskAttachmentViewSet.as_view({"delete": "destroy"})
-task_attachment_download = TaskAttachmentViewSet.as_view({"get": "download"})
-task_links = TaskLinkViewSet.as_view({"get": "list", "post": "create"})
-task_link_detail = TaskLinkViewSet.as_view({"delete": "destroy"})
-task_file_links = TaskFileLinkViewSet.as_view({"get": "list", "post": "create"})
-task_file_link_detail = TaskFileLinkViewSet.as_view({"delete": "destroy"})
 
 urlpatterns = [
     path("api/v1/projects", ProjectListView.as_view(), name="project-list"),
@@ -54,11 +48,6 @@ urlpatterns = [
         name="project-available-actions",
     ),
     path("api/v1/projects/tasks", AllTasksView.as_view(), name="project-all-tasks"),
-    path(
-        "api/v1/projects/tasks/calendar",
-        TaskCalendarView.as_view(),
-        name="project-tasks-calendar",
-    ),
     path(
         "api/v1/projects/tasks/<uuid:uuid>",
         TaskDetailView.as_view(),
@@ -83,6 +72,56 @@ urlpatterns = [
         "api/v1/projects/subtasks/<uuid:uuid>",
         SubtaskDetailView.as_view(),
         name="project-subtask-detail",
+    ),
+    path(
+        "api/v1/projects/tasks/<uuid:task_uuid>/comments",
+        CommentListView.as_view(),
+        name="project-task-comments",
+    ),
+    path(
+        "api/v1/projects/comments/<uuid:uuid>",
+        CommentDetailView.as_view(),
+        name="project-comment-detail",
+    ),
+    path(
+        "api/v1/projects/tasks/<uuid:task_uuid>/attachments",
+        AttachmentListView.as_view(),
+        name="project-task-attachments",
+    ),
+    path(
+        "api/v1/projects/attachments/<uuid:uuid>",
+        AttachmentDetailView.as_view(),
+        name="project-attachment-detail",
+    ),
+    path(
+        "api/v1/projects/attachments/<uuid:uuid>/content",
+        AttachmentContentView.as_view(),
+        name="project-attachment-content",
+    ),
+    path(
+        "api/v1/projects/attachments/<uuid:uuid>/download",
+        AttachmentDownloadView.as_view(),
+        name="project-attachment-download",
+    ),
+    path(
+        "api/v1/projects/tasks/<uuid:task_uuid>/links",
+        TaskLinkListView.as_view(),
+        name="project-task-links",
+    ),
+    path(
+        "api/v1/projects/links/<uuid:uuid>",
+        TaskLinkDetailView.as_view(),
+        name="project-link-detail",
+    ),
+    path(
+        "api/v1/projects/tasks/<uuid:task_uuid>/file-links",
+        FileLinkListView.as_view(),
+        name="project-task-file-links",
+    ),
+    path(
+        "api/v1/projects/file-links/<uuid:uuid>",
+        FileLinkDetailView.as_view(),
+        name="project-file-link-detail",
     ),
     path(
         "api/v1/projects/members/<uuid:uuid>",
@@ -183,50 +222,5 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/reorder",
         TaskReorderView.as_view(),
         name="project-tasks-reorder",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/comments",
-        task_comments,
-        name="project-task-comments",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/comments/<uuid:uuid>",
-        task_comment_detail,
-        name="project-task-comment-detail",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/attachments",
-        task_attachments,
-        name="project-task-attachments",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/attachments/<uuid:uuid>",
-        task_attachment_detail,
-        name="project-task-attachment-detail",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/attachments/<uuid:uuid>/download",
-        task_attachment_download,
-        name="project-task-attachment-download",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/links",
-        task_links,
-        name="project-task-links",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/links/<uuid:uuid>",
-        task_link_detail,
-        name="project-task-link-detail",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/files",
-        task_file_links,
-        name="project-task-file-links",
-    ),
-    path(
-        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/files/<uuid:uuid>",
-        task_file_link_detail,
-        name="project-task-file-link-detail",
     ),
 ]

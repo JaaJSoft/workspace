@@ -21,9 +21,7 @@ class TaskCommentApiTests(ProjectTestMixin, APITestCase):
     def setUp(self):
         super().setUp()
         self.task = create_task(self.project, self.admin, title="Ship the thing")
-        self.base_url = (
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/comments"
-        )
+        self.base_url = f"/api/v1/projects/tasks/{self.task.uuid}/comments"
 
     def _create_comment(self, author, body="hello"):
         return self.task.comments.create(author=author, body=body)
@@ -36,19 +34,50 @@ class TaskCommentApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.member)
         response = self.client.get(self.base_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        comments = response.data["comments"]
+        comments = response.data
         self.assertEqual([c["body"] for c in comments], ["first", "second"])
-        self.assertEqual(comments[0]["author"]["username"], "admin1")
-
-    def test_list_includes_mention_users(self):
-        self.client.force_authenticate(self.member)
-        response = self.client.get(self.base_url)
-        usernames = {u["username"] for u in response.data["mention_users"]}
-        self.assertIn("admin1", usernames)
-        self.assertIn("member1", usernames)
         self.assertEqual(
-            set(response.data["mention_users"][0].keys()),
-            {"id", "username", "first_name", "last_name"},
+            set(comments[0]),
+            {"uuid", "task", "author", "body", "body_html", "edited_at", "created_at"},
+        )
+        self.assertEqual(
+            comments[0]["author"],
+            {
+                "id": self.admin.pk,
+                "username": "admin1",
+                "first_name": "",
+                "last_name": "",
+                "avatar_url": f"/api/v1/users/{self.admin.pk}/avatar",
+            },
+        )
+        self.assertEqual(
+            comments[0]["task"],
+            {
+                "uuid": str(self.task.uuid),
+                "reference": self.task.reference,
+                "title": "Ship the thing",
+                "url": self.task.get_absolute_url(),
+            },
+        )
+
+    def test_the_list_is_paged(self):
+        for body in ("one", "two", "three"):
+            self._create_comment(self.admin, body=body)
+        self.client.force_authenticate(self.member)
+        first = self.client.get(self.base_url, {"limit": 2})
+        self.assertEqual([c["body"] for c in first.data], ["one", "two"])
+        self.assertEqual(first["X-Has-More"], "true")
+        rest = self.client.get(self.base_url, {"limit": 2, "offset": 2})
+        self.assertEqual([c["body"] for c in rest.data], ["three"])
+        self.assertEqual(rest["X-Has-More"], "false")
+
+    def test_who_can_be_mentioned_is_the_list_of_the_project_users(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.get(f"/api/v1/projects/{self.project.uuid}/users")
+        self.assertEqual({u["username"] for u in response.data}, {"admin1", "member1"})
+        self.assertEqual(
+            set(response.data[0]),
+            {"id", "username", "first_name", "last_name", "avatar_url"},
         )
 
     def test_soft_deleted_comments_are_hidden_from_list(self):
@@ -58,21 +87,50 @@ class TaskCommentApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.member)
         response = self.client.get(self.base_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["comments"], [])
+        self.assertEqual(response.data, [])
 
     def test_outsider_gets_404(self):
         self.client.force_authenticate(self.outsider)
         response = self.client.get(self.base_url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_task_from_another_project_is_404(self):
+    def test_task_of_a_project_out_of_reach_is_404(self):
         other_project = create_project(self.admin, name="Other")
         other_task = create_task(other_project, self.admin, title="Elsewhere")
         self.client.force_authenticate(self.member)
-        response = self.client.get(
-            f"/api/v1/projects/{self.project.uuid}/tasks/{other_task.uuid}/comments"
-        )
+        response = self.client.get(f"/api/v1/projects/tasks/{other_task.uuid}/comments")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_member_reads_one_comment(self):
+        comment = self._create_comment(self.admin, body="first")
+        self.client.force_authenticate(self.member)
+        response = self.client.get(f"/api/v1/projects/comments/{comment.uuid}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["body"], "first")
+
+    def test_a_comment_out_of_reach_answers_like_one_that_does_not_exist(self):
+        import uuid as uuid_module
+
+        comment = self._create_comment(self.admin)
+        deleted = self._create_comment(self.admin)
+        deleted.deleted_at = timezone.now()
+        deleted.save(update_fields=["deleted_at"])
+        self.client.force_authenticate(self.outsider)
+        unknown = self.client.get(f"/api/v1/projects/comments/{uuid_module.uuid4()}")
+        self.assertEqual(unknown.status_code, status.HTTP_404_NOT_FOUND)
+        for method in ("get", "patch", "delete"):
+            with self.subTest(method=method):
+                hidden = getattr(self.client, method)(
+                    f"/api/v1/projects/comments/{comment.uuid}"
+                )
+                self.assertEqual(
+                    (hidden.status_code, hidden.content),
+                    (unknown.status_code, unknown.content),
+                )
+        # A deleted comment is gone for its own project too.
+        self.client.force_authenticate(self.admin)
+        gone = self.client.get(f"/api/v1/projects/comments/{deleted.uuid}")
+        self.assertEqual(gone.status_code, status.HTTP_404_NOT_FOUND)
 
     # ── Create ────────────────────────────────────────────
 
@@ -123,7 +181,9 @@ class TaskCommentApiTests(ProjectTestMixin, APITestCase):
         comment = self._create_comment(self.member, body="typo")
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"{self.base_url}/{comment.uuid}", {"body": "fixed"}, format="json"
+            f"/api/v1/projects/comments/{comment.uuid}",
+            {"body": "fixed"},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         comment.refresh_from_db()
@@ -134,14 +194,16 @@ class TaskCommentApiTests(ProjectTestMixin, APITestCase):
         comment = self._create_comment(self.member)
         self.client.force_authenticate(self.admin)
         response = self.client.patch(
-            f"{self.base_url}/{comment.uuid}", {"body": "hijack"}, format="json"
+            f"/api/v1/projects/comments/{comment.uuid}",
+            {"body": "hijack"},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_edit_unknown_comment_is_404(self):
         self.client.force_authenticate(self.member)
         response = self.client.patch(
-            f"{self.base_url}/{self.task.uuid}", {"body": "x"}, format="json"
+            f"/api/v1/projects/comments/{self.task.uuid}", {"body": "x"}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
@@ -150,7 +212,7 @@ class TaskCommentApiTests(ProjectTestMixin, APITestCase):
     def test_author_soft_deletes_own_comment(self):
         comment = self._create_comment(self.member)
         self.client.force_authenticate(self.member)
-        response = self.client.delete(f"{self.base_url}/{comment.uuid}")
+        response = self.client.delete(f"/api/v1/projects/comments/{comment.uuid}")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         comment.refresh_from_db()
         self.assertIsNotNone(comment.deleted_at)
@@ -158,7 +220,7 @@ class TaskCommentApiTests(ProjectTestMixin, APITestCase):
     def test_non_author_cannot_delete(self):
         comment = self._create_comment(self.member)
         self.client.force_authenticate(self.admin)
-        response = self.client.delete(f"{self.base_url}/{comment.uuid}")
+        response = self.client.delete(f"/api/v1/projects/comments/{comment.uuid}")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     # ── Notification merge / auto-read ─────────────────────
@@ -194,9 +256,7 @@ class TaskCommentMentionTests(ProjectTestMixin, APITestCase):
     def setUp(self):
         super().setUp()
         self.task = create_task(self.project, self.admin, title="Ship the thing")
-        self.base_url = (
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/comments"
-        )
+        self.base_url = f"/api/v1/projects/tasks/{self.task.uuid}/comments"
 
     def _notifs_for(self, user):
         return Notification.objects.filter(recipient=user, origin="projects")
@@ -282,7 +342,7 @@ class TaskCommentMentionTests(ProjectTestMixin, APITestCase):
         response = self.client.post(self.base_url, {"body": "draft"}, format="json")
         comment_uuid = response.data["uuid"]
         self.client.patch(
-            f"{self.base_url}/{comment_uuid}",
+            f"/api/v1/projects/comments/{comment_uuid}",
             {"body": "draft, ping @member1"},
             format="json",
         )
@@ -297,7 +357,7 @@ class TaskCommentMentionTests(ProjectTestMixin, APITestCase):
         )
         comment_uuid = response.data["uuid"]
         self.client.patch(
-            f"{self.base_url}/{comment_uuid}",
+            f"/api/v1/projects/comments/{comment_uuid}",
             {"body": "ping @member1 again"},
             format="json",
         )

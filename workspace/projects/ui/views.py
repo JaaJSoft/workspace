@@ -39,8 +39,9 @@ from workspace.projects.queries import (
     visible_task_events_q,
 )
 from workspace.projects.serializers import (
-    ProjectUserSerializer,
     TaskAttachmentSerializer,
+    TaskFileLinkSerializer,
+    TaskLinkSerializer,
 )
 from workspace.projects.services.analytics import (
     flow_summary,
@@ -69,6 +70,7 @@ from workspace.projects.services.rendering import render_task_description
 from workspace.projects.services.timeline import build_timeline, coerce_scale
 from workspace.projects.sse_provider import project_revision
 from workspace.projects.tasks import reminder_hour
+from workspace.users.serializers import UserSummarySerializer
 from workspace.users.services.settings import get_setting, set_setting
 
 # The board, backlog and all-tasks views deliberately render whole columns
@@ -284,7 +286,7 @@ def _base_context(request, project, role, view):
             }
             for s in statuses
         ]
-        context["members_data"] = ProjectUserSerializer(project_members, many=True).data
+        context["members_data"] = UserSummarySerializer(project_members, many=True).data
         context["projects"] = _sidebar_projects(request.user)
         context["projects_prefs"] = {
             "reminder_hour": reminder_hour(request.user),
@@ -396,29 +398,25 @@ def _task_panel_context(user, project, role, task, *, members=None):
             "" if mine is None else ("muted" if mine.muted else "watching")
         ),
         "panel_watchers": [
-            {"id": str(w.user_id), "username": w.user.username}
+            {"id": w.user_id, "username": w.user.username}
             for w in watch_rows
             if not w.muted
         ],
         "panel_can_comment": "comment" in action_ids,
         "panel_comment_count": task.comments.filter(deleted_at__isnull=True).count(),
         "panel_attachments": TaskAttachmentSerializer(
-            task.attachments.select_related("task", "added_by"), many=True
+            task.attachments.select_related("added_by"), many=True
         ).data,
         "panel_description_html": render_task_description(task.description),
-        "panel_links": links_for_task(user, task),
-        "panel_file_links": file_links_for_task(task),
+        "panel_links": TaskLinkSerializer(links_for_task(user, task), many=True).data,
+        "panel_file_links": TaskFileLinkSerializer(
+            file_links_for_task(task), many=True
+        ).data,
         "panel_task_data": {
             "uuid": str(task.uuid),
             "project": str(project.uuid),
-            "links_url": reverse(
-                "project-task-links",
-                kwargs={"project_uuid": project.uuid, "task_uuid": task.uuid},
-            ),
-            "file_links_url": reverse(
-                "project-task-file-links",
-                kwargs={"project_uuid": project.uuid, "task_uuid": task.uuid},
-            ),
+            "links_url": reverse("project-task-links", args=[task.uuid]),
+            "file_links_url": reverse("project-task-file-links", args=[task.uuid]),
             "link_search_url": reverse("project-all-tasks"),
             "title": task.title,
             "description": task.description,
@@ -427,9 +425,9 @@ def _task_panel_context(user, project, role, task, *, members=None):
             "due_date": task.due_date.isoformat() if task.due_date else "",
             "start_date": task.start_date.isoformat() if task.start_date else "",
             "estimate": format_estimate(task.estimate),
-            "assignees": [str(u.pk) for u in task.assignees.all()],
+            "assignees": [u.pk for u in task.assignees.all()],
             "assignee_users": [
-                {"id": str(u.pk), "username": u.username} for u in task.assignees.all()
+                {"id": u.pk, "username": u.username} for u in task.assignees.all()
             ],
             "labels": [str(label.uuid) for label in task.labels.all()],
             "epic": str(task.epic_id) if task.epic_id else "",
@@ -996,14 +994,7 @@ def settings_view(request, project_uuid):
 
 
 def _attachment_content_url(attachment):
-    return reverse(
-        "project-task-attachment-download",
-        kwargs={
-            "project_uuid": attachment.task.project_id,
-            "task_uuid": attachment.task_id,
-            "uuid": attachment.uuid,
-        },
-    )
+    return reverse("project-attachment-content", args=[attachment.uuid])
 
 
 @login_required

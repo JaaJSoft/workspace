@@ -11,6 +11,7 @@ from workspace.files.services import trash, tree
 from workspace.files.services.hard_delete import hard_delete_tree
 from workspace.files.services.sharing import share_file
 from workspace.projects.models import TaskEvent, TaskFileLink
+from workspace.projects.serializers import TaskFileLinkSerializer
 from workspace.projects.services.file_links import (
     file_links_for_task,
     link_files,
@@ -243,25 +244,33 @@ class FileLinksForTaskTests(ProjectTestMixin, TestCase):
         self.doc = make_file(self.admin, "spec.md", b"# spec")
         link_files(self.admin, self.task, [self.doc], permission="rw")
 
+    def _described(self):
+        links = list(file_links_for_task(self.task))
+        with self.assertNumQueries(0):
+            return TaskFileLinkSerializer(links, many=True).data
+
     def test_item_summarizes_the_live_file(self):
-        (item,) = file_links_for_task(self.task)
-        self.assertEqual(item["file_uuid"], str(self.doc.uuid))
-        self.assertEqual(item["name"], "spec.md")
-        self.assertEqual(item["size"], 6)
-        self.assertEqual(item["permission"], "rw")
-        self.assertEqual(item["added_by"], "admin1")
-        self.assertFalse(item["in_trash"])
+        (item,) = self._described()
         self.assertEqual(
-            item["download_url"], f"/api/v1/files/{self.doc.uuid}/download"
+            set(item), {"uuid", "file", "permission", "added_by", "created_at"}
         )
-        self.assertIn("type_icon", item)
+        self.assertEqual(item["file"]["uuid"], str(self.doc.uuid))
+        self.assertEqual(item["file"]["name"], "spec.md")
+        self.assertEqual(item["file"]["size"], 6)
+        self.assertEqual(item["permission"], "rw")
+        self.assertEqual(item["added_by"]["username"], "admin1")
+        self.assertFalse(item["file"]["is_trashed"])
+        self.assertEqual(
+            item["file"]["download_url"], f"/api/v1/files/{self.doc.uuid}/download"
+        )
+        self.assertIn("type_icon", item["file"])
 
     def test_rename_follows_through(self):
         tree.rename(self.doc, "renamed.md")
-        (item,) = file_links_for_task(self.task)
-        self.assertEqual(item["name"], "renamed.md")
+        (item,) = self._described()
+        self.assertEqual(item["file"]["name"], "renamed.md")
 
     def test_trashed_file_stays_listed_and_flagged(self):
         trash.soft_delete(self.doc)
-        (item,) = file_links_for_task(self.task)
-        self.assertTrue(item["in_trash"])
+        (item,) = self._described()
+        self.assertTrue(item["file"]["is_trashed"])

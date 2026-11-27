@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.utils import translation
 
 from workspace.projects.models import TaskEvent, TaskLink, TaskStatus
+from workspace.projects.serializers import LinkedTaskSerializer
 from workspace.projects.services.links import (
     annotate_blocked,
     create_link,
@@ -130,11 +131,16 @@ class LinksForTaskTests(ProjectTestMixin, TestCase):
         outward = links_for_task(self.member, self.task_a)
         inward = links_for_task(self.member, self.task_b)
         self.assertEqual(len(outward), 1)
-        self.assertEqual(outward[0]["label"], "blocks")
-        self.assertEqual(outward[0]["task"]["uuid"], str(self.task_b.uuid))
+        self.assertEqual(
+            (outward[0]["relation"], outward[0]["label"]), ("blocks", "blocks")
+        )
+        self.assertEqual(outward[0]["task"], self.task_b)
         self.assertEqual(len(inward), 1)
-        self.assertEqual(inward[0]["label"], "is blocked by")
-        self.assertEqual(inward[0]["task"]["uuid"], str(self.task_a.uuid))
+        self.assertEqual(
+            (inward[0]["relation"], inward[0]["label"]),
+            ("blocked_by", "is blocked by"),
+        )
+        self.assertEqual(inward[0]["task"], self.task_a)
 
     def test_direction_is_in_the_readers_language(self):
         create_link(self.task_a, self.task_b, "blocks")
@@ -152,13 +158,16 @@ class LinksForTaskTests(ProjectTestMixin, TestCase):
         # The admin can see both projects, so the link shows for them.
         self.assertEqual(len(links_for_task(self.admin, self.task_a)), 1)
 
-    def test_done_state_is_serialized(self):
+    def test_the_other_end_comes_with_what_describing_it_reads(self):
         done = self.project.statuses.get(category=TaskStatus.Category.DONE)
         self.task_b.status = done
         self.task_b.save(update_fields=["status"])
         create_link(self.task_a, self.task_b, "blocks")
         (item,) = links_for_task(self.member, self.task_a)
-        self.assertTrue(item["task"]["is_done"])
+        with self.assertNumQueries(0):
+            described = LinkedTaskSerializer(item["task"]).data
+        self.assertTrue(described["is_done"])
+        self.assertEqual(described["project"]["key"], self.project.key)
 
 
 class AnnotateBlockedTests(ProjectTestMixin, TestCase):

@@ -23,9 +23,10 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
     def setUp(self):
         super().setUp()
         self.task = create_task(self.project, self.admin, title="Ship it")
-        self.url = (
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/attachments"
-        )
+        self.url = f"/api/v1/projects/tasks/{self.task.uuid}/attachments"
+
+    def _item_url(self, uuid_, suffix=""):
+        return f"/api/v1/projects/attachments/{uuid_}{suffix}"
 
     def tearDown(self):
         for att in TaskAttachment.objects.all():
@@ -42,7 +43,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(user)
         return self.client.post(
             self.url,
-            data={"file_uuids": [str(f.uuid) for f in files]},
+            data={"files": [str(f.uuid) for f in files]},
             format="json",
         )
 
@@ -50,7 +51,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(user)
         return self.client.post(
             self.url,
-            data={"files": [SimpleUploadedFile(name, content)]},
+            data={"file": [SimpleUploadedFile(name, content)]},
             format="multipart",
         )
 
@@ -63,7 +64,9 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         att = TaskAttachment.objects.get()
         self.assertEqual(att.original_name, "doc.txt")
         self.assertEqual(att.added_by, self.member)
-        self.assertEqual(resp.data["attachments"][0]["name"], "doc.txt")
+        (created,) = resp.data
+        self.assertEqual(created["name"], "doc.txt")
+        self.assertEqual(created["uuid"], str(att.uuid))
 
     def test_workspace_attach_copies_the_content(self):
         src = self._make_file(self.member, content=b"payload")
@@ -101,7 +104,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
     def test_unknown_uuid_is_rejected(self):
         self.client.force_authenticate(self.member)
         resp = self.client.post(
-            self.url, data={"file_uuids": [str(uuid.uuid4())]}, format="json"
+            self.url, data={"files": [str(uuid.uuid4())]}, format="json"
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -153,13 +156,14 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         from unittest.mock import patch
 
         self.client.force_authenticate(self.member)
-        with patch("workspace.projects.views.viewsets.MAX_UPLOAD_BYTES", 4):
+        with patch("workspace.projects.serializers.MAX_UPLOAD_BYTES", 4):
             resp = self.client.post(
                 self.url,
-                data={"files": [SimpleUploadedFile("big.bin", b"12345")]},
+                data={"file": [SimpleUploadedFile("big.bin", b"12345")]},
                 format="multipart",
             )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(resp.data), ["file"])
         self.assertEqual(TaskAttachment.objects.count(), 0)
 
     # ── Listing ────────────────────────────────────────────────
@@ -171,17 +175,23 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.admin)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data["attachments"]), 1)
-        self.assertEqual(resp.data["attachments"][0]["name"], "notes.txt")
-        self.assertEqual(resp.data["attachments"][0]["added_by"], "member1")
+        (listed,) = resp.data
+        self.assertEqual(listed["name"], "notes.txt")
+        self.assertEqual(listed["added_by"]["username"], "member1")
+        self.assertEqual(
+            (listed["content_url"], listed["download_url"]),
+            (
+                self._item_url(listed["uuid"], "/content"),
+                self._item_url(listed["uuid"], "/download"),
+            ),
+        )
 
     def test_member_sees_a_copy_of_a_file_they_cannot_access(self):
         private = self._make_file(self.admin, "private.txt")
         self._attach_workspace(self.admin, private)
         self.client.force_authenticate(self.member)
         resp = self.client.get(self.url)
-        self.assertEqual(len(resp.data["attachments"]), 1)
-        self.assertEqual(resp.data["attachments"][0]["name"], "private.txt")
+        self.assertEqual([item["name"] for item in resp.data], ["private.txt"])
 
     def test_attachment_survives_source_file_trash(self):
         from django.utils import timezone
@@ -192,7 +202,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         src.save(update_fields=["deleted_at"])
         self.client.force_authenticate(self.admin)
         resp = self.client.get(self.url)
-        self.assertEqual(len(resp.data["attachments"]), 1)
+        self.assertEqual(len(resp.data), 1)
 
     def test_outsider_cannot_list(self):
         self.client.force_authenticate(self.outsider)
@@ -205,11 +215,29 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self._upload(self.member)
         att = TaskAttachment.objects.get()
         self.client.force_authenticate(self.admin)
-        resp = self.client.get(f"{self.url}/{att.uuid}/download")
+        resp = self.client.get(self._item_url(att.uuid, "/download"))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(b"".join(resp.streaming_content), b"minutes")
+        self.assertTrue(resp["Content-Disposition"].startswith("attachment"))
 
-    def test_an_html_attachment_downloads_behind_the_sandbox(self):
+    def test_content_is_served_inline(self):
+        self._upload(self.member)
+        att = TaskAttachment.objects.get()
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get(self._item_url(att.uuid, "/content"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(resp.streaming_content), b"minutes")
+        self.assertTrue(resp["Content-Disposition"].startswith("inline"))
+
+    def test_member_reads_one_attachment(self):
+        self._upload(self.member)
+        att = TaskAttachment.objects.get()
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get(self._item_url(att.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["name"], "notes.txt")
+
+    def test_an_html_attachment_is_never_shown_inline(self):
         # Opened directly, the page would run with the viewer's session.
         self._upload(
             self.member,
@@ -219,7 +247,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         att = TaskAttachment.objects.get()
         self.assertEqual(att.mime_type, "text/html")
         self.client.force_authenticate(self.admin)
-        resp = self.client.get(f"{self.url}/{att.uuid}/download")
+        resp = self.client.get(self._item_url(att.uuid, "/content"))
         b"".join(resp.streaming_content)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp["Content-Disposition"].startswith("attachment"))
@@ -229,15 +257,22 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self._upload(self.member)
         att = TaskAttachment.objects.get()
         self.client.force_authenticate(self.outsider)
-        resp = self.client.get(f"{self.url}/{att.uuid}/download")
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        for suffix in ("", "/content", "/download"):
+            with self.subTest(suffix=suffix):
+                hidden = self.client.get(self._item_url(att.uuid, suffix))
+                unknown = self.client.get(self._item_url(uuid.uuid4(), suffix))
+                self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+                self.assertEqual(
+                    (hidden.status_code, hidden.content),
+                    (unknown.status_code, unknown.content),
+                )
 
     def test_download_of_vanished_blob_404s(self):
         self._upload(self.member)
         att = TaskAttachment.objects.get()
         default_storage.delete(att.file.name)
         self.client.force_authenticate(self.member)
-        resp = self.client.get(f"{self.url}/{att.uuid}/download")
+        resp = self.client.get(self._item_url(att.uuid, "/download"))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     # ── Removing ───────────────────────────────────────────────
@@ -248,7 +283,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         blob_path = att.file.name
         self.client.force_authenticate(self.member)
         with self.captureOnCommitCallbacks(execute=True):
-            resp = self.client.delete(f"{self.url}/{att.uuid}")
+            resp = self.client.delete(self._item_url(att.uuid))
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(TaskAttachment.objects.count(), 0)
         self.assertFalse(default_storage.exists(blob_path))
@@ -263,14 +298,14 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self._attach_workspace(self.member, src)
         att = TaskAttachment.objects.get()
         self.client.force_authenticate(self.member)
-        self.client.delete(f"{self.url}/{att.uuid}")
+        self.client.delete(self._item_url(att.uuid))
         src.refresh_from_db()
         self.assertIsNone(src.deleted_at)
         self.assertTrue(default_storage.exists(src.content.name))
 
     def test_remove_unknown_uuid_404s(self):
         self.client.force_authenticate(self.member)
-        resp = self.client.delete(f"{self.url}/{uuid.uuid4()}")
+        resp = self.client.delete(self._item_url(uuid.uuid4()))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     # ── Cascades ───────────────────────────────────────────────
@@ -325,8 +360,8 @@ class TaskAttachmentViewerTests(ProjectTestMixin, APITestCase):
         self.task = create_task(self.project, self.admin, title="Ship it")
         self.client.force_authenticate(self.member)
         self.client.post(
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/attachments",
-            data={"files": [SimpleUploadedFile("notes.txt", b"minutes")]},
+            f"/api/v1/projects/tasks/{self.task.uuid}/attachments",
+            data={"file": [SimpleUploadedFile("notes.txt", b"minutes")]},
             format="multipart",
         )
         self.attachment = TaskAttachment.objects.get()

@@ -19,40 +19,53 @@ from workspace.files.services.comments import (
     notify_comment_added,
     notify_comment_edited,
 )
+from workspace.users.serializers import UserSummarySerializer
 
 
 def _mention_context(audience):
     return {"mention_map": {u.username: u.pk for u in audience}}
 
 
-def _mention_users_payload(audience):
-    return [
-        {
-            "id": u.pk,
-            "username": u.username,
-            "first_name": u.first_name,
-            "last_name": u.last_name,
-        }
-        for u in audience
-    ]
-
-
 class CommentsMixin:
-    """Adds comments and comment_detail actions."""
+    """Adds the comments, comment_detail and mentionable_users actions."""
+
+    @extend_schema(
+        summary="List the users who can be mentioned on a file",
+        description="Everyone who can see it: its owner, its group, who it is shared with.",
+        responses=UserSummarySerializer(many=True),
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="mentionable-users",
+        pagination_class=None,
+        filter_backends=[],
+    )
+    def mentionable_users(self, request, uuid=None):
+        file_obj, perm = self._resolve_file_with_access(uuid)
+        return Response(
+            UserSummarySerializer(mentionable_users(file_obj), many=True).data
+        )
 
     @extend_schema(
         summary="List or create comments on a file",
         description=(
-            "GET returns {comments, mention_users}, POST adds a new comment. "
-            "mention_users lists the file's audience for @mention autocomplete."
+            "GET lists the comments, oldest first; POST adds one. Who can be "
+            "mentioned is at `/files/{uuid}/mentionable-users`."
         ),
         request=FileCommentCreateSerializer,
         responses={
-            200: OpenApiResponse(description="Comments and mentionable users."),
+            200: FileCommentSerializer(many=True),
             201: OpenApiResponse(response=FileCommentSerializer),
         },
     )
-    @action(detail=True, methods=["get", "post"], url_path="comments")
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="comments",
+        pagination_class=None,
+        filter_backends=[],
+    )
     def comments(self, request, uuid=None):
         """List or create comments on a file/folder."""
         file_obj, perm = self._resolve_file_with_access(uuid)
@@ -76,12 +89,7 @@ class CommentsMixin:
             serializer = FileCommentSerializer(
                 qs, many=True, context=_mention_context(audience)
             )
-            return Response(
-                {
-                    "comments": serializer.data,
-                    "mention_users": _mention_users_payload(audience),
-                }
-            )
+            return Response(serializer.data)
 
         # POST
         create_ser = FileCommentCreateSerializer(data=request.data)

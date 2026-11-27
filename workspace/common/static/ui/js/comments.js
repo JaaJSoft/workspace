@@ -1,11 +1,14 @@
 // ── Shared comments component ──────────────────────────────
 // Backs the comment thread UI (files properties panel, task panel).
-// listUrl is the collection endpoint; item endpoints are `${listUrl}/<uuid>`.
+// `urls` names the three endpoints of a thread: `list` (the collection, a
+// bare array that may be paged), `item` (one comment is at `${item}/<uuid>`)
+// and `mentions` (the users who can be mentioned).
 // Pair with the "ui/partials/comments.html" template partial.
 
-window.commentsComponent = function commentsComponent(listUrl, currentUserId, canComment) {
+window.commentsComponent = function commentsComponent(urls, currentUserId, canComment) {
+  const PAGE = 200;
   return {
-    listUrl,
+    urls,
     currentUserId,
     canComment,
     comments: [],
@@ -25,6 +28,7 @@ window.commentsComponent = function commentsComponent(listUrl, currentUserId, ca
     mentionEl: null,
 
     async init() {
+      this.loadMentionUsers();
       await this.loadComments();
     },
 
@@ -34,20 +38,40 @@ window.commentsComponent = function commentsComponent(listUrl, currentUserId, ca
     },
 
     _url(commentUuid) {
-      return commentUuid ? `${this.listUrl}/${commentUuid}` : this.listUrl;
+      return commentUuid ? `${this.urls.item}/${commentUuid}` : this.urls.list;
+    },
+
+    // Every page of the thread, or nothing: half a thread would read as the
+    // whole of it.
+    async _fetchComments() {
+      const comments = [];
+      for (let offset = 0; ; offset += PAGE) {
+        const resp = await fetch(`${this._url()}?limit=${PAGE}&offset=${offset}`, {
+          credentials: 'same-origin',
+        });
+        if (!resp.ok) return null;
+        comments.push(...(await resp.json()));
+        if (resp.headers.get('X-Has-More') !== 'true') return comments;
+      }
     },
 
     async loadComments() {
       this.loading = true;
       try {
-        const resp = await fetch(this._url(), { credentials: 'same-origin' });
-        if (resp.ok) {
-          const data = await resp.json();
-          this.comments = data.comments;
-          this.mentionUsers = data.mention_users || [];
-        }
+        const comments = await this._fetchComments();
+        if (comments) this.comments = comments;
       } catch (e) { /* ignore */ }
       this.loading = false;
+    },
+
+    // Who can be mentioned changes with who has access, not with the thread:
+    // asked once, when the thread opens.
+    async loadMentionUsers() {
+      if (!this.urls.mentions) return;
+      try {
+        const resp = await fetch(this.urls.mentions, { credentials: 'same-origin' });
+        if (resp.ok) this.mentionUsers = await resp.json();
+      } catch (e) { /* the composer works without the autocomplete */ }
     },
 
     async addComment() {

@@ -66,8 +66,7 @@ class TaskAttachmentViewerTests(PlaywrightTestCase):
         expect(self.viewer.locator("#viewer-panel img")).to_be_visible()
         expect(self.viewer.locator("a[download]")).to_have_attribute(
             "href",
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}"
-            f"/attachments/{self.attachment.uuid}/download",
+            f"/api/v1/projects/attachments/{self.attachment.uuid}/download",
         )
         self._close()
         self.assertEqual(

@@ -4,8 +4,9 @@ author-only actions. Requires ui/js/comments.js (commentsComponent) on
 the page. The section heading stays at the call site.
 
 Params:
-- list_url:        collection endpoint; item endpoints are `<list_url>/<uuid>`
-                   (e.g. {% url 'project-task-comments' ... as comments_url %})
+- list_url:        collection endpoint, answering a bare array
+- item_url:        where one comment is: its endpoints are `<item_url>/<uuid>`
+- mentions_url:    endpoint listing the users who can be mentioned
 - current_user_id: request.user.id
 - can_comment:     boolean; when False the composer and edit/delete
                    actions are hidden (server enforces it regardless)
@@ -13,7 +14,7 @@ Params:
 {% load i18n %}
 <div
   class="space-y-3"
-  x-data="commentsComponent('{{ list_url|escapejs }}', {{ current_user_id }}, {{ can_comment|yesno:"true,false" }})"
+  x-data="commentsComponent({ list: '{{ list_url|escapejs }}', item: '{{ item_url|escapejs }}', mentions: '{{ mentions_url|escapejs }}' }, {{ current_user_id }}, {{ can_comment|yesno:"true,false" }})"
 >
   <div x-show="loading" class="flex justify-center py-4">
     <span class="loading loading-spinner loading-sm"></span>

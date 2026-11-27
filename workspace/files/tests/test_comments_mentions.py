@@ -208,18 +208,35 @@ class DottedUsernameMentionTests(FileCommentMentionTestBase):
 
 
 class CommentListShapeTests(FileCommentMentionTestBase):
-    def test_list_returns_comments_and_mention_users(self):
+    def test_list_answers_the_comments_alone(self):
         FileComment.objects.create(file=self.file, author=self.owner, body="hi")
         resp = self.client.get(f"/api/v1/files/{self.file.uuid}/comments")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = resp.json()
-        self.assertEqual(len(data["comments"]), 1)
+        (comment,) = resp.json()
+        self.assertEqual(comment["body"], "hi")
+
+    def test_who_can_be_mentioned_has_its_own_endpoint(self):
+        resp = self.client.get(f"/api/v1/files/{self.file.uuid}/mentionable-users")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        users = resp.json()
+        self.assertEqual({u["username"] for u in users}, {"owner", "shared"})
         self.assertEqual(
-            {u["username"] for u in data["mention_users"]}, {"owner", "shared"}
+            set(users[0]),
+            {"id", "username", "first_name", "last_name", "avatar_url"},
         )
+
+    def test_who_can_be_mentioned_is_hidden_with_the_file(self):
+        import uuid as uuid_module
+
+        stranger = User.objects.create_user(username="stranger", password="p")
+        self.client.force_authenticate(stranger)
+        hidden = self.client.get(f"/api/v1/files/{self.file.uuid}/mentionable-users")
+        unknown = self.client.get(
+            f"/api/v1/files/{uuid_module.uuid4()}/mentionable-users"
+        )
+        self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(
-            set(data["mention_users"][0].keys()),
-            {"id", "username", "first_name", "last_name"},
+            (hidden.status_code, hidden.content), (unknown.status_code, unknown.content)
         )
 
     def test_body_html_renders_mention_badge(self):
@@ -227,7 +244,7 @@ class CommentListShapeTests(FileCommentMentionTestBase):
             file=self.file, author=self.owner, body="ping @shared"
         )
         resp = self.client.get(f"/api/v1/files/{self.file.uuid}/comments")
-        body_html = resp.json()["comments"][0]["body_html"]
+        body_html = resp.json()[0]["body_html"]
         self.assertIn("mention-badge", body_html)
         self.assertIn(f'data-user-id="{self.shared.pk}"', body_html)
 
@@ -236,7 +253,7 @@ class CommentListShapeTests(FileCommentMentionTestBase):
             file=self.file, author=self.owner, body="<script>x</script>"
         )
         resp = self.client.get(f"/api/v1/files/{self.file.uuid}/comments")
-        body_html = resp.json()["comments"][0]["body_html"]
+        body_html = resp.json()[0]["body_html"]
         self.assertNotIn("<script>", body_html)
 
     def test_create_response_includes_body_html(self):

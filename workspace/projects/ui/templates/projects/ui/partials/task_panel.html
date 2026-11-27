@@ -694,34 +694,34 @@
               class="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-base-300 bg-base-200/50 text-sm"
             >
               <i
-                :data-lucide="link.type_icon || 'file'"
+                :data-lucide="link.file.type_icon || 'file'"
                 class="w-4 h-4 shrink-0"
-                :class="link.type_color || 'text-base-content/60'"
+                :class="link.file.type_color || 'text-base-content/60'"
               ></i>
               <button
                 type="button"
                 class="flex-1 min-w-0 text-left truncate hover:underline"
-                x-show="!link.in_trash"
-                x-text="link.name"
-                :title="link.name"
+                x-show="!link.file.is_trashed"
+                x-text="link.file.name"
+                :title="link.file.name"
                 @click="openLinkedFile(link)"
               ></button>
               <span
                 class="flex-1 min-w-0 truncate text-base-content/50 line-through"
-                x-show="link.in_trash"
+                x-show="link.file.is_trashed"
                 x-cloak
-                x-text="link.name"
-                :title="link.name"
+                x-text="link.file.name"
+                :title="link.file.name"
               ></span>
               <i
-                x-show="link.in_trash"
+                x-show="link.file.is_trashed"
                 x-cloak
                 data-lucide="trash-2"
                 class="w-3.5 h-3.5 shrink-0 text-warning"
                 title="{% translate "In trash" %}"
               ></i>
               <i
-                x-show="!link.in_trash && link.permission === 'rw'"
+                x-show="!link.file.is_trashed && link.permission === 'rw'"
                 x-cloak
                 data-lucide="pencil"
                 class="w-3.5 h-3.5 shrink-0 text-base-content/40"
@@ -729,11 +729,11 @@
               ></i>
               <span
                 class="text-xs text-base-content/50 shrink-0"
-                x-text="formatFileSize(link.size)"
+                x-text="formatFileSize(link.file.size)"
               ></span>
               <a
-                x-show="!link.in_trash"
-                :href="link.download_url"
+                x-show="!link.file.is_trashed"
+                :href="link.file.download_url"
                 download
                 class="btn btn-ghost btn-xs btn-square"
                 title="{% translate "Download" %}"
@@ -930,7 +930,8 @@
       </h3>
       <div x-show="sectionsOpen.comments">
         {% url 'project-task-comments' panel_task.uuid as comments_url %}
-        {% include "ui/partials/comments.html" with list_url=comments_url current_user_id=request.user.id can_comment=panel_can_comment %}
+        {% url 'project-users' project.uuid as mentions_url %}
+        {% include "ui/partials/comments.html" with list_url=comments_url item_url="/api/v1/projects/comments" mentions_url=mentions_url current_user_id=request.user.id can_comment=panel_can_comment %}
       </div>
     </section>
 

@@ -69,6 +69,8 @@ class TaskLinkListView(TaskRowsMixin, GenericAPIView):
     tags=["Projects - Tasks"],
     summary="Remove a link between two tasks",
     description="From either end: whoever may link one of the two tasks.",
+    request=None,
+    responses={204: None},
 )
 class TaskLinkDetailView(ProjectContextMixin, GenericAPIView):
     queryset = TaskLink.objects.none()

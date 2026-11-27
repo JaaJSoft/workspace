@@ -840,6 +840,10 @@ test('a rotation in doubt that can no longer land is said so, and its key is not
   assert.equal(mixin.recoveryKeyWarns(), true);
   assert.match(mixin.recoveryKeyNoticeText(), /can no longer tell whether the new recovery key/);
   assert.doesNotMatch(mixin.recoveryKeyNoticeText(), /opens nothing|discard|not replaced/);
+  // A key that unlocks is not thereby the key in use: the envelope a later
+  // rotation replaced still opens with it, and the vault warns when it does.
+  assert.match(mixin.recoveryKeyNoticeText(), /unlocks your vault without the warning about a previous password or recovery key/);
+  assert.doesNotMatch(mixin.recoveryKeyNoticeText(), /whichever unlocks/);
   // Nothing is in doubt any more: the dialog opens again.
   mixin.openRecoveryKeyDialog();
   assert.equal(mixin.recoveryKeyDialogOpen, true);

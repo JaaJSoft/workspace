@@ -334,8 +334,10 @@ out what it proves:
   comes back. Whether it was applied before the third envelope arrived cannot
   be told, and it matters: a password change made since with the new key seals
   an envelope that the new key opens. So the key is not called void. The user
-  is told to keep it with the others, and that whichever unlocks is the one in
-  use. A conflict met by a second attempt is this case, not the first.
+  is told to keep it with the others, and that the key in use is the one that
+  unlocks without the previous-credentials banner: a key that merely unlocks
+  may be going through the previous envelope. A conflict met by a second
+  attempt is this case, not the first.
 
 The page is told that a rotation is out before it leaves, so a lock or an unlock
 during the request claims nothing. If the dialog is closed or locked while the

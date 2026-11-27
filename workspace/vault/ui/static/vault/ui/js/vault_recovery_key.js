@@ -51,9 +51,11 @@ window.vaultRecoveryKeyOutcome = async function vaultRecoveryKeyOutcome(pending,
 };
 
 // Said by the dialog while it is open and by the page afterwards: one text,
-// so that the two cannot drift.
+// so that the two cannot drift. It does not say that a key which unlocks is
+// the key in use: the envelope a rotation replaced still opens with the
+// credentials before it, and the vault warns when an unlock went through it.
 window.vaultRecoveryKeySupersededText = function vaultRecoveryKeySupersededText() {
-  return gettext('Your account was changed from another tab or another device, so this page can no longer tell whether the new recovery key it showed you was put in place. Keep that key and its emergency kit with the old ones: whichever unlocks your vault is the one in use.');
+  return gettext('Your account was changed from another tab or another device, so this page can no longer tell whether the new recovery key it showed you was put in place. Keep that key and its emergency kit with the old ones. The key in use is the one that unlocks your vault without the warning about a previous password or recovery key.');
 };
 
 window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {

@@ -1,7 +1,7 @@
 // Notes graph view: force-graph integration + pure helpers.
 // Classic script (no top-level import) so it loads via <script src> and the
 // node:vm test loader. The vendored force-graph module is imported dynamically
-// inside open(), from the URL the mount element carries in
+// inside openGraph(), from the URL the mount element carries in
 // data-force-graph-url, so loading this file is side-effect-free.
 
 // Base node radius unit; the actual radius scales with the node's degree (see
@@ -306,7 +306,8 @@ async function _load() {
   }
 }
 
-async function open(container, opts) {
+// Not named open: a top-level declaration in a classic script is window.open.
+async function openGraph(container, opts) {
   const gen = ++_openGen;
   _state.scope = (opts && opts.scope) || 'mine';
   _state.kind = 'all';
@@ -481,4 +482,4 @@ function destroy() {
   };
 }
 
-window.notesGraph = { isAttachment, nodeColorKey, fitZoom, linkActive, makeFitLatch, open, setScope, setKind, setSearch, setTags, fitView, destroy };
+window.notesGraph = { isAttachment, nodeColorKey, fitZoom, linkActive, makeFitLatch, open: openGraph, setScope, setKind, setSearch, setTags, fitView, destroy };

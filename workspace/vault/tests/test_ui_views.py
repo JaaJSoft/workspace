@@ -262,7 +262,7 @@ class OnboardingStrengthMeterTests(TestCase):
         )
 
     def test_the_checklist_no_longer_states_the_verdict_itself(self):
-        self.assertIn("Strong enough to resist guessing", self.html)
+        self.assertIn("Hard to guess", self.html)
         self.assertNotIn("'- ' + feedback", self.html)
         # The include's own explanation is a {% comment %} block, not a {# #}
         # one, which would have rendered it into the page verbatim.

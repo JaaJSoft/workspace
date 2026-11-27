@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-24 21:09+0100\n"
+"POT-Creation-Date: 2026-11-27 08:14+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -168,29 +168,25 @@ msgstr ""
 "détient la clé."
 
 #: ui/templates/vault/ui/onboarding.html
-msgid "Set up your master password - Workspace"
-msgstr "Configurer votre mot de passe principal - Workspace"
+msgid "Set up your vault - Workspace"
+msgstr "Configurer votre coffre-fort - Workspace"
 
 #: ui/templates/vault/ui/onboarding.html
-msgid "Set up your master password"
-msgstr "Configurer votre mot de passe principal"
+msgid "Set up your vault"
+msgstr "Configurer votre coffre-fort"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "End-to-end encrypted: nobody but you can read what you store here."
+msgstr "Chiffré de bout en bout : personne d’autre que vous ne peut le lire."
 
 #: ui/templates/vault/ui/onboarding.html
 msgid "How it works"
 msgstr "Fonctionnement"
 
 #: ui/templates/vault/ui/onboarding.html
-msgid "One password opens every vault"
-msgstr "Un mot de passe ouvre chaque coffre-fort"
-
-#: ui/templates/vault/ui/onboarding.html
 #: ui/templates/vault/ui/partials/unlock_form.html
 msgid "Master password"
 msgstr "Mot de passe principal"
-
-#: ui/templates/vault/ui/onboarding.html
-msgid "Typed every time you unlock"
-msgstr "Saisi à chaque déverrouillage"
 
 #: ui/templates/vault/ui/onboarding.html
 #: ui/templates/vault/ui/partials/password_dialog.html
@@ -199,105 +195,98 @@ msgid "Recovery key"
 msgstr "Clé de récupération"
 
 #: ui/templates/vault/ui/onboarding.html
-msgid "Shown once, on this screen"
-msgstr "Affichée une seule fois, sur cet écran"
+msgid "Two keys protect your vaults"
+msgstr "Deux clés protègent vos coffres-forts"
 
 #: ui/templates/vault/ui/onboarding.html
 msgid ""
-"Encrypted on this device. There is no password reset, and unlocking takes "
-"both your password and your recovery key. Lose your password and your vaults "
-"are gone. Lose your recovery key and only a device that still remembers it "
-"can open them."
+"Your data is encrypted in this browser before it is saved. The server only "
+"keeps what it cannot read, so unlocking takes two things that only you hold:"
 msgstr ""
-"Chiffré sur cet appareil. Le mot de passe ne peut pas être réinitialisé, et "
-"le déverrouillage demande à la fois votre mot de passe et votre clé de "
-"récupération. Perdez votre mot de passe et vos coffres-forts sont perdus. "
-"Perdez votre clé de récupération et seul un appareil qui la garde encore en "
-"mémoire pourra les ouvrir."
-
-#: ui/templates/vault/ui/onboarding.html
-msgid "Your recovery key"
-msgstr "Votre clé de récupération"
-
-#: ui/templates/vault/ui/onboarding.html
-msgid "One password opens everything"
-msgstr "Un mot de passe ouvre tout"
+"Vos données sont chiffrées dans ce navigateur avant d’être enregistrées. Le "
+"serveur ne conserve que ce qu’il ne peut pas lire : pour les déverrouiller, "
+"il faut deux éléments qui ne sont qu’entre vos mains :"
 
 #: ui/templates/vault/ui/onboarding.html
 msgid ""
-"Your master password unlocks your account, and every vault in it - today's "
-"and the ones you create later. Vaults do not have their own passwords. It is "
-"not your Workspace password either, and changing one never changes the other."
+"You choose it in the next step and type it each time you unlock. It opens "
+"all your vaults and is separate from your Workspace password."
 msgstr ""
-"Votre mot de passe principal déverrouille votre compte et chacun de ses "
-"coffres-forts - ceux d’aujourd’hui comme ceux que vous créerez. Les coffres-"
-"forts n’ont pas de mot de passe propre. Ce n’est pas non plus votre mot de "
-"passe Workspace, et changer l’un ne change jamais l’autre."
-
-#: ui/templates/vault/ui/onboarding.html
-msgid "It never leaves this browser"
-msgstr "Il ne quitte jamais ce navigateur"
+"Vous le choisissez à l’étape suivante et le saisissez à chaque "
+"déverrouillage. Il ouvre tous vos coffres-forts et reste indépendant du mot "
+"de passe de votre compte Workspace."
 
 #: ui/templates/vault/ui/onboarding.html
 msgid ""
-"It is used here, on this device, to open the keys that decrypt your data. "
-"What we store, we cannot read - which is also why nobody here can reset it."
+"Generated for you in the last step and shown only once. You need it, along "
+"with your password, to unlock on a new device. It does not replace a "
+"forgotten password."
 msgstr ""
-"Il sert ici, sur cet appareil, à ouvrir les clés qui déchiffrent vos "
-"données. Ce que nous stockons, nous ne pouvons pas le lire - c’est aussi "
-"pourquoi personne ici ne peut le réinitialiser."
+"Générée à la dernière étape et affichée une seule fois. Elle vous sera "
+"demandée, avec votre mot de passe, pour déverrouiller sur un nouvel "
+"appareil. Elle ne remplace pas un mot de passe oublié."
 
 #: ui/templates/vault/ui/onboarding.html
-msgid "Your recovery key is the other half"
-msgstr "Votre clé de récupération est l’autre moitié"
+msgid "Choose your master password"
+msgstr "Choisissez votre mot de passe principal"
 
 #: ui/templates/vault/ui/onboarding.html
 msgid ""
-"We will create one on this device in a moment and show it once. It does not "
-"recover your password: it is the second half of the lock, the part you bring "
-"to a new device. Keep it offline."
+"A sentence of a few words works well: easy for you to remember, hard for "
+"anyone else to guess. It never leaves this browser."
 msgstr ""
-"Nous allons en créer une sur cet appareil dans un instant et l’afficher une "
-"seule fois. Elle ne récupère pas votre mot de passe : c’est la seconde "
-"moitié du verrou, celle que vous apportez sur un nouvel appareil. Conservez-"
-"la hors ligne."
+"Une phrase de quelques mots fait très bien l’affaire : facile à retenir pour "
+"vous, difficile à deviner pour les autres. Votre mot de passe ne quitte "
+"jamais ce navigateur."
 
 #: ui/templates/vault/ui/onboarding.html
-msgid "Pick your master password. It never leaves this browser."
-msgstr ""
-"Choisissez votre mot de passe principal. Il ne quitte jamais ce navigateur."
+msgid "Confirm master password"
+msgstr "Confirmer le mot de passe principal"
 
 #: ui/templates/vault/ui/onboarding.html
-#: ui/templates/vault/ui/partials/password_dialog.html
-msgid "Confirm it"
-msgstr "Confirmez-le"
+msgid "Save your recovery key"
+msgstr "Conservez votre clé de récupération"
 
 #: ui/templates/vault/ui/onboarding.html
 msgid ""
-"Save it somewhere safe and offline. With your master password, it is the "
-"only way into your vaults."
+"It is shown only this once. Download the emergency kit or write the key "
+"down, and keep it somewhere you can still reach if you lose this device."
 msgstr ""
-"Conservez-la en lieu sûr, hors ligne. Avec votre mot de passe principal, "
-"c’est le seul moyen d’ouvrir vos coffres-forts."
+"Elle n’est affichée qu’une seule fois. Téléchargez le kit de secours ou "
+"recopiez la clé, puis rangez-la dans un endroit accessible même si vous "
+"perdez cet appareil."
 
 #: ui/templates/vault/ui/onboarding.html
 msgid "Download the emergency kit (PDF)"
 msgstr "Télécharger le kit de secours (PDF)"
 
 #: ui/templates/vault/ui/onboarding.html
-msgid "I have saved my recovery key. Without it, nobody can open my vaults."
-msgstr ""
-"J’ai conservé ma clé de récupération. Sans elle, personne ne peut ouvrir mes "
-"coffres-forts."
+msgid "Remember the recovery key on this device"
+msgstr "Mémoriser la clé de récupération sur cet appareil"
 
 #: ui/templates/vault/ui/onboarding.html
 msgid ""
-"Remember my recovery key on this device. Anything that can run code on this "
-"page can then read it, so leave it off on a shared computer."
+"You will not have to enter it to unlock here. Leave this off on a shared "
+"computer: any code running on this page could read it."
 msgstr ""
-"Mémoriser ma clé de récupération sur cet appareil. Tout ce qui peut exécuter "
-"du code sur cette page pourra alors la lire : laissez cette option "
-"désactivée sur un ordinateur partagé."
+"Vous n’aurez pas à la saisir pour déverrouiller sur cet appareil. À éviter "
+"sur un ordinateur partagé : tout code exécuté sur cette page pourrait la "
+"lire."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid ""
+"There is no password reset. Forget your master password and your vaults are "
+"lost for good. Lose your recovery key and only a device that remembers it "
+"can still open them."
+msgstr ""
+"Aucune réinitialisation n’est possible. Si vous oubliez votre mot de passe "
+"principal, vos coffres-forts sont définitivement perdus. Si vous perdez "
+"votre clé de récupération, seul un appareil qui l’a mémorisée pourra encore "
+"les ouvrir."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "I have saved my recovery key somewhere safe"
+msgstr "J’ai mis ma clé de récupération en lieu sûr"
 
 #: ui/templates/vault/ui/onboarding.html
 msgid "I understand"
@@ -845,33 +834,38 @@ msgstr ""
 msgid "New master password"
 msgstr "Nouveau mot de passe principal"
 
+#: ui/templates/vault/ui/partials/password_dialog.html
+msgid "Confirm it"
+msgstr "Confirmez-le"
+
 #: ui/templates/vault/ui/partials/password_floor_checklist.html
 msgid "At least 12 characters"
 msgstr "Au moins 12 caractères"
 
 #: ui/templates/vault/ui/partials/password_floor_checklist.html
-msgid "Strong enough to resist guessing"
-msgstr "Assez robuste pour résister aux tentatives"
+msgid "Hard to guess"
+msgstr "Difficile à deviner"
 
 #: ui/templates/vault/ui/partials/password_floor_checklist.html
-msgid "Both fields match"
-msgstr "Les deux champs correspondent"
+msgid "Both entries match"
+msgstr "Les deux saisies sont identiques"
 
 #: ui/templates/vault/ui/partials/password_floor_checklist.html
-msgid "Not in a known data breach"
-msgstr "Absent des fuites de données connues"
+msgid "Not found in any known data breach"
+msgstr "Absent de toute fuite de données connue"
 
 #: ui/templates/vault/ui/partials/password_floor_checklist.html
 msgid "Checking known data breaches..."
 msgstr "Vérification des fuites de données connues..."
 
 #: ui/templates/vault/ui/partials/password_floor_checklist.html
-msgid "Found in a public data breach - pick another one"
-msgstr "Trouvé dans une fuite de données publique - choisissez-en un autre"
+msgid "Found in a public data breach: choose another password"
+msgstr "Présent dans une fuite de données publique : choisissez-en un autre"
 
 #: ui/templates/vault/ui/partials/password_floor_checklist.html
-msgid "Breach check unavailable - you can continue"
-msgstr "Vérification des fuites indisponible - vous pouvez continuer"
+msgid "Breach check unavailable: you can still continue"
+msgstr ""
+"Vérification des fuites indisponible : vous pouvez tout de même continuer"
 
 #: ui/templates/vault/ui/partials/switcher_menu.html
 msgid "Nothing can be done with this vault"

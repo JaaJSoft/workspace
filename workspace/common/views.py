@@ -37,15 +37,28 @@ def rows_in_order(queryset, uuids):
 
     The rows are read, not locked - a module's services take their locks in
     their own order, and locking here first would invert it. A view whose
-    service skips a row deleted since asks again once the service holds its
-    locks, and raises ``unknown_rows`` for what is gone: the transaction
-    around it undoes the rest.
+    service skips a row deleted since calls ``refuse_if_gone`` once the
+    service holds its locks.
     """
     found = {row.pk: row for row in queryset.filter(pk__in=uuids)}
     missing = [uuid for uuid in uuids if uuid not in found]
     if missing:
         raise unknown_rows(missing)
     return [found[uuid] for uuid in uuids]
+
+
+def refuse_if_gone(queryset, rows):
+    """Refuse the request when one of *rows* left *queryset* since it was read.
+
+    Called once the service has run, inside the request's transaction: the
+    service holds its locks by then, so what is left cannot change anymore,
+    and a service skips a row it does not find instead of failing. Raising
+    undoes what it did to the others.
+    """
+    left = {row.pk for row in queryset.filter(pk__in=[row.pk for row in rows])}
+    gone = [row.pk for row in rows if row.pk not in left]
+    if gone:
+        raise unknown_rows(gone)
 
 
 class BatchView(GenericAPIView):
@@ -117,7 +130,9 @@ class ReorderView(GenericAPIView):
 
     The body is ``{"uuids": [...]}``; a view whose order has a scope (the
     column a task list belongs to) extends ``UuidListSerializer`` with it.
-    ``perform_reorder(rows, data)`` receives the rows in the order asked.
+    ``perform_reorder(rows, data)`` receives the rows in the order asked. A
+    row deleted while the order was being applied refuses the request like
+    one that was never there: the order asked for could not be given.
     """
 
     serializer_class = UuidListSerializer
@@ -129,6 +144,7 @@ class ReorderView(GenericAPIView):
         with transaction.atomic():
             rows = rows_in_order(self.get_queryset(), body.validated_data["uuids"])
             self.perform_reorder(rows, body.validated_data)
+            refuse_if_gone(self.get_queryset(), rows)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

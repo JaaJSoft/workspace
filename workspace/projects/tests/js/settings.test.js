@@ -4,9 +4,10 @@ const {
   loadScripts,
   CUSTOM_ELEMENT_STUBS,
 } = require('../../../common/tests/js/loader');
+const { sidebarPreferenceStub } = require('../../../core/tests/js/sidebar_preference_stub');
 
 // settings.js reads the shared <tag-chip> palette, which base.html loads
-// before it.
+// before it, and the row addresses of board.js, which the page loads first.
 function ctx() {
   return settingsWith({});
 }
@@ -65,10 +66,17 @@ function settingsWith(extraGlobals) {
   return loadScripts(
     [
       'workspace/common/static/ui/js/tag_chip.js',
+      'workspace/common/static/ui/js/latest_only.js',
+      'workspace/common/static/ui/js/attachment_input.js',
+      'workspace/projects/ui/static/projects/ui/js/board.js',
       'workspace/projects/ui/static/projects/ui/js/settings.js',
     ],
     {
       ...CUSTOM_ELEMENT_STUBS,
+      URL,
+      URLSearchParams,
+      setTimeout,
+      sidebarPreference: sidebarPreferenceStub(),
       getCSRFToken: () => 'test-token',
       // localtime.js, loaded by base.html: the day in the configured zone.
       userTzDayKey: (d) => d.toISOString().slice(0, 10),
@@ -331,9 +339,73 @@ test('projectGroupAccess.selectableGroups excludes attached groups', () => {
   );
 });
 
+test('projectMembers.memberName prefers the full name over the username', () => {
+  const c = ctx().projectMembers({ apiBase: '/x' });
+  const named = { user: { username: 'ada', first_name: 'Ada', last_name: 'Lovelace' } };
+  const half = { user: { username: 'grace', first_name: 'Grace', last_name: '' } };
+  const bare = { user: { username: 'alan', first_name: '', last_name: '' } };
+  assert.equal(c.memberName(named), 'Ada Lovelace');
+  assert.equal(c.memberName(half), 'Grace');
+  assert.equal(c.memberName(bare), 'alan');
+});
+
+test('projectMembers addresses a member without its project', async () => {
+  const c = settingsWith({
+    AppDialog: { confirm: async () => true },
+  }).projectMembers({ apiBase: '/api/v1/projects/p1' });
+  const member = { uuid: 'm1', user: { id: 7, username: 'alice' }, role: 'member' };
+  c.items = [member];
+  c.syncBoardMembers = async () => {};
+  const calls = [];
+  c.request = async (url, options) => {
+    calls.push(options.method + ' ' + url);
+    return { json: async () => ({ role: 'admin' }) };
+  };
+  await c.changeRole(member, 'admin');
+  await c.removeMember(member);
+  assert.deepStrictEqual(Array.from(calls), [
+    'PATCH /api/v1/projects/members/m1',
+    'DELETE /api/v1/projects/members/m1',
+  ]);
+  assert.equal(c.items.length, 0);
+});
+
+test('projectSettingsDanger archives and unarchives through the project itself', async () => {
+  const calls = [];
+  const c = settingsWith({
+    fetch: async (url, options) => {
+      calls.push([options.method, url, JSON.parse(options.body)]);
+      return { ok: true };
+    },
+    location: { reload() {} },
+  }).projectSettingsDanger({ apiBase: '/api/v1/projects/p1', projectName: 'P' });
+  await c.archive('archive');
+  await c.archive('unarchive');
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(calls)), [
+    ['PATCH', '/api/v1/projects/p1', { is_archived: true }],
+    ['PATCH', '/api/v1/projects/p1', { is_archived: false }],
+  ]);
+});
+
+test('projectColumns.onColumnDrop sends the full order as uuids', async () => {
+  const c = ctx().projectColumns({ apiBase: '/api/v1/projects/p1' });
+  c.columns = COLUMNS.map((column) => ({ ...column }));
+  c.syncBoardStatuses = () => {};
+  let sent = null;
+  c.request = async (url, options) => {
+    sent = [url, JSON.parse(options.body)];
+  };
+  c.draggingColumn = 'd';
+  await c.onColumnDrop({}, 'a');
+  assert.deepStrictEqual(sent, [
+    '/api/v1/projects/p1/statuses/reorder',
+    { uuids: ['d', 'a', 'b', 'c'] },
+  ]);
+});
+
 test('projectMembers.addMember skips users that are already members', async () => {
   const c = ctx().projectMembers({ apiBase: '/x' });
-  c.items = [{ uuid: 'm1', user: 7, username: 'alice', role: 'member' }];
+  c.items = [{ uuid: 'm1', user: { id: 7, username: 'alice' }, role: 'member' }];
   let called = false;
   c.request = async () => { called = true; };
   await c.addMember({ id: '7', username: 'alice' });
@@ -392,16 +464,16 @@ test('projectEpics.toggleClosed flips the flag through the API', async () => {
     return { json: async () => ({}) };
   };
   c.epics = [];
-  const epic = { uuid: 'e1', name: 'Launch', color: '', closed: false, target_date: null };
+  const epic = { uuid: 'e1', name: 'Launch', color: '', is_closed: false, target_date: null };
   c.items = [epic];
   await c.toggleClosed(epic);
-  assert.deepStrictEqual(calls[0], ['/x/epics/e1', { closed: true }]);
-  assert.equal(epic.closed, true);
+  assert.deepStrictEqual(calls[0], ['/api/v1/projects/epics/e1', { is_closed: true }]);
+  assert.equal(epic.is_closed, true);
   assert.deepStrictEqual({ ...c.epics[0] }, {
     uuid: 'e1',
     name: 'Launch',
     color: '',
-    closed: true,
+    is_closed: true,
     target_date: null,
     display_date: '',
   });
@@ -445,9 +517,9 @@ test('projectEpics.saveDescEdit keeps the editor and draft on failure', async ()
 test('projectEpics.visibleEpics filters by search and open state', () => {
   const c = ctx().projectEpics({ apiBase: '/x' });
   c.items = [
-    { uuid: 'e1', name: 'Mobile launch', closed: false },
-    { uuid: 'e2', name: 'Performance', closed: false },
-    { uuid: 'e3', name: 'Old mobile era', closed: true },
+    { uuid: 'e1', name: 'Mobile launch', is_closed: false },
+    { uuid: 'e2', name: 'Performance', is_closed: false },
+    { uuid: 'e3', name: 'Old mobile era', is_closed: true },
   ];
   assert.equal(c.visibleEpics().length, 3);
   c.openOnly = true;
@@ -650,16 +722,16 @@ test('projectEpics.setTargetDate patches and syncs, clears on empty', async () =
     return { json: async () => ({}) };
   };
   c.epics = [];
-  const epic = { uuid: 'e1', name: 'Launch', target_date: '2026-10-01', closed: false };
+  const epic = { uuid: 'e1', name: 'Launch', target_date: '2026-10-01', is_closed: false };
   c.items = [epic];
   await c.setTargetDate(epic, '2026-10-01');
   assert.equal(calls.length, 0);
   await c.setTargetDate(epic, '2026-10-15');
-  assert.deepStrictEqual(calls[0], ['/x/epics/e1', { target_date: '2026-10-15' }]);
+  assert.deepStrictEqual(calls[0], ['/api/v1/projects/epics/e1', { target_date: '2026-10-15' }]);
   assert.equal(epic.target_date, '2026-10-15');
   assert.equal(c.epics[0].target_date, '2026-10-15');
   await c.setTargetDate(epic, '');
-  assert.deepStrictEqual(calls[1], ['/x/epics/e1', { target_date: null }]);
+  assert.deepStrictEqual(calls[1], ['/api/v1/projects/epics/e1', { target_date: null }]);
   assert.equal(epic.target_date, null);
 });
 
@@ -683,8 +755,8 @@ test('projectEpics.setTargetDate re-sorts the list', async () => {
   const c = ctx().projectEpics({ apiBase: '/x' });
   c.request = async () => ({ json: async () => ({}) });
   c.epics = [];
-  const alpha = { uuid: 'e1', name: 'Alpha', target_date: null, closed: false };
-  const beta = { uuid: 'e2', name: 'Beta', target_date: '2026-11-01', closed: false };
+  const alpha = { uuid: 'e1', name: 'Alpha', target_date: null, is_closed: false };
+  const beta = { uuid: 'e2', name: 'Beta', target_date: '2026-11-01', is_closed: false };
   // Deliberately out of sort order before the change: alpha is undated so
   // it belongs after beta, and dating it earlier than beta should move it
   // back to the front - proving setTargetDate actually re-sorts rather

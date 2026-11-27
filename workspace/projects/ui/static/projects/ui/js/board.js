@@ -20,6 +20,13 @@ function movedOnto(items, uuid, targetUuid) {
   return next;
 }
 
+// A row with a uuid of its own is addressed without its project:
+// /api/v1/projects/<collection>/<uuid>. Collections stay under their parent.
+function projectRowUrl(collection, uuid) {
+  return '/api/v1/projects/' + collection + '/' + uuid;
+}
+window.projectRowUrl = projectRowUrl;
+
 const TASK_ANIMATION = 'task-drag';
 
 function prefersReducedMotion() {
@@ -1333,10 +1340,10 @@ function projectBoard(config) {
       });
       if (!ok) return;
       try {
-        const resp = await fetch(
-          config.apiBase + '/sprints/' + uuid + '/start',
-          { method: 'POST', headers: this.headers() }
-        );
+        const resp = await fetch(projectRowUrl('sprints', uuid) + '/start', {
+          method: 'POST',
+          headers: this.headers(),
+        });
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
           throw new Error(data.detail || gettext('Could not start the sprint.'));
@@ -1392,14 +1399,11 @@ function projectBoard(config) {
         if (!ok) return;
       }
       try {
-        const resp = await fetch(
-          config.apiBase + '/sprints/' + uuid + '/complete',
-          {
-            method: 'POST',
-            headers: this.headers(),
-            body: JSON.stringify({ move_to: moveTo }),
-          }
-        );
+        const resp = await fetch(projectRowUrl('sprints', uuid) + '/complete', {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({ move_to: moveTo }),
+        });
         if (!resp.ok) {
           const body = await resp.json().catch(() => ({}));
           throw new Error(body.detail || gettext('Could not complete the sprint.'));
@@ -1622,7 +1626,7 @@ function projectBoard(config) {
     // Feeds the epic dropdown rows; closed epics still resolve by uuid so
     // a task keeping one renders its name in the trigger and on chips.
     openEpics() {
-      return this.epics.filter((e) => !e.closed);
+      return this.epics.filter((e) => !e.is_closed);
     },
 
     // Inline create from the epic dropdown (admins; the server enforces it).
@@ -1646,7 +1650,7 @@ function projectBoard(config) {
           uuid: epic.uuid,
           name: epic.name,
           color: epic.color,
-          closed: false,
+          is_closed: false,
         });
         return epic;
       } catch (e) {
@@ -1937,11 +1941,11 @@ function taskPanel() {
     // add input between two quick entries.
 
     subtasksDone() {
-      return this.subtasks.filter((s) => s.done).length;
+      return this.subtasks.filter((s) => s.is_done).length;
     },
 
     subtaskUrl(uuid) {
-      return this.data.subtasks_url + '/' + uuid;
+      return projectRowUrl('subtasks', uuid);
     },
 
     async addSubtask() {
@@ -1967,17 +1971,17 @@ function taskPanel() {
 
     async toggleSubtask(st) {
       if (!this.can('edit')) return;
-      st.done = !st.done;
+      st.is_done = !st.is_done;
       try {
         const resp = await fetch(this.subtaskUrl(st.uuid), {
           method: 'PATCH',
           headers: this.headers(),
-          body: JSON.stringify({ done: st.done }),
+          body: JSON.stringify({ is_done: st.is_done }),
         });
         if (!resp.ok) throw new Error('Save failed');
         this.refreshContent();
       } catch (e) {
-        st.done = !st.done;
+        st.is_done = !st.is_done;
         if (window.AppAlert) AppAlert.error(gettext('Could not save the item.'));
       }
     },
@@ -2062,7 +2066,7 @@ function taskPanel() {
         const resp = await fetch(this.data.subtasks_url + '/reorder', {
           method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify({ order: this.subtasks.map((s) => s.uuid) }),
+          body: JSON.stringify({ uuids: this.subtasks.map((s) => s.uuid) }),
         });
         if (!resp.ok) throw new Error('Reorder failed');
       } catch (e) {

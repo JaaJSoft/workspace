@@ -22,7 +22,7 @@ class EpicApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.data[0]["name"], "Launch")
         self.assertEqual(response.data[0]["task_count"], 2)
         self.assertEqual(response.data[0]["done_task_count"], 1)
-        self.assertFalse(response.data[0]["closed"])
+        self.assertFalse(response.data[0]["is_closed"])
 
     def test_admin_creates_epic(self):
         self.client.force_authenticate(self.admin)
@@ -106,25 +106,23 @@ class EpicApiTests(ProjectTestMixin, APITestCase):
         epic = self.project.epics.create(name="Launch")
         self.client.force_authenticate(self.admin)
         response = self.client.patch(
-            f"/api/v1/projects/{self.project.uuid}/epics/{epic.uuid}",
-            {"closed": True},
+            f"/api/v1/projects/epics/{epic.uuid}",
+            {"is_closed": True},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data["closed"])
+        self.assertTrue(response.data["is_closed"])
         epic.refresh_from_db()
         self.assertIsNotNone(epic.closed_at)
         response = self.client.patch(
-            f"/api/v1/projects/{self.project.uuid}/epics/{epic.uuid}",
-            {"closed": False},
+            f"/api/v1/projects/epics/{epic.uuid}",
+            {"is_closed": False},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         epic.refresh_from_db()
         self.assertIsNone(epic.closed_at)
-        response = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/epics/{epic.uuid}"
-        )
+        response = self.client.delete(f"/api/v1/projects/epics/{epic.uuid}")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(self.project.epics.count(), 0)
 
@@ -132,9 +130,7 @@ class EpicApiTests(ProjectTestMixin, APITestCase):
         epic = self.project.epics.create(name="Launch")
         task = create_task(self.project, self.admin, title="a", epic=epic)
         self.client.force_authenticate(self.admin)
-        response = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/epics/{epic.uuid}"
-        )
+        response = self.client.delete(f"/api/v1/projects/epics/{epic.uuid}")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         task.refresh_from_db()
         self.assertIsNone(task.epic)
@@ -152,7 +148,7 @@ class EpicApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(epic.target_date, date(2026, 10, 1))
 
         response = self.client.patch(
-            f"/api/v1/projects/{self.project.uuid}/epics/{epic.uuid}",
+            f"/api/v1/projects/epics/{epic.uuid}",
             {"target_date": "2026-11-15"},
             format="json",
         )
@@ -160,7 +156,7 @@ class EpicApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.data["target_date"], "2026-11-15")
 
         response = self.client.patch(
-            f"/api/v1/projects/{self.project.uuid}/epics/{epic.uuid}",
+            f"/api/v1/projects/epics/{epic.uuid}",
             {"target_date": None},
             format="json",
         )

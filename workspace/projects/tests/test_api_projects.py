@@ -43,6 +43,43 @@ class ProjectListCreateTests(ProjectTestMixin, APITestCase):
         self.assertEqual(project.statuses.count(), 4)
         self.assertEqual(project.type, Project.Type.KANBAN)
 
+    def test_create_applies_every_setting_it_accepts(self):
+        self.client.force_authenticate(self.outsider)
+        response = self.client.post(
+            "/api/v1/projects",
+            {
+                "name": "Imported",
+                "estimate_unit": "hours",
+                "done_retention_days": 7,
+                "is_archived": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        project = Project.objects.get(uuid=response.data["uuid"])
+        self.assertEqual(
+            (project.estimate_unit, project.done_retention_days, project.is_archived),
+            ("hours", 7, True),
+        )
+        self.assertEqual(
+            (
+                response.data["estimate_unit"],
+                response.data["done_retention_days"],
+                response.data["is_archived"],
+            ),
+            ("hours", 7, True),
+        )
+        self.assertIsNotNone(response.data["archived_at"])
+
+    def test_create_leaves_the_settings_it_is_not_given_at_their_default(self):
+        self.client.force_authenticate(self.outsider)
+        response = self.client.post("/api/v1/projects", {"name": "New"}, format="json")
+        project = Project.objects.get(uuid=response.data["uuid"])
+        self.assertEqual(
+            (project.estimate_unit, project.done_retention_days, project.is_archived),
+            ("", None, False),
+        )
+
     def test_create_attaches_a_group_the_creator_is_not_in(self):
         group = Group.objects.create(name="devs")
         self.client.force_authenticate(self.outsider)
@@ -66,7 +103,10 @@ class ProjectListCreateTests(ProjectTestMixin, APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(set(response.data["groups"]), {devs.pk, design.pk})
+        self.assertCountEqual(
+            response.data["groups"],
+            [{"id": devs.pk, "name": "devs"}, {"id": design.pk, "name": "design"}],
+        )
         project = Project.objects.get(uuid=response.data["uuid"])
         self.assertEqual(
             set(project.groups.values_list("pk", flat=True)), {devs.pk, design.pk}
@@ -143,9 +183,13 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
         personal = get_or_create_personal_project(self.admin)
         self.client.force_authenticate(self.admin)
         response = self.client.delete(f"/api/v1/projects/{personal.uuid}")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        response = self.client.post(f"/api/v1/projects/{personal.uuid}/archive")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        response = self.client.patch(
+            f"/api/v1/projects/{personal.uuid}", {"is_archived": True}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        personal.refresh_from_db()
+        self.assertFalse(personal.is_archived)
 
     def test_personal_project_cannot_attach_group(self):
         group = Group.objects.create(name="devs")
@@ -201,16 +245,61 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(self.project.groups.count(), 0)
 
+    def _archive(self, archived, user=None):
+        self.client.force_authenticate(user or self.admin)
+        return self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}",
+            {"is_archived": archived},
+            format="json",
+        )
+
     def test_archive_and_unarchive(self):
-        self.client.force_authenticate(self.admin)
-        response = self.client.post(f"/api/v1/projects/{self.project.uuid}/archive")
+        response = self._archive(True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["is_archived"])
+        self.assertIsNotNone(response.data["archived_at"])
         self.project.refresh_from_db()
         self.assertTrue(self.project.is_archived)
-        response = self.client.post(f"/api/v1/projects/{self.project.uuid}/unarchive")
+        response = self._archive(False)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["is_archived"])
+        self.assertIsNone(response.data["archived_at"])
         self.project.refresh_from_db()
         self.assertFalse(self.project.is_archived)
+
+    def test_archiving_twice_keeps_the_first_date(self):
+        self._archive(True)
+        self.project.refresh_from_db()
+        first = self.project.archived_at
+        response = self._archive(True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.archived_at, first)
+
+    def test_member_cannot_archive_or_unarchive(self):
+        for archived in (True, False):
+            with self.subTest(archived=archived):
+                response = self._archive(archived, user=self.member)
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.project.refresh_from_db()
+        self.assertFalse(self.project.is_archived)
+
+    def test_an_archived_project_takes_no_other_change_with_its_unarchiving(self):
+        self._archive(True)
+        response = self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}",
+            {"is_archived": False, "name": "Renamed"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.project.refresh_from_db()
+        self.assertTrue(self.project.is_archived)
+        self.assertEqual(self.project.name, "Website")
+
+    def test_is_archived_takes_a_boolean_only(self):
+        response = self._archive("soon")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(response.data), ["is_archived"])
 
     def test_rename_blocked_while_archived(self):
         self.project.archived_at = timezone.now()
@@ -348,8 +437,8 @@ class ProjectEstimateUnitApiTests(ProjectTestMixin, APITestCase):
 
 
 class ProjectListQueryCountTests(ProjectTestMixin, APITestCase):
-    """The listing is unpaginated, so anything resolved per project is
-    unbounded work."""
+    """Nothing is resolved per project: a page costs the same queries
+    whatever it holds."""
 
     def _add_projects(self, count):
         # Numbered from the current total so a second call keeps minting

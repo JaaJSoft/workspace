@@ -4,7 +4,7 @@ from django.db.models import Max
 from ..models import Subtask, Task
 
 
-def create_subtask(task, title):
+def create_subtask(task, title, *, done=False):
     """Append a checklist item at the end of *task*'s checklist.
 
     The task row is locked first: two concurrent adds would otherwise read
@@ -16,6 +16,7 @@ def create_subtask(task, title):
         return Subtask.objects.create(
             task=task,
             title=title,
+            done=done,
             position=0 if last is None else last + 1,
         )
 

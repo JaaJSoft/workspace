@@ -9,7 +9,7 @@ from workspace.projects.serializers import SprintSerializer
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.sprints import complete_sprint, start_sprint
 from workspace.projects.services.tasks import create_task
-from workspace.projects.views.viewsets import SprintViewSet
+from workspace.projects.views.sprints import SprintDetailView
 
 from .base import ProjectTestMixin
 
@@ -30,6 +30,7 @@ class ScrumProjectMixin(ProjectTestMixin):
         self.doing = self.scrum.statuses.get(name="In progress")
         self.done = self.scrum.statuses.get(name="Done")
         self.sprints_url = f"/api/v1/projects/{self.scrum.uuid}/sprints"
+        self.sprint_url = "/api/v1/projects/sprints"
 
 
 class SprintCrudApiTests(ScrumProjectMixin, APITestCase):
@@ -94,7 +95,7 @@ class SprintCrudApiTests(ScrumProjectMixin, APITestCase):
         sprint = self.scrum.sprints.create(name="Sprint 1")
         self.client.force_authenticate(self.admin)
         response = self.client.patch(
-            f"{self.sprints_url}/{sprint.uuid}", {"state": "active"}, format="json"
+            f"{self.sprint_url}/{sprint.uuid}", {"state": "active"}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         sprint.refresh_from_db()
@@ -111,7 +112,7 @@ class SprintCrudApiTests(ScrumProjectMixin, APITestCase):
         self.client.force_authenticate(self.admin)
         with mock.patch.object(SprintSerializer, "validate", validate_then_complete):
             response = self.client.patch(
-                f"{self.sprints_url}/{sprint.uuid}", {"goal": "Ship"}, format="json"
+                f"{self.sprint_url}/{sprint.uuid}", {"goal": "Ship"}, format="json"
             )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         sprint.refresh_from_db()
@@ -123,21 +124,21 @@ class SprintCrudApiTests(ScrumProjectMixin, APITestCase):
         sprint = self.scrum.sprints.create(name="Sprint 1")
         task = create_task(self.scrum, self.admin, title="a", sprint=sprint)
         self.client.force_authenticate(self.admin)
-        response = self.client.delete(f"{self.sprints_url}/{sprint.uuid}")
+        response = self.client.delete(f"{self.sprint_url}/{sprint.uuid}")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         task.refresh_from_db()
         self.assertIsNone(task.sprint)
 
-    def test_delete_active_sprint_is_400(self):
+    def test_delete_active_sprint_is_409(self):
         sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
         self.client.force_authenticate(self.admin)
-        response = self.client.delete(f"{self.sprints_url}/{sprint.uuid}")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.delete(f"{self.sprint_url}/{sprint.uuid}")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_delete_refuses_a_sprint_started_after_it_was_read(self):
         sprint = self.scrum.sprints.create(name="Sprint 1")
         task = create_task(self.scrum, self.admin, title="a", sprint=sprint)
-        read = SprintViewSet.get_object
+        read = SprintDetailView.get_object
 
         def read_then_start(view):
             loaded = read(view)
@@ -146,9 +147,9 @@ class SprintCrudApiTests(ScrumProjectMixin, APITestCase):
             return loaded
 
         self.client.force_authenticate(self.admin)
-        with mock.patch.object(SprintViewSet, "get_object", read_then_start):
-            response = self.client.delete(f"{self.sprints_url}/{sprint.uuid}")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        with mock.patch.object(SprintDetailView, "get_object", read_then_start):
+            response = self.client.delete(f"{self.sprint_url}/{sprint.uuid}")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(
             response.data["detail"], "The active sprint must be completed, not deleted."
         )
@@ -162,7 +163,7 @@ class SprintLifecycleApiTests(ScrumProjectMixin, APITestCase):
         planned = create_task(self.scrum, self.admin, title="a", sprint=sprint)
         unplanned = create_task(self.scrum, self.admin, title="b")
         self.client.force_authenticate(self.admin)
-        response = self.client.post(f"{self.sprints_url}/{sprint.uuid}/start")
+        response = self.client.post(f"{self.sprint_url}/{sprint.uuid}/start")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["state"], "active")
         sprint.refresh_from_db()
@@ -176,21 +177,21 @@ class SprintLifecycleApiTests(ScrumProjectMixin, APITestCase):
     def test_start_requires_admin(self):
         sprint = self.scrum.sprints.create(name="Sprint 1")
         self.client.force_authenticate(self.member)
-        response = self.client.post(f"{self.sprints_url}/{sprint.uuid}/start")
+        response = self.client.post(f"{self.sprint_url}/{sprint.uuid}/start")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_second_active_sprint_is_400(self):
+    def test_second_active_sprint_is_409(self):
         self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
         sprint = self.scrum.sprints.create(name="Sprint 2")
         self.client.force_authenticate(self.admin)
-        response = self.client.post(f"{self.sprints_url}/{sprint.uuid}/start")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.post(f"{self.sprint_url}/{sprint.uuid}/start")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
-    def test_start_closed_sprint_is_400(self):
+    def test_start_closed_sprint_is_409(self):
         sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.CLOSED)
         self.client.force_authenticate(self.admin)
-        response = self.client.post(f"{self.sprints_url}/{sprint.uuid}/start")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.post(f"{self.sprint_url}/{sprint.uuid}/start")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_complete_returns_unfinished_tasks_to_backlog(self):
         sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
@@ -202,7 +203,7 @@ class SprintLifecycleApiTests(ScrumProjectMixin, APITestCase):
         )
         self.client.force_authenticate(self.admin)
         response = self.client.post(
-            f"{self.sprints_url}/{sprint.uuid}/complete", {}, format="json"
+            f"{self.sprint_url}/{sprint.uuid}/complete", {}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         sprint.refresh_from_db()
@@ -225,7 +226,7 @@ class SprintLifecycleApiTests(ScrumProjectMixin, APITestCase):
         )
         self.client.force_authenticate(self.admin)
         response = self.client.post(
-            f"{self.sprints_url}/{sprint.uuid}/complete",
+            f"{self.sprint_url}/{sprint.uuid}/complete",
             {"move_to": str(next_sprint.uuid)},
             format="json",
         )
@@ -235,24 +236,24 @@ class SprintLifecycleApiTests(ScrumProjectMixin, APITestCase):
         # Carried-over tasks resume where they stopped: the status stays.
         self.assertEqual(open_task.status_id, self.doing.pk)
 
-    def test_complete_to_closed_sprint_is_400(self):
+    def test_complete_to_closed_sprint_is_409(self):
         sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
         closed = self.scrum.sprints.create(name="Sprint 0", state=Sprint.State.CLOSED)
         self.client.force_authenticate(self.admin)
         response = self.client.post(
-            f"{self.sprints_url}/{sprint.uuid}/complete",
+            f"{self.sprint_url}/{sprint.uuid}/complete",
             {"move_to": str(closed.uuid)},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
-    def test_complete_planned_sprint_is_400(self):
+    def test_complete_planned_sprint_is_409(self):
         sprint = self.scrum.sprints.create(name="Sprint 1")
         self.client.force_authenticate(self.admin)
         response = self.client.post(
-            f"{self.sprints_url}/{sprint.uuid}/complete", {}, format="json"
+            f"{self.sprint_url}/{sprint.uuid}/complete", {}, format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
 
 class AssignSprintApiTests(ScrumProjectMixin, APITestCase):
@@ -444,7 +445,7 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
         assign_tasks_to_sprint(self.scrum, other, [moved.uuid], actor=self.admin)
         self.client.force_authenticate(self.admin)
         response = self.client.patch(
-            f"{self.sprints_url}/{sprint.uuid}", {"name": "Iteration 1"}, format="json"
+            f"{self.sprint_url}/{sprint.uuid}", {"name": "Iteration 1"}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         events = TaskEvent.objects.filter(type=TaskEvent.Type.SPRINT)
@@ -457,12 +458,31 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
             [("", "Iteration 1"), ("Iteration 1", "Neighbour")],
         )
 
+    def test_a_rename_whose_snapshots_cannot_be_rewritten_does_not_land(self):
+        sprint = self.scrum.sprints.create(name="Renamable")
+        self.client.force_authenticate(self.admin)
+        with (
+            mock.patch(
+                "workspace.projects.views.sprints.propagate_sprint_rename",
+                side_effect=RuntimeError("snapshots"),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.patch(
+                f"{self.sprint_url}/{sprint.uuid}",
+                {"name": "Iteration 1"},
+                format="json",
+            )
+        sprint.refresh_from_db()
+        # Or a retry would find the name already changed and skip the rewrite.
+        self.assertEqual(sprint.name, "Renamable")
+
     def test_patch_without_a_rename_leaves_the_snapshots_alone(self):
         sprint = self.scrum.sprints.create(name="Renamable")
         create_task(self.scrum, self.admin, title="a", sprint=sprint)
         self.client.force_authenticate(self.admin)
         self.client.patch(
-            f"{self.sprints_url}/{sprint.uuid}", {"goal": "Ship"}, format="json"
+            f"{self.sprint_url}/{sprint.uuid}", {"goal": "Ship"}, format="json"
         )
         event = TaskEvent.objects.get(type=TaskEvent.Type.SPRINT)
         self.assertEqual(event.to_value, "Renamable")

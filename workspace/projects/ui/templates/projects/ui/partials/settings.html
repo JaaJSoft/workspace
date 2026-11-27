@@ -187,23 +187,23 @@
               <div class="avatar avatar-placeholder">
                 <div
                   class="w-8 rounded-full text-white text-xs"
-                  :class="imgOk ? '' : userAvatarColorClass(member.user)"
+                  :class="imgOk ? '' : userAvatarColorClass(member.user.id)"
                 >
                   <img
                     x-show="imgOk"
-                    :src="'/api/v1/users/' + member.user + '/avatar'"
+                    :src="member.user.avatar_url"
                     alt=""
-                    :alt="member.username"
+                    :alt="member.user.username"
                     loading="lazy"
                     @error="imgOk = false"
                   />
-                  <span x-show="!imgOk" x-text="member.username.charAt(0).toUpperCase()"></span>
+                  <span x-show="!imgOk" x-text="member.user.username.charAt(0).toUpperCase()"></span>
                 </div>
               </div>
               <span
                 class="font-medium flex-1 truncate"
-                x-text="member.display_name"
-                :title="member.username"
+                x-text="memberName(member)"
+                :title="member.user.username"
               ></span>
               {% if writable %}
                 {# A fixed width, whatever the role's label: the remove buttons line up. #}
@@ -577,7 +577,7 @@
         <template x-for="epic in visibleEpics()" :key="epic.uuid">
           <div
             class="rounded-box bg-base-100 p-3 flex flex-col gap-2"
-            :class="epic.closed ? 'opacity-60' : ''"
+            :class="epic.is_closed ? 'opacity-60' : ''"
           >
             <div class="flex items-center gap-2 min-w-0">
               {% if writable %}
@@ -620,7 +620,7 @@
                 <button
                   type="button"
                   class="font-medium text-sm truncate text-left"
-                  :class="epic.closed ? 'line-through' : ''"
+                  :class="epic.is_closed ? 'line-through' : ''"
                   x-text="epic.name"
                   {% if writable %}@click="startEdit(epic)"{% endif %}
                 ></button>
@@ -655,7 +655,7 @@
               {% endif %}
               <span
                 class="badge badge-ghost badge-sm shrink-0"
-                x-show="epic.closed"
+                x-show="epic.is_closed"
               >{% translate "Closed" context "epic state" %}</span>
               <span
                 class="ml-auto text-xs text-base-content/60 font-mono shrink-0"
@@ -665,11 +665,11 @@
                 <button
                   type="button"
                   class="btn btn-ghost btn-circle btn-xs shrink-0"
-                  :aria-label="epic.closed ? '{{ reopen_epic|escapejs }}' : '{{ close_epic|escapejs }}'"
-                  :title="epic.closed ? '{{ reopen_epic|escapejs }}' : '{{ close_epic|escapejs }}'"
+                  :aria-label="epic.is_closed ? '{{ reopen_epic|escapejs }}' : '{{ close_epic|escapejs }}'"
+                  :title="epic.is_closed ? '{{ reopen_epic|escapejs }}' : '{{ close_epic|escapejs }}'"
                   @click="toggleClosed(epic)"
                 >
-                  <template x-if="!epic.closed">
+                  <template x-if="!epic.is_closed">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="w-3.5 h-3.5"
@@ -684,7 +684,7 @@
                       <path d="m9 11 3 3L22 4" />
                     </svg>
                   </template>
-                  <template x-if="epic.closed">
+                  <template x-if="epic.is_closed">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="w-3.5 h-3.5"

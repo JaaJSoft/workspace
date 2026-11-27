@@ -205,12 +205,12 @@ class NotificationLevelApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.member)
 
         resp = self.client.put(self._url(), {"level": "in_app"}, format="json")
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data, {"level": "in_app"})
+        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.content, b"")
         self.assertEqual(self._row(self.member).level, Level.IN_APP)
 
         resp = self.client.put(self._url(), {"level": "none"}, format="json")
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 204)
         self.assertEqual(self._row(self.member).level, Level.NONE)
         self.assertEqual(
             ProjectNotificationLevel.objects.filter(user=self.member).count(), 1
@@ -245,7 +245,7 @@ class NotificationLevelApiTests(ProjectTestMixin, APITestCase):
 
         resp = self.client.put(self._url(), {"level": "in_app"}, format="json")
 
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 204)
         self.assertEqual(self._row(self.outsider).level, Level.IN_APP)
 
 

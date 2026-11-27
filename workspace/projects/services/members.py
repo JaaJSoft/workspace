@@ -6,7 +6,7 @@ from ..models import Project, ProjectMember, ProjectNotificationLevel
 
 
 class ProjectRuleError(Exception):
-    """Violation of a project business rule; the API maps it to HTTP 400.
+    """Violation of a project business rule; the API answers it with a 409.
 
     ``detail`` is a curated, user-facing message built from constant strings
     (never from user input or tracebacks), safe to return in API responses.

@@ -242,10 +242,8 @@ class ProjectApiLanguageTests(ProjectTestMixin, TestCase):
     def test_refused_column_deletion_is_translated(self):
         set_setting(self.admin, "core", "language", "fr")
         backlog = self.project.statuses.get(category="backlog")
-        response = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/statuses/{backlog.uuid}"
-        )
-        self.assertEqual(response.status_code, 400)
+        response = self.client.delete(f"/api/v1/projects/statuses/{backlog.uuid}")
+        self.assertEqual(response.status_code, 409)
         self.assertEqual(
             response.json()["detail"],
             "Impossible de supprimer la dernière colonne « Backlog ».",

@@ -86,14 +86,12 @@ class LabelApiTests(ProjectTestMixin, APITestCase):
         label = self.project.labels.create(name="bug", color="#ff0000")
         self.client.force_authenticate(self.admin)
         response = self.client.patch(
-            f"/api/v1/projects/{self.project.uuid}/labels/{label.uuid}",
+            f"/api/v1/projects/labels/{label.uuid}",
             {"name": "defect"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        response = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/labels/{label.uuid}"
-        )
+        response = self.client.delete(f"/api/v1/projects/labels/{label.uuid}")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(self.project.labels.count(), 0)
 

@@ -16,16 +16,27 @@ class MemberListTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.member)
         response = self.client.get(f"/api/v1/projects/{self.project.uuid}/members")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual({m["username"] for m in response.data}, {"admin1", "member1"})
+        self.assertEqual(
+            {m["user"]["username"] for m in response.data}, {"admin1", "member1"}
+        )
 
-    def test_member_carries_the_name_people_know_them_by(self):
+    def test_member_carries_the_user_as_a_small_object(self):
         self.member.first_name, self.member.last_name = "Ada", "Lovelace"
         self.member.save(update_fields=["first_name", "last_name"])
         self.client.force_authenticate(self.member)
         response = self.client.get(f"/api/v1/projects/{self.project.uuid}/members")
-        names = {m["username"]: m["display_name"] for m in response.data}
-        # The username stands in for a user who never gave a name.
-        self.assertEqual(names, {"admin1": "admin1", "member1": "Ada Lovelace"})
+        row = next(m for m in response.data if m["user"]["id"] == self.member.pk)
+        self.assertEqual(set(row), {"uuid", "user", "role", "joined_at"})
+        self.assertEqual(
+            row["user"],
+            {
+                "id": self.member.pk,
+                "username": "member1",
+                "first_name": "Ada",
+                "last_name": "Lovelace",
+                "avatar_url": f"/api/v1/users/{self.member.pk}/avatar",
+            },
+        )
 
     def test_outsider_gets_404(self):
         self.client.force_authenticate(self.outsider)
@@ -72,6 +83,8 @@ class MemberCreateTests(ProjectTestMixin, APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["user"]["username"], "outsider1")
+        self.assertEqual(response.data["role"], "member")
         self.assertTrue(
             ProjectMember.objects.filter(
                 project=self.project, user=self.outsider, left_at__isnull=True
@@ -95,7 +108,7 @@ class MemberCreateTests(ProjectTestMixin, APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["detail"], "User not found.")
+        self.assertEqual(list(response.data), ["user"])
 
     def test_malformed_user_id_is_400(self):
         self.client.force_authenticate(self.admin)
@@ -111,7 +124,7 @@ class MemberUpdateDeleteTests(ProjectTestMixin, APITestCase):
     def test_admin_promotes_member(self):
         self.client.force_authenticate(self.admin)
         response = self.client.patch(
-            f"/api/v1/projects/{self.project.uuid}/members/{self.membership.uuid}",
+            f"/api/v1/projects/members/{self.membership.uuid}",
             {"role": "admin"},
             format="json",
         )
@@ -119,19 +132,20 @@ class MemberUpdateDeleteTests(ProjectTestMixin, APITestCase):
         self.membership.refresh_from_db()
         self.assertEqual(self.membership.role, ProjectMember.Role.ADMIN)
 
-    def test_demoting_last_admin_is_400(self):
+    def test_demoting_last_admin_is_409(self):
         self.client.force_authenticate(self.admin)
         response = self.client.patch(
-            f"/api/v1/projects/{self.project.uuid}/members/{self.admin_membership.uuid}",
+            f"/api/v1/projects/members/{self.admin_membership.uuid}",
             {"role": "member"},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("detail", response.data)
 
     def test_admin_removes_member(self):
         self.client.force_authenticate(self.admin)
         response = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/members/{self.membership.uuid}"
+            f"/api/v1/projects/members/{self.membership.uuid}"
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.membership.refresh_from_db()
@@ -140,23 +154,56 @@ class MemberUpdateDeleteTests(ProjectTestMixin, APITestCase):
     def test_member_leaves_own_row(self):
         self.client.force_authenticate(self.member)
         response = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/members/{self.membership.uuid}"
+            f"/api/v1/projects/members/{self.membership.uuid}"
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_member_cannot_remove_someone_else(self):
         self.client.force_authenticate(self.member)
         response = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/members/{self.admin_membership.uuid}"
+            f"/api/v1/projects/members/{self.admin_membership.uuid}"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_last_admin_cannot_leave(self):
         self.client.force_authenticate(self.admin)
         response = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/members/{self.admin_membership.uuid}"
+            f"/api/v1/projects/members/{self.admin_membership.uuid}"
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_member_reads_one_membership(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.get(
+            f"/api/v1/projects/members/{self.admin_membership.uuid}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["role"], "admin")
+
+    def test_membership_out_of_reach_answers_like_one_that_does_not_exist(self):
+        import uuid as uuid_module
+
+        self.client.force_authenticate(self.outsider)
+        for method in ("get", "patch", "delete"):
+            with self.subTest(method=method):
+                hidden = getattr(self.client, method)(
+                    f"/api/v1/projects/members/{self.membership.uuid}"
+                )
+                unknown = getattr(self.client, method)(
+                    f"/api/v1/projects/members/{uuid_module.uuid4()}"
+                )
+                self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+                self.assertEqual(
+                    (hidden.status_code, hidden.content),
+                    (unknown.status_code, unknown.content),
+                )
+
+    def test_a_member_who_left_is_no_longer_a_row(self):
+        self.membership.left_at = timezone.now()
+        self.membership.save(update_fields=["left_at"])
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(f"/api/v1/projects/members/{self.membership.uuid}")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class ArchivedProjectMemberTests(ProjectTestMixin, APITestCase):
@@ -170,11 +217,10 @@ class ArchivedProjectMemberTests(ProjectTestMixin, APITestCase):
         base = f"/api/v1/projects/{self.project.uuid}/members"
         response = self.client.post(base, {"user": self.outsider.pk}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        response = self.client.patch(
-            f"{base}/{self.membership.uuid}", {"role": "admin"}, format="json"
-        )
+        row = f"/api/v1/projects/members/{self.membership.uuid}"
+        response = self.client.patch(row, {"role": "admin"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        response = self.client.delete(f"{base}/{self.membership.uuid}")
+        response = self.client.delete(row)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_list_still_allowed_while_archived(self):
@@ -185,6 +231,6 @@ class ArchivedProjectMemberTests(ProjectTestMixin, APITestCase):
     def test_member_can_leave_archived_project(self):
         self.client.force_authenticate(self.member)
         response = self.client.delete(
-            f"/api/v1/projects/{self.project.uuid}/members/{self.membership.uuid}"
+            f"/api/v1/projects/members/{self.membership.uuid}"
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)

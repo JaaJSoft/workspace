@@ -751,10 +751,37 @@ test('taskPanel assignee helpers expose names and the unassigned list', () => {
   );
 });
 
+test('the checklist writes each item at its own address', async () => {
+  const panel = ctx.taskPanel();
+  panel.data = { subtasks_url: '/api/v1/projects/tasks/t1/subtasks' };
+  panel.actions = ['edit'];
+  panel.headers = () => ({});
+  panel.refreshContent = () => {};
+  panel.subtasks = [
+    { uuid: 's1', title: 'a', is_done: false },
+    { uuid: 's2', title: 'b', is_done: true },
+  ];
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push([opts.method, url, JSON.parse(opts.body)]);
+    return { ok: true, json: async () => ({}) };
+  };
+
+  await panel.toggleSubtask(panel.subtasks[0]);
+  await panel.saveSubtaskOrder();
+
+  assert.equal(panel.subtasks[0].is_done, true);
+  assert.equal(panel.subtasksDone(), 2);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(calls)), [
+    ['PATCH', '/api/v1/projects/subtasks/s1', { is_done: true }],
+    ['POST', '/api/v1/projects/tasks/t1/subtasks/reorder', { uuids: ['s1', 's2'] }],
+  ]);
+});
+
 test('sectionDefaults opens filled sections and collapses empty ones', () => {
   const panel = ctx.taskPanel();
   panel.data = { assignees: [], labels: ['l1'], description: '   ' };
-  panel.subtasks = [{ uuid: 's1', title: 'a', done: false }];
+  panel.subtasks = [{ uuid: 's1', title: 'a', is_done: false }];
   panel.links = [];
   panel.fileLinks = [{ uuid: 'f1', name: 'spec.md' }];
   panel.attachments = [];
@@ -1526,8 +1553,8 @@ test('epic filter adds once, removes, and counts as active', () => {
 test('epic lookups resolve names and colors, openEpics drops closed ones', () => {
   const board = panelBoard();
   board.epics = [
-    { uuid: 'e1', name: 'Launch', color: '#3b82f6', closed: false },
-    { uuid: 'e2', name: 'Done era', color: '', closed: true },
+    { uuid: 'e1', name: 'Launch', color: '#3b82f6', is_closed: false },
+    { uuid: 'e2', name: 'Done era', color: '', is_closed: true },
   ];
   assert.equal(board.epicName('e1'), 'Launch');
   assert.equal(board.epicColor('e1'), '#3b82f6');
@@ -1541,7 +1568,7 @@ test('epic lookups resolve names and colors, openEpics drops closed ones', () =>
 
 test('createEpic posts name and auto color then joins the shared list', async () => {
   const board = panelBoard();
-  board.epics = [{ uuid: 'e1', name: 'Launch', color: '#ef4444', closed: false }];
+  board.epics = [{ uuid: 'e1', name: 'Launch', color: '#ef4444', is_closed: false }];
   const calls = [];
   ctx.fetch = async (url, opts) => {
     calls.push(opts.method + ' ' + url + ' ' + opts.body);
@@ -1560,7 +1587,7 @@ test('createEpic posts name and auto color then joins the shared list', async ()
     uuid: 'e9',
     name: 'Polish',
     color: '#3b82f6',
-    closed: false,
+    is_closed: false,
   });
 });
 
@@ -1655,7 +1682,7 @@ test('startSprint confirms before posting', async () => {
   await board.startSprint('s1', 'Sprint 1');
   assert.deepStrictEqual(Array.from(calls), [
     'confirm',
-    'POST /api/sprints/s1/start',
+    'POST /api/v1/projects/sprints/s1/start',
     'refresh',
   ]);
 });
@@ -1682,7 +1709,7 @@ test('completeSprint offers backlog and planned sprints, backlog maps to null', 
   await board.completeSprint('s1', 'Sprint 1');
   assert.deepStrictEqual(Array.from(calls), [
     'select:backlog,s2',
-    'POST /api/sprints/s1/complete {"move_to":null}',
+    'POST /api/v1/projects/sprints/s1/complete {"move_to":null}',
     'replace /projects/p/board',
     'refresh',
   ]);

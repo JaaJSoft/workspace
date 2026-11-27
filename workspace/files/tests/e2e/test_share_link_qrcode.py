@@ -1,9 +1,9 @@
-"""E2E: a public link's QR code unfolds under its row, loads and downloads.
+"""E2E: a public link's QR code unfolds under its row, scans and downloads.
 
-The JS tests hold the component's state and the API tests what the image
+The JS tests hold the component's state and the API tests what the PNG
 encodes. What only a browser shows is that the row's button is wired to that
-state, that the address the row builds is one the server answers with an
-image, and that the PNG arrives as a file named after the node.
+state, that the SVG the row asks for is drawn as a code a reader takes back
+to the link, and that the PNG arrives as a file named after the node.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
+from workspace.common.tests.qr import read_qr
 from workspace.files.models import File, FileShareLink
 
 
@@ -40,7 +41,7 @@ class ShareLinkQRCodeTests(PlaywrightTestCase):
         )
         return self.page.locator("dialog[open]")
 
-    def test_the_button_unfolds_a_code_that_loads_and_folds_it_back(self):
+    def test_the_button_unfolds_a_code_that_scans_and_folds_it_back(self):
         dialog = self._open_share_modal()
         button = dialog.get_by_role("button", name="QR code")
         image = dialog.get_by_role("img", name="QR code of the link")
@@ -50,8 +51,12 @@ class ShareLinkQRCodeTests(PlaywrightTestCase):
 
         expect(image).to_be_visible()
         # decode() rejects on an image the server refused or could not draw.
-        width = image.evaluate("img => img.decode().then(() => img.naturalWidth)")
-        self.assertGreater(width, 0)
+        image.evaluate("img => img.decode()")
+        # The code as the dialog shows it, at the size it shows it.
+        self.assertEqual(
+            read_qr(image.screenshot()),
+            f"{self.live_server_url}/files/shared/{self.link.token}",
+        )
         expect(dialog.get_by_text("Could not load the QR code")).to_have_count(0)
 
         button.click()

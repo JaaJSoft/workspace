@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from workspace.common.qr import make_qr, qr_svg
+from workspace.common.tests.qr import read_qr
 from workspace.files.models import File, FileShare
 from workspace.files.services import tree
 from workspace.files.services.sharing import create_share_link, share_file
@@ -20,9 +21,8 @@ def qrcode_path(link_uuid):
     return f"/api/v1/files/share-links/{link_uuid}/qrcode"
 
 
-def code_of(link):
-    """The SVG of a code holding the address *link* opens at, and only that."""
-    return qr_svg(make_qr(f"http://testserver/files/shared/{link.token}")).encode()
+def address_of(link):
+    return f"http://testserver/files/shared/{link.token}"
 
 
 class ShareLinkQRCodeTests(APITestCase):
@@ -44,22 +44,30 @@ class ShareLinkQRCodeTests(APITestCase):
         self.assertEqual(response["Content-Type"], "image/png")
         self.assertTrue(response.content.startswith(PNG_MAGIC))
 
-    def test_the_code_holds_the_address_the_link_opens_at(self):
+    def scanned(self, link):
+        """What a reader gets from the PNG served for *link*."""
+        response = self.client.get(qrcode_path(link.uuid), {"kind": "png"})
+        return read_qr(response.content)
+
+    def test_scanning_the_code_gives_the_address_the_link_opens_at(self):
+        self.assertEqual(self.scanned(self.link), address_of(self.link))
+
+    def test_the_svg_is_the_same_code_as_the_png(self):
         response = self.client.get(qrcode_path(self.link.uuid))
-        self.assertEqual(response.content, code_of(self.link))
+        self.assertEqual(
+            response.content.decode(), qr_svg(make_qr(address_of(self.link)))
+        )
 
     def test_a_password_never_reaches_the_code(self):
         protected = create_share_link(
             self.file, acting_user=self.owner, password="correct horse"
         )
-        response = self.client.get(qrcode_path(protected.uuid))
-        self.assertEqual(response.content, code_of(protected))
+        self.assertEqual(self.scanned(protected), address_of(protected))
 
     def test_a_folder_link_has_its_code_too(self):
         folder = tree.create_folder(self.owner, "Holidays")
         link = create_share_link(folder, acting_user=self.owner)
-        response = self.client.get(qrcode_path(link.uuid))
-        self.assertEqual(response.content, code_of(link))
+        self.assertEqual(self.scanned(link), address_of(link))
 
     def test_named_after_the_node_and_shown_inline(self):
         response = self.client.get(qrcode_path(self.link.uuid), {"kind": "png"})

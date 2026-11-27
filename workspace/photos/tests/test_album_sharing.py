@@ -38,6 +38,7 @@ from workspace.photos.services.album_sharing import (
 )
 from workspace.photos.services.albums import add_items, create_album
 from workspace.projects.models import Project, ProjectMember
+from workspace.users.models import GroupVisibility
 
 from .images import make_photo
 
@@ -563,6 +564,52 @@ class SharesApiTests(SharingTestCase):
     def test_the_service_wants_exactly_one_target(self):
         with self.assertRaises(ValueError):
             unshare_album(self.album, acting_user=self.owner)
+
+
+class HiddenGroupSharesApiTests(SharingTestCase):
+    """A hidden group the sharer is not in answers like a group that does
+    not exist."""
+
+    def setUp(self):
+        super().setUp()
+        self.team = Group.objects.create(name="Council")
+        self.bob.groups.add(self.team)
+        GroupVisibility.objects.create(group=self.team, is_hidden=True)
+        gone = Group.objects.create(name="Gone")
+        self.missing_id = gone.pk
+        gone.delete()
+        self.client.force_login(self.owner)
+        self.url = f"{API}/{self.album.uuid}/shares"
+
+    def answer(self, method, body):
+        response = getattr(self.client, method)(
+            self.url, body, content_type="application/json"
+        )
+        return response.status_code, response.content
+
+    def test_sharing_with_it_answers_like_a_missing_group(self):
+        self.assertEqual(
+            self.answer("post", {"group": self.team.pk, "role": "viewer"}),
+            self.answer("post", {"group": self.missing_id, "role": "viewer"}),
+        )
+        self.assertFalse(AlbumShare.objects.exists())
+
+    def test_removing_it_answers_like_a_missing_group(self):
+        self.assertEqual(
+            self.answer("delete", {"group": self.team.pk}),
+            self.answer("delete", {"group": self.missing_id}),
+        )
+
+    def test_a_member_shares_with_it(self):
+        self.owner.groups.add(self.team)
+        status_code, _ = self.answer("post", {"group": self.team.pk, "role": "viewer"})
+        self.assertEqual(status_code, 201)
+
+    def test_a_share_made_before_leaving_it_can_still_be_removed(self):
+        self.share(group=self.team)
+        status_code, _ = self.answer("delete", {"group": self.team.pk})
+        self.assertEqual(status_code, 204)
+        self.assertFalse(AlbumShare.objects.exists())
 
 
 class LeaveApiTests(SharingTestCase):

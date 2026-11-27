@@ -1,11 +1,14 @@
 """Tests for workspace.users.queries."""
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 
 from workspace.ai.models import BotProfile
+from workspace.users.models import GroupVisibility
 from workspace.users.queries import (
     active_user_with_email,
+    nameable_groups,
     pickable_users,
     search_people,
 )
@@ -141,3 +144,38 @@ class PickableUsersTests(TestCase):
         BotProfile.objects.create(user=bot)
 
         self.assertEqual(list(pickable_users()), [alice])
+
+
+class NameableGroupsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="alice", password="pass")
+        cls.visible = Group.objects.create(name="Everyone")
+        cls.unhidden = Group.objects.create(name="Was hidden")
+        GroupVisibility.objects.create(group=cls.unhidden, is_hidden=False)
+        cls.hidden = Group.objects.create(name="Council")
+        GroupVisibility.objects.create(group=cls.hidden, is_hidden=True)
+
+    def names(self, **kwargs):
+        return set(nameable_groups(self.alice, **kwargs).values_list("name", flat=True))
+
+    def test_a_hidden_group_is_left_out_for_someone_not_in_it(self):
+        self.assertEqual(self.names(), {"Everyone", "Was hidden"})
+
+    def test_a_hidden_group_is_there_for_its_members(self):
+        self.alice.groups.add(self.hidden)
+        self.assertEqual(self.names(), {"Everyone", "Was hidden", "Council"})
+
+    def test_a_group_already_named_stays_nameable(self):
+        already = Group.objects.filter(pk=self.hidden.pk).values("pk")
+        self.assertIn("Council", self.names(already_named=already))
+
+    def test_each_group_comes_back_once(self):
+        self.alice.groups.add(self.visible, self.hidden)
+        already = Group.objects.values("pk")
+        names = list(
+            nameable_groups(self.alice, already_named=already).values_list(
+                "name", flat=True
+            )
+        )
+        self.assertEqual(len(names), len(set(names)))

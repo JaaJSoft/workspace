@@ -1,7 +1,10 @@
-"""Shared querysets for looking people up."""
+"""Shared querysets for looking people and groups up."""
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db.models import Q
+
+from .models import GroupVisibility
 
 MIN_SEARCH_QUERY_LENGTH = 2
 DEFAULT_SEARCH_LIMIT = 10
@@ -15,6 +18,24 @@ def pickable_users():
     so anything that takes a user id from a picker validates it against this.
     """
     return get_user_model().objects.filter(is_active=True, bot_profile__isnull=True)
+
+
+def nameable_groups(user, *, already_named=None):
+    """The groups *user* may name: list in a picker, share with, attach.
+
+    Every group except the hidden ones *user* is not in. A group outside
+    this set answers exactly like one that does not exist, so a write path
+    resolves the id it was handed against this queryset, not ``Group.objects``.
+
+    *already_named* is a queryset of group ids the object being edited
+    already carries. Keeping or removing such a group names nothing new, and
+    the owner of a share may have left a hidden group since they added it.
+    """
+    hidden = GroupVisibility.objects.filter(is_hidden=True).values("group_id")
+    allowed = ~Q(pk__in=hidden) | Q(pk__in=user.groups.values("pk"))
+    if already_named is not None:
+        allowed |= Q(pk__in=already_named)
+    return Group.objects.filter(allowed)
 
 
 def search_people(

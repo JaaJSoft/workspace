@@ -1,7 +1,6 @@
 import logging
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.utils.translation import gettext, gettext_lazy
@@ -13,6 +12,7 @@ from rest_framework.views import APIView
 
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
+from workspace.users.queries import nameable_groups
 
 from ..models import Conversation, ConversationMember, Message, PinnedConversation
 from ..serializers import (
@@ -159,7 +159,9 @@ class ConversationListView(CacheControlMixin, APIView):
 
         group_ids = serializer.validated_data.get("group_ids")
         if group_ids:
-            groups_by_pk = {g.pk: g for g in Group.objects.filter(pk__in=group_ids)}
+            groups_by_pk = {
+                g.pk: g for g in nameable_groups(request.user).filter(pk__in=group_ids)
+            }
             if len(groups_by_pk) != len(set(group_ids)):
                 return Response(
                     {"detail": gettext("One or more group IDs are invalid.")},

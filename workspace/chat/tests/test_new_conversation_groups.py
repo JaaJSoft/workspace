@@ -1,12 +1,15 @@
 """The groups the new-conversation dialog offers.
 
-A group conversation takes its members from its groups, so any group of the
-instance can be linked to one, as long as one of them is the creator's.
+A group conversation takes its members from its groups, so any group the
+creator may name can be linked to one, as long as one of them is the
+creator's. A hidden group is offered to its members only.
 """
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
+
+from workspace.users.models import GroupVisibility
 
 User = get_user_model()
 
@@ -41,3 +44,11 @@ class DialogGroupsTests(TestCase):
             [group["name"] for group in groups], ["Accounting", "design", "Sales"]
         )
         self.assertFalse(any(group["mine"] for group in groups))
+
+    def test_a_hidden_group_is_offered_to_its_members_only(self):
+        GroupVisibility.objects.create(group=self.sales, is_hidden=True)
+        GroupVisibility.objects.create(group=self.design, is_hidden=True)
+
+        groups = self.client.get("/chat").context["chat_groups"]
+
+        self.assertEqual([group["name"] for group in groups], ["design", "Accounting"])

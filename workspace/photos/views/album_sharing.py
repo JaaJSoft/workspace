@@ -7,7 +7,6 @@ a 404, never a 403.
 """
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -20,6 +19,7 @@ from rest_framework.views import APIView
 from workspace.common.mixins import CacheControlMixin
 from workspace.projects.models import Project
 from workspace.projects.queries import user_project_ids
+from workspace.users.queries import nameable_groups
 
 from ..actions import album_action_allowed
 from ..models import AlbumLink, AlbumShare
@@ -107,12 +107,13 @@ def _share_entry(share):
     return entry | {"role": share.role, "shared_at": share.created_at}
 
 
-def _resolve_target(request, data, *, active_only=True):
+def _resolve_target(request, data, *, removing_from=None):
     """The share target *data* names, as keyword arguments for the sharing
     service, or a Response refusing it.
 
-    *active_only* refuses a deactivated user: nobody new is shared with
-    one, but their existing share can still be removed.
+    *removing_from* is the album a member is being removed from. Nobody new
+    is shared with a deactivated user, nor with a hidden group the caller is
+    not in, but a share either already holds can still be removed.
     """
     if "shared_with" in data:
         if data["shared_with"] == request.user.pk:
@@ -121,12 +122,21 @@ def _resolve_target(request, data, *, active_only=True):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         users = User.objects.filter(pk=data["shared_with"])
-        if active_only:
+        if removing_from is None:
             users = users.filter(is_active=True)
         user = users.first()
         return {"user": user} if user is not None else _not_found()
     if "group" in data:
-        group = Group.objects.filter(pk=data["group"]).first()
+        already_named = None
+        if removing_from is not None:
+            already_named = AlbumShare.objects.filter(album=removing_from).values(
+                "shared_with_group_id"
+            )
+        group = (
+            nameable_groups(request.user, already_named=already_named)
+            .filter(pk=data["group"])
+            .first()
+        )
         return {"group": group} if group is not None else _not_found()
     project = Project.objects.filter(
         uuid=data["project"], uuid__in=user_project_ids(request.user)
@@ -219,7 +229,9 @@ class AlbumSharesView(CacheControlMixin, APIView):
             return error
         serializer = ShareTargetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        target = _resolve_target(request, serializer.validated_data, active_only=False)
+        target = _resolve_target(
+            request, serializer.validated_data, removing_from=album
+        )
         if isinstance(target, Response):
             return target
         if not unshare_album(album, acting_user=request.user, **target):

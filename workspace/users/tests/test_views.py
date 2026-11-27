@@ -10,7 +10,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.users.models import UserSetting
+from workspace.users.models import GroupVisibility, UserSetting
 from workspace.users.services.settings import get_setting, set_setting
 
 User = get_user_model()
@@ -843,7 +843,8 @@ class UserGroupsTests(UserTestMixin, APITestCase):
 
 
 class GroupListTests(UserTestMixin, APITestCase):
-    """Every group, not only the caller's: a file is shared with any team."""
+    """Every group, not only the caller's: a file is shared with any team.
+    A hidden group is listed to its members only."""
 
     URL = "/api/v1/groups"
 
@@ -866,3 +867,17 @@ class GroupListTests(UserTestMixin, APITestCase):
         other.groups.add(group)
         resp = self.client.get(self.URL)
         self.assertEqual([g["id"] for g in resp.data], [group.pk])
+
+    def test_leaves_out_a_hidden_group_the_caller_is_not_in(self):
+        visible = Group.objects.create(name="Everyone")
+        council = Group.objects.create(name="Council")
+        GroupVisibility.objects.create(group=council, is_hidden=True)
+        resp = self.client.get(self.URL)
+        self.assertEqual([g["id"] for g in resp.data], [visible.pk])
+
+    def test_lists_a_hidden_group_to_its_members(self):
+        council = Group.objects.create(name="Council")
+        GroupVisibility.objects.create(group=council, is_hidden=True)
+        self.user.groups.add(council)
+        resp = self.client.get(self.URL)
+        self.assertEqual([g["id"] for g in resp.data], [council.pk])

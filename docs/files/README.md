@@ -100,7 +100,10 @@ dimensions.
 - **With people and groups**: a file can be shared read-only or read & write.
   A group share follows the group's membership: someone who joins sees the
   file, someone who leaves loses it. Shared files appear under *Shared with
-  me*.
+  me*. A group an administrator marked **hidden** in the Django admin (the
+  group's own page) is offered and accepted only for its members, here as in
+  albums, projects and group conversations; for everyone else it answers as
+  if it did not exist.
 - **Public links** on a file or a folder, with an optional password (one is
   generated and shown in clear) and expiry. A folder link is *Read only*,
   *Upload only* (visitors drop files without an account and without seeing

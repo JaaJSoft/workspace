@@ -30,6 +30,7 @@ from workspace.files.services.sharing import share_file, unshare_file
 from workspace.files.sse_provider import FilesSSEProvider, push_file_event
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.notifications.models import Notification
+from workspace.users.models import GroupVisibility
 
 User = get_user_model()
 
@@ -461,3 +462,49 @@ class GroupShareFanOutTests(GroupShareFixtures, TestCase):
         self.member.is_active = False
         self.member.save(update_fields=["is_active"])
         self.assertEqual({u.pk for u in mentionable_users(self.file)}, {self.owner.pk})
+
+
+class HiddenGroupShareAPITests(GroupShareFixtures, APITestCase):
+    """A hidden group the sharer is not in answers like a group that does
+    not exist, so the share endpoint cannot be used to probe for it."""
+
+    def setUp(self):
+        super().setUp()
+        self.url = f"/api/v1/files/{self.file.uuid}/share"
+        GroupVisibility.objects.create(group=self.team, is_hidden=True)
+        gone = Group.objects.create(name="Gone")
+        self.missing_id = gone.pk
+        gone.delete()
+        self.client.force_authenticate(user=self.owner)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _answer(self, method, group_id):
+        resp = getattr(self.client, method)(
+            self.url, {"group": group_id}, format="json"
+        )
+        return resp.status_code, resp.content
+
+    def test_sharing_with_it_answers_like_a_missing_group(self):
+        self.assertEqual(
+            self._answer("post", self.team.pk), self._answer("post", self.missing_id)
+        )
+        self.assertFalse(FileShare.objects.exists())
+
+    def test_unsharing_it_answers_like_a_missing_group(self):
+        self.assertEqual(
+            self._answer("delete", self.team.pk),
+            self._answer("delete", self.missing_id),
+        )
+
+    def test_a_member_shares_with_it(self):
+        self.owner.groups.add(self.team)
+        resp = self.client.post(self.url, {"group": self.team.pk}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+    def test_a_share_made_before_leaving_it_can_still_be_removed(self):
+        self._share_with_team()
+        resp = self.client.delete(self.url, {"group": self.team.pk}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(FileShare.objects.exists())

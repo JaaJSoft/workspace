@@ -2,7 +2,6 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import Group
 from django.db.models import OuterRef, Prefetch, Subquery, prefetch_related_objects
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse, HttpResponseForbidden
@@ -37,16 +36,20 @@ from workspace.common.dates import time_ago
 from workspace.common.prefetch import prefetchable
 from workspace.common.services.image import SOURCE_TYPES
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.users.queries import nameable_groups
 from workspace.users.services.settings import get_setting
 
 
 def _chat_groups(user):
     """Every group a conversation can follow, the user's own first, shaped for
-    json_script. A conversation needs one of the user's own (group_sync)."""
+    json_script. A conversation needs one of the user's own (group_sync), and
+    can only follow the groups the user may name."""
     mine = set(user.groups.values_list("pk", flat=True))
     groups = [
         {"id": pk, "name": name, "mine": pk in mine}
-        for pk, name in Group.objects.order_by(Lower("name")).values_list("pk", "name")
+        for pk, name in nameable_groups(user)
+        .order_by(Lower("name"))
+        .values_list("pk", "name")
     ]
     return sorted(groups, key=lambda group: not group["mine"])
 

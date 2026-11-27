@@ -114,3 +114,33 @@ class OIDCIdentity(models.Model):
 
     def __str__(self):
         return f"{self.user} <oidc:{self.sub}>"
+
+
+class GroupVisibility(models.Model):
+    """Whether a group is advertised to people who are not in it.
+
+    No row means visible, which is what every group starts as, the ones the
+    OIDC sync creates included. A hidden group is listed to its members only,
+    and only they can share with it or attach it to something
+    (``queries.nameable_groups``).
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    group = models.OneToOneField(
+        "auth.Group", on_delete=models.CASCADE, related_name="visibility"
+    )
+    is_hidden = models.BooleanField(
+        "hidden",
+        default=False,
+        help_text=(
+            "Only members see this group: it is left out of the group pickers "
+            "of everyone else, who cannot share with it or attach it."
+        ),
+    )
+
+    class Meta:
+        verbose_name = "group visibility"
+        verbose_name_plural = "group visibilities"
+
+    def __str__(self):
+        return f"{self.group}: {'hidden' if self.is_hidden else 'visible'}"

@@ -169,7 +169,7 @@ window.vaultRecoveryKeyDialogMixin = function vaultRecoveryKeyDialogMixin() {
         return;
       }
       this.recoveryKeyInFlight = true;
-      let outcome = 'unknown';
+      let outcome;
       // Whether this page sent the rotation itself. It then landed under a
       // session the old key had opened, whichever envelope that was.
       let resent = false;

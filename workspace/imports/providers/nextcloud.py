@@ -116,14 +116,21 @@ def _member_failed(element) -> bool:
 
 def _origin(url: str):
     """``(scheme, host, port)`` of a URL, the port filled in from the scheme;
-    ``None`` for anything that is not an http(s) URL with a host."""
+    ``None`` for anything that is not an http(s) URL with a host.
+
+    Also ``None`` wherever Python and a browser could read a different host:
+    a browser takes ``\\`` for ``/`` in an http(s) URL, so for
+    ``https://evil.example.net\\@cloud.example.org/`` urlparse answers the
+    host after the ``@`` while the browser goes to the one before it."""
+    if any(char == "\\" or not "\x20" < char < "\x7f" for char in url):
+        return None
     try:
         parsed = urlparse(url)
         port = parsed.port
     except ValueError:
         return None
     scheme = parsed.scheme.lower()
-    if scheme not in ("http", "https") or not parsed.hostname:
+    if scheme not in ("http", "https") or not parsed.hostname or "@" in parsed.netloc:
         return None
     return scheme, parsed.hostname.lower(), port or (443 if scheme == "https" else 80)
 

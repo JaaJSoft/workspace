@@ -93,6 +93,20 @@ class StartLoginFlowTests(SimpleTestCase):
         with self.assertRaisesMessage(ProviderError, "another server"):
             self._start(httpx2.Response(200, json=answer))
 
+    def test_addresses_a_browser_reads_as_another_host_are_refused(self):
+        # urlparse reads the host after the "@" in each of these; a browser
+        # takes "\" for "/" and goes to evil.example.net.
+        for address in (
+            r"https://evil.example.net\@cloud.example.org/login/v2/flow/abc",
+            "https://evil.example.net@cloud.example.org/login/v2/flow/abc",
+            "https://cloud.example.org\t.evil.example.net/login/v2/flow/abc",
+        ):
+            for field in ("login", "endpoint"):
+                with self.subTest(address=address, field=field):
+                    answer = _start_answer(**{field: address})
+                    with self.assertRaisesMessage(ProviderError, "another server"):
+                        self._start(httpx2.Response(200, json=answer))
+
     def test_the_default_port_written_out_is_the_same_server(self):
         answer = _start_answer(endpoint="https://cloud.example.org:443/login/v2/poll")
         start, _ = self._start(httpx2.Response(200, json=answer))
@@ -158,6 +172,14 @@ class PollLoginFlowTests(SimpleTestCase):
             with self.assertRaises(ProviderError):
                 NextcloudProvider().poll_login_flow(
                     BASE, "https://evil.example.net/poll", "tok"
+                )
+        self.assertEqual(requests, [])
+
+    def test_a_poll_endpoint_hiding_another_host_is_never_asked(self):
+        with _remote(lambda request: httpx2.Response(404)) as requests:
+            with self.assertRaises(ProviderError):
+                NextcloudProvider().poll_login_flow(
+                    BASE, r"https://evil.example.net\@cloud.example.org/poll", "tok"
                 )
         self.assertEqual(requests, [])
 

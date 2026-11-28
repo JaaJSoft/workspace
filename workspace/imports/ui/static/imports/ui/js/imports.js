@@ -8,6 +8,8 @@ const IMPORTS_API = '/api/v1/imports';
 const JOBS_POLL_MS = 10000;
 // The server asks the remote at most every two seconds, whatever this is.
 const LOGIN_FLOW_POLL_MS = 3000;
+// Polls in a row that got no answer at all before the dialog gives up.
+const LOGIN_FLOW_MAX_FAILURES = 10;
 
 function readJson(id, fallback) {
   const el = document.getElementById(id);
@@ -101,6 +103,11 @@ async function api(path, { method = 'GET', body } = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
+// Best effort: a flow nobody discards still expires on the server.
+function discardLoginFlow(uuid) {
+  return api(`/login-flows/${uuid}`, { method: 'DELETE' }).catch(() => {});
+}
+
 function errorMessage(data, fallback) {
   if (!data) return fallback;
   if (typeof data.detail === 'string') return data.detail;
@@ -172,6 +179,10 @@ window.importsApp = function importsApp() {
     connMode: 'password',
     loginFlow: null,
     _loginFlowTimer: null,
+    _loginFlowFailures: 0,
+    // Moves on whenever the connection dialog opens or closes, so an answer
+    // to an earlier session's request is recognised as stale.
+    _connDialogSession: 0,
 
     wizard: emptyWizard(),
     browse: { path: '/', entries: [], loading: false, error: '' },
@@ -210,7 +221,7 @@ window.importsApp = function importsApp() {
 
     destroy() {
       if (this._pollTimer) clearTimeout(this._pollTimer);
-      this._stopLoginFlowPoll();
+      this._abandonLoginFlow();
       window.removeEventListener('sse:imports.job', this._onJobEvent);
       window.removeEventListener('sse:reconnect', this._onReconnect);
     },
@@ -518,6 +529,7 @@ window.importsApp = function importsApp() {
         const first = this.credentialProviders()[0];
         this.connForm = emptyConnectionForm(first ? first.slug : '');
       }
+      this._connDialogSession += 1;
       this.loginFlow = null;
       this.onProviderChange();
       this.$refs.connectionDialog.showModal();
@@ -529,10 +541,17 @@ window.importsApp = function importsApp() {
 
     // The dialog closes by Cancel, Escape or the backdrop alike.
     onConnectionDialogClosed() {
+      this._abandonLoginFlow();
+    },
+
+    // Ends the dialog's sign-in, if any: a response still in flight finds the
+    // session moved on, and a flow left pending is given up on the server.
+    _abandonLoginFlow() {
+      this._connDialogSession += 1;
       this._stopLoginFlowPoll();
       const flow = this.loginFlow;
       this.loginFlow = null;
-      if (flow && flow.status === 'pending') api(`/login-flows/${flow.uuid}`, { method: 'DELETE' });
+      if (flow && flow.status === 'pending') discardLoginFlow(flow.uuid);
     },
 
     addConnection(conn) {
@@ -551,28 +570,55 @@ window.importsApp = function importsApp() {
       // the request has returned is a popup the browser blocks.
       const tab = window.open('', '_blank');
       if (tab) tab.opener = null;
+      const session = this._connDialogSession;
+      const { provider, label, base_url } = this.connForm;
+      let res = null;
       try {
-        const { provider, label, base_url } = this.connForm;
-        const res = await api('/login-flows', { method: 'POST', body: { provider, label, base_url } });
-        if (!res.ok) {
-          if (tab) tab.close();
-          this.connError = errorMessage(res.data, gettext('The sign-in could not be started.'));
-          return;
-        }
-        this.loginFlow = res.data;
-        if (tab) tab.location.href = res.data.login_url;
-        this._scheduleLoginFlowPoll();
-      } finally {
-        this.connSaving = false;
+        res = await api('/login-flows', { method: 'POST', body: { provider, label, base_url } });
+      } catch (e) {
+        // No answer at all (offline, connection dropped): reported below.
       }
+      if (session !== this._connDialogSession) {
+        // The dialog was closed, or opened again, while this was in flight.
+        if (tab) tab.close();
+        if (res && res.ok) discardLoginFlow(res.data.uuid);
+        return;
+      }
+      this.connSaving = false;
+      if (!res || !res.ok) {
+        if (tab) tab.close();
+        this.connError = errorMessage(res && res.data, gettext('The sign-in could not be started.'));
+        return;
+      }
+      this.loginFlow = res.data;
+      this._loginFlowFailures = 0;
+      if (tab) tab.location.href = res.data.login_url;
+      this._scheduleLoginFlowPoll();
     },
 
     async pollLoginFlow() {
       const flow = this.loginFlow;
       if (!flow) return;
-      const res = await api(`/login-flows/${flow.uuid}`);
+      let res = null;
+      try {
+        res = await api(`/login-flows/${flow.uuid}`);
+      } catch (e) {
+        // No answer at all: retried below, the flow lives on the server.
+      }
       // The dialog was closed, or another sign-in started, meanwhile.
       if (this.loginFlow !== flow) return;
+      if (!res) {
+        this._loginFlowFailures += 1;
+        if (this._loginFlowFailures < LOGIN_FLOW_MAX_FAILURES) {
+          this._scheduleLoginFlowPoll();
+          return;
+        }
+        this.loginFlow = null;
+        this.connError = gettext('The sign-in could not be checked.');
+        discardLoginFlow(flow.uuid);
+        return;
+      }
+      this._loginFlowFailures = 0;
       if (!res.ok) {
         this.loginFlow = null;
         this.connError = res.status === 404

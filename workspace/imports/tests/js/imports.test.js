@@ -282,6 +282,8 @@ test('status and conflict labels come from the page, unknown values as sent', ()
   assert.equal(component.isActive({ status: 'paused' }), false);
 });
 
+const OFFLINE = Symbol('offline');
+
 // A page with a Nextcloud-like provider offering the sign-in flow, a scripted
 // API, a fake tab and timers the test fires by hand.
 function signInApp(answers) {
@@ -292,8 +294,11 @@ function signInApp(answers) {
   const fetchStub = (url, options) => {
     const method = (options && options.method) || 'GET';
     requests.push(`${method} ${url}`);
-    const [status, data] = answers.shift();
-    return Promise.resolve({ ok: status < 400, status, json: async () => data });
+    const answer = answers.shift();
+    // OFFLINE: no answer at all; a promise: an answer the test releases later.
+    if (answer === OFFLINE) return Promise.reject(new TypeError('Failed to fetch'));
+    const respond = ([status, data]) => ({ ok: status < 400, status, json: async () => data });
+    return answer instanceof Promise ? answer.then(respond) : Promise.resolve(respond(answer));
   };
   const { component } = app(fetchStub, {
     open: () => {
@@ -411,4 +416,52 @@ test('closing the dialog while waiting gives up on the flow', async () => {
   // A poll already scheduled finds no flow and asks nothing.
   await timers.shift()();
   assert.equal(requests.length, 2);
+});
+
+test('a start request that gets no answer closes the tab and says so', async () => {
+  const { component, tabs, timers } = signInApp([OFFLINE]);
+
+  await component.saveConnection();
+
+  assert.equal(tabs[0].closed, true);
+  assert.equal(component.connError, 'The sign-in could not be started.');
+  assert.equal(component.connSaving, false);
+  assert.equal(component.loginFlow, null);
+  assert.equal(timers.length, 0);
+});
+
+test('a start answer arriving after the dialog closed is given up, not installed', async () => {
+  let release;
+  const late = new Promise((resolve) => { release = resolve; });
+  const { component, requests, tabs, timers } = signInApp([late, [204, null]]);
+
+  const starting = component.saveConnection();
+  component.closeConnectionDialog();
+  release([202, PENDING]);
+  await starting;
+
+  assert.equal(component.loginFlow, null);
+  assert.equal(tabs[0].closed, true);
+  assert.equal(tabs[0].location.href, '');
+  assert.equal(timers.length, 0);
+  assert.deepStrictEqual(requests, ['POST /api/v1/imports/login-flows', 'DELETE /api/v1/imports/login-flows/f1']);
+});
+
+test('polls that get no answer are retried, then the dialog gives up', async () => {
+  const offline = Array.from({ length: 10 }, () => OFFLINE);
+  const { component, requests, timers } = signInApp([[202, PENDING], OFFLINE, [200, PENDING], ...offline, [204, null]]);
+  await component.saveConnection();
+
+  // One lost answer, then the server answers again: still waiting.
+  await timers.shift()();
+  await timers.shift()();
+  assert.equal(component.loginFlow.status, 'pending');
+  assert.equal(component.connError, '');
+
+  // Ten in a row: the form comes back with the reason.
+  for (let i = 0; i < 10; i++) await timers.shift()();
+  assert.equal(component.loginFlow, null);
+  assert.equal(component.connError, 'The sign-in could not be checked.');
+  assert.equal(timers.length, 0);
+  assert.equal(requests[requests.length - 1], 'DELETE /api/v1/imports/login-flows/f1');
 });

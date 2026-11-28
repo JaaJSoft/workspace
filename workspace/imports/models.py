@@ -182,8 +182,8 @@ class ImportLoginFlow(models.Model):
     """A sign-in started on a remote that hands out its own credentials once
     the user approves Workspace there (Nextcloud Login Flow v2).
 
-    Lives as long as the remote keeps the flow open; the poll token is dropped
-    as soon as the flow ends, and the row itself by the daily purge.
+    Lives as long as the remote keeps the flow open. The poll token is dropped
+    when the flow ends or expires, and the row an hour later, by the purge.
     """
 
     class Status(models.TextChoices):

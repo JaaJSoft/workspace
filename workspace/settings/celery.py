@@ -156,7 +156,9 @@ CELERY_BEAT_SCHEDULE = {
     },
     "purge-import-login-flows": {
         "task": "imports.purge_login_flows",
-        "schedule": crontab(hour=3, minute=50),  # Every day at 3:50 AM
+        # Often: it is what ends an abandoned flow's poll token.
+        "schedule": 300.0,  # Every 5 minutes
+        "options": {"expires": 300.0},
     },
     "recover-stale-import-jobs": {
         "task": "imports.recover_stale_jobs",

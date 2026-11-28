@@ -140,6 +140,14 @@ def discard_login_flow(flow):
 
 
 def purge_expired_login_flows():
-    cutoff = timezone.now() - PURGE_AFTER_EXPIRY
-    deleted, _per_model = ImportLoginFlow.objects.filter(expires_at__lt=cutoff).delete()
+    """Drop the poll token of every expired flow, whether or not anyone reads
+    it again, then the rows expired past the margin. Answers how many rows
+    were deleted."""
+    now = timezone.now()
+    ImportLoginFlow.objects.filter(
+        expires_at__lte=now, poll_token_encrypted__isnull=False
+    ).update(poll_token_encrypted=None)
+    deleted, _per_model = ImportLoginFlow.objects.filter(
+        expires_at__lt=now - PURGE_AFTER_EXPIRY
+    ).delete()
     return deleted

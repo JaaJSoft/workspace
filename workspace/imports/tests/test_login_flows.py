@@ -239,3 +239,23 @@ class LoginFlowServiceTests(TestCase):
         self.assertEqual(
             list(ImportLoginFlow.objects.values_list("pk", flat=True)), [fresh.pk]
         )
+
+    def test_purge_drops_the_token_of_a_flow_nobody_reads_once_it_expired(self):
+        abandoned = self._start()
+        open_flow = self._start()
+        ImportLoginFlow.objects.filter(pk=abandoned.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=1)
+        )
+
+        svc.purge_expired_login_flows()
+
+        abandoned.refresh_from_db()
+        self.assertIsNone(abandoned.poll_token_encrypted)
+        self.assertEqual(abandoned.status, ImportLoginFlow.Status.PENDING)
+        self.assertEqual(
+            ImportLoginFlow.objects.get(pk=open_flow.pk).get_poll_token(), TOKEN
+        )
+        # A late read still reports the expiry, without asking the remote.
+        abandoned = svc.advance_login_flow(abandoned)
+        self.assertEqual(abandoned.status, ImportLoginFlow.Status.FAILED)
+        self.assertEqual(self.provider.login_flow_polls, [])

@@ -327,6 +327,39 @@ class PersonApiTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("linked_user", response.data)
 
+    def test_a_move_and_a_link_in_one_request_are_judged_in_the_book_it_ends_in(self):
+        """The account already has a contact in the book the contact leaves,
+        and none in the one it goes to: nothing clashes where it lands."""
+        create_person(owner=self.alice, display_name="Bob", linked_user=self.bob)
+        person = create_person(owner=self.alice, display_name="Bob at work")
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}",
+            {"group": self.team.id, "linked_user": self.bob.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        person.refresh_from_db()
+        self.assertEqual(person.group, self.team)
+        self.assertEqual(person.linked_user, self.bob)
+
+    def test_a_move_that_swaps_the_link_does_not_trip_on_the_one_it_drops(self):
+        """The contact leaves its account behind as it moves: the contact the
+        destination already holds for that account is no clash."""
+        carol = User.objects.create_user(username="carol", password="x")
+        create_person(group=self.team, display_name="Bob team", linked_user=self.bob)
+        person = create_person(
+            owner=self.alice, display_name="Bob", linked_user=self.bob
+        )
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}",
+            {"group": self.team.id, "linked_user": carol.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        person.refresh_from_db()
+        self.assertEqual(person.group, self.team)
+        self.assertEqual(person.linked_user, carol)
+
     def test_patch_linked_user(self):
         person = create_person(owner=self.alice, display_name="Bob")
         response = self.client.patch(

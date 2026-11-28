@@ -81,10 +81,10 @@ class PersonViewSet(PersonRowsMixin, viewsets.ModelViewSet):
         fields.pop("group", None)
         owner, group = book.get("owner"), book.get("group")
         with taken_value_refused("linked_user", LINKED_USER_TAKEN):
-            if fields:
-                update_person(person, **fields)
             if (owner, group) != (person.owner, person.group):
-                move_to_scope(person, owner=owner, group=group)
+                move_to_scope(person, owner=owner, group=group, **fields)
+            elif fields:
+                update_person(person, **fields)
 
     def perform_destroy(self, instance):
         delete_person(instance)

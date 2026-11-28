@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-27 08:14+0000\n"
+"POT-Creation-Date: 2026-11-28 09:13+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -371,6 +371,7 @@ msgid "Master password"
 msgstr "Mot de passe principal"
 
 #: ui/static/vault/ui/js/vault_password.js
+#: ui/static/vault/ui/js/vault_recovery_key.js
 #: ui/static/vault/ui/js/vault_unlock.js
 msgid ""
 "Your recovery key could not be read. Dashes and case do not matter - check "
@@ -384,6 +385,7 @@ msgid "Current password or recovery key is incorrect."
 msgstr "Le mot de passe actuel ou la clé de récupération est incorrect."
 
 #: ui/static/vault/ui/js/vault_password.js
+#: ui/static/vault/ui/js/vault_recovery_key.js
 msgid ""
 "This vault was saved by a newer version of the app. Reload the page to "
 "update it."
@@ -396,16 +398,111 @@ msgid "The new password could not be applied."
 msgstr "Le nouveau mot de passe n’a pas pu être appliqué."
 
 #: ui/static/vault/ui/js/vault_password.js
-msgid "The password could not be changed. Try again."
-msgstr "Le mot de passe n’a pas pu être changé. Réessayez."
-
-#: ui/static/vault/ui/js/vault_password.js
 msgid "Your account changed in another tab. Reload and try again."
 msgstr "Votre compte a changé dans un autre onglet. Rechargez et réessayez."
+
+#: ui/static/vault/ui/js/vault_password.js
+msgid "The password could not be changed. Try again."
+msgstr "Le mot de passe n’a pas pu être changé. Réessayez."
 
 #: ui/static/vault/ui/js/vault_prefs.js
 msgid "That preference could not be saved. Try again."
 msgstr "Cette préférence n’a pas pu être enregistrée. Réessayez."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"Your account was changed from another tab or another device, so this page "
+"can no longer tell whether the new recovery key it showed you was put in "
+"place. Keep that key and its emergency kit with the old ones. The key in use "
+"is the one that unlocks your vault without the warning about a previous "
+"password or recovery key."
+msgstr ""
+"Votre compte a été modifié depuis un autre onglet ou un autre appareil : "
+"cette page ne peut plus dire si la nouvelle clé de récupération qu’elle vous "
+"a montrée a été mise en place. Gardez cette clé et son kit de secours avec "
+"les anciens. La clé en usage est celle qui déverrouille votre coffre sans "
+"l’avertissement sur un ancien mot de passe ou une ancienne clé de "
+"récupération."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"Your recovery key was not replaced: nothing changed. The new key you were "
+"shown opens nothing - discard it, and any emergency kit saved with it."
+msgstr ""
+"Votre clé de récupération n’a pas été remplacée : rien n’a changé. La "
+"nouvelle clé qui vous a été montrée n’ouvre rien - jetez-la, ainsi que tout "
+"kit de secours enregistré avec elle."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"This page could not check whether your recovery key was replaced. Keep the "
+"new key and its emergency kit with the old ones for now: your next unlock on "
+"this page will say which is in place."
+msgstr ""
+"Cette page n’a pas pu vérifier si votre clé de récupération a été remplacée. "
+"Gardez pour l’instant la nouvelle clé et son kit de secours avec les "
+"anciens : votre prochain déverrouillage sur cette page dira laquelle est en "
+"place."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"Your recovery key was replaced after all. Keep the new key and its emergency "
+"kit, and unlock with it from now on: that is what retires the old one."
+msgstr ""
+"Votre clé de récupération a bien été remplacée. Gardez la nouvelle clé et "
+"son kit de secours, et déverrouillez désormais avec elle : c’est ce qui "
+"retire l’ancienne."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid "Master password is incorrect."
+msgstr "Le mot de passe principal est incorrect."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid "Master password or recovery key is incorrect."
+msgstr "Le mot de passe principal ou la clé de récupération est incorrect."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid "The new recovery key could not be applied."
+msgstr "La nouvelle clé de récupération n’a pas pu être appliquée."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid "Your recovery key could not be replaced. Try again."
+msgstr "Votre clé de récupération n’a pas pu être remplacée. Réessayez."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"The emergency kit could not be produced. Write the key down instead, or try "
+"again."
+msgstr ""
+"Le kit de secours n’a pas pu être produit. Notez la clé à la main, ou "
+"réessayez."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"This page could not check whether your recovery key was replaced. Keep this "
+"key and try again."
+msgstr ""
+"Cette page n’a pas pu vérifier si votre clé de récupération a été remplacée. "
+"Gardez cette clé et réessayez."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"Your account changed in another tab or on another device, so this attempt "
+"replaced nothing and left your recovery key as it was. The key shown here "
+"opens nothing - discard it, and try again for a new one."
+msgstr ""
+"Votre compte a changé dans un autre onglet ou sur un autre appareil : cette "
+"tentative n’a rien remplacé et a laissé votre clé de récupération telle "
+"qu’elle était. La clé affichée ici n’ouvre rien - jetez-la, puis réessayez "
+"pour en obtenir une nouvelle."
+
+#: ui/static/vault/ui/js/vault_recovery_key.js
+msgid ""
+"Too many changes to this account in the last hour, so nothing was replaced "
+"yet. Try again later."
+msgstr ""
+"Trop de modifications de ce compte durant la dernière heure : rien n’a "
+"encore été remplacé. Réessayez plus tard."
 
 #: ui/static/vault/ui/js/vault_store.js
 msgid "%(count)s item"
@@ -577,12 +674,14 @@ msgstr ""
 #: ui/static/vault/ui/js/vault_unlock.js
 msgid ""
 "That did not open this account. Either the master password is wrong, or the "
-"recovery key remembered on this device belongs to another account - both "
-"fail the same way. Nothing was sent to the server."
+"recovery key remembered on this device is not the right one: it was replaced "
+"since, or it belongs to another account. Both fail the same way. Nothing was "
+"sent to the server."
 msgstr ""
 "Cela n’a pas ouvert ce compte. Soit le mot de passe principal est erroné, "
-"soit la clé de récupération mémorisée sur cet appareil appartient à un autre "
-"compte - les deux échouent de la même façon. Rien n’a été envoyé au serveur."
+"soit la clé de récupération mémorisée sur cet appareil n’est pas la bonne : "
+"elle a été remplacée depuis, ou elle appartient à un autre compte. Les deux "
+"échouent de la même façon. Rien n’a été envoyé au serveur."
 
 #: ui/static/vault/ui/js/vault_unlock.js
 msgid ""

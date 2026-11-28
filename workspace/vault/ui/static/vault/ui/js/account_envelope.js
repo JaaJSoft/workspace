@@ -1,9 +1,10 @@
 // The account envelope: the two private keys the vault password seals.
 //
-// Shared by the unlock and the password change, because both open an envelope
-// from a password and both write one back - and a write is never sent before
-// it has been opened again here. The keys handed in are raw bytes the caller
-// zeroes; nothing in this file keeps a reference to one.
+// Shared by the unlock and by the rotations a user asks for
+// (envelope_rotation.js), because both open an envelope from a password and
+// both write one back - and a write is never sent before it has been opened
+// again here. The keys handed in are raw bytes the caller zeroes; nothing in
+// this file keeps a reference to one.
 window.vaultEnvelope = (function () {
   const FIELDS = ['kdf_algo', 'kdf_params', 'wrapped_kex_priv', 'wrapped_sig_priv'];
 

@@ -287,6 +287,84 @@ A user opened by the previous envelope who has forgotten the current password
 cannot choose another through the dialog, which starts from the current
 envelope.
 
+### Replacing the recovery key
+
+The secret key only enters the derivation (*Key hierarchy*), so a new one is a
+new envelope and nothing else: same salt, same private keys, same vault key
+wraps. It is the password change with the other half of the credentials
+replaced, and both run the one sequence in `envelope_rotation.js` against the
+same `rotate` endpoint. From a dialog in the sidebar, in two steps.
+
+1. **Prepare.** The client draws 32 random bytes for the new key and opens the
+   envelope with the password and the current secret key, falling back to the
+   previous envelope as an unlock does: a key that still opens the account is
+   the one worth replacing. It derives under the same password and the new key,
+   seals both private keys, **reopens and compares them**, and zeroes the raw
+   material. The new unwrap key is derived from the key as the kit spells it,
+   decoded again, so what the keys are sealed under is what the user will type
+   back. Nothing is sent.
+2. **Replace.** The new key is shown with a new emergency kit. Once the user
+   confirms it is saved, the client sends `rotate` with the envelope read in
+   step 1, after a `confirm` when that envelope opened as the current one and
+   still had a previous.
+
+Showing before sending is deliberate. A page lost between the two steps has
+changed nothing, and the next screen says that the key it showed opens nothing.
+The other way round, a page lost after the rotation would leave the current
+envelope under a key nobody ever saw.
+
+A refused or unanswered rotation is not reported before the client has worked
+out what it proves:
+
+- **the envelope in place is the one it sent**: the request landed and only its
+  answer was lost, and the replacement completes;
+- **it was never applied**: no copy is unanswered, because none left or because
+  the server itself refused the only one. After a 409 the key shown is
+  withdrawn and the user starts again. The message does not vouch for the old
+  key: the change made elsewhere may be a replacement of it;
+- **a copy is unanswered and the envelope of step 1 is still in place**: the
+  outcome is unknown, and is not called a failure. A request that got no
+  answer, or a gateway's, may be committed for as long as that envelope is
+  there. Reading it back proves nothing, and neither does waiting: nothing
+  bounds how long a request can be held on its way. Only the server's answer
+  to the rotation settles it, so the dialog keeps the key for another attempt
+  and stops saying that nothing has changed;
+- **a copy is unanswered and a third envelope is in place**: the rotation is
+  over, since it is conditional on the envelope of step 1 and that one never
+  comes back. Whether it was applied before the third envelope arrived cannot
+  be told, and it matters: a password change made since with the new key seals
+  an envelope that the new key opens. So the key is not called void. The user
+  is told to keep it with the others, and that the key in use is the one that
+  unlocks without the previous-credentials banner: a key that merely unlocks
+  may be going through the previous envelope. A conflict met by a second
+  attempt is this case, not the first.
+
+The page is told that a rotation is out before it leaves, so a lock or an unlock
+during the request claims nothing. If the dialog is closed or locked while the
+outcome is unknown, the page keeps the rotation it sent (ciphertext only), says
+that it could not check, and settles it at the next unlock by the same rule. It
+reads the envelope: its own means the rotation landed, a third one that it is
+over and that nothing can be said of the key. With the envelope of step 1 still
+in place it sends the rotation again, the one its owner confirmed and
+conditional on that same envelope, and the answer decides. A rotation found or
+put in place has the device forget the old key it unlocked with, so that the
+next unlock is made with the new one. Until it is settled no second replacement
+starts from that page: asking for the dialog runs the same check instead,
+because a page with two keys in doubt could only answer for the last.
+
+On success the key this device remembers is replaced or dropped, the session
+locks, and the next unlock opens the current envelope with the new key and sends
+`confirm`. The cost is the one a password change accepts: until that unlock, the
+previous envelope still opens with the **old** secret key. A device that
+remembers the old key keeps opening through it during that window, with the
+banner, and is asked for the new one afterwards.
+
+A replacement does not change the private keys. An envelope copied before it,
+from the database or through the account's own Workspace session, still opens
+with the old secret key and the password. What it ends is the use of a leaked
+key against the envelope the server holds from then on - and the master password
+stays the other half either way.
+
 ## The export archive
 
 `vault_archive.js` writes an archive and `tests/reference/archive.py` reads one.
@@ -349,9 +427,11 @@ WebAssembly is inlined into it deliberately: one artifact to verify in CI, and
 one fewer request at the most sensitive moment of the flow.
 
 The PDF generator and the password strength estimator would each break that
-budget on their own. They serve onboarding and password rotation only, never
-unlocking and never the entry pages. The PDF generator ships as a second
-bundle, `vault-onboarding.js`, for the screens that need it to load on demand.
+budget on their own. They serve onboarding, password rotation and recovery key
+replacement only, never unlocking and never the entry pages. The PDF generator
+ships as a second bundle, `vault-onboarding.js`: the onboarding page loads it
+with its other scripts, and the vault page fetches it when the recovery key
+dialog opens.
 The strength estimator is not the vault's alone - the account password form
 shows the same meter - so it lives in the shared `password-strength.js` bundle
 under `common`, which the onboarding page loads next to its own. The integrity

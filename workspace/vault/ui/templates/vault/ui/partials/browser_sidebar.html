@@ -162,6 +162,7 @@
         {% include "ui/partials/drawer_item.html" with icon="dices" label=_("Generator") color="module" onclick="openGeneratorDialog()" tooltip=_("Password generator") %}
         {% include "ui/partials/drawer_item.html" with icon="download" label=_("Export") color="module" onclick="openExportDialog()" tooltip=_("Export this account") %}
         {% include "ui/partials/drawer_item.html" with icon="key-round" label=change_password_label color="module" onclick="openPasswordDialog()" tooltip=_("Change your master password") %}
+        {% include "ui/partials/drawer_item.html" with icon="rotate-ccw-key" label=_("Recovery key") color="module" onclick="openRecoveryKeyDialog()" tooltip=_("Replace your recovery key") %}
         {% include "ui/partials/drawer_item.html" with icon="lock" label=_("Lock") color="module" onclick="lockNow()" badge_binding="countdown()" tooltip=_("Lock") %}
         {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('vault-help-dialog')?.showModal()" tooltip=_("Help") %}
       </ul>

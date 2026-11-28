@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-27 08:14+0000\n"
+"POT-Creation-Date: 2026-11-28 09:13+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -141,11 +141,11 @@ msgstr ""
 
 #: ui/templates/vault/ui/index.html
 msgid ""
-"Unlocked with your previous password. Your new one takes over the first time "
-"you use it."
+"Unlocked with your previous password or recovery key. The new one takes over "
+"the first time you use it."
 msgstr ""
-"Déverrouillé avec votre ancien mot de passe. Le nouveau prend le relais dès "
-"que vous l’utilisez."
+"Déverrouillé avec votre ancien mot de passe ou votre ancienne clé de "
+"récupération. Leur remplaçant prend le relais dès que vous l’utilisez."
 
 #: ui/templates/vault/ui/index.html
 msgid ""
@@ -184,11 +184,13 @@ msgid "How it works"
 msgstr "Fonctionnement"
 
 #: ui/templates/vault/ui/onboarding.html
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
 #: ui/templates/vault/ui/partials/unlock_form.html
 msgid "Master password"
 msgstr "Mot de passe principal"
 
 #: ui/templates/vault/ui/onboarding.html
+#: ui/templates/vault/ui/partials/browser_sidebar.html
 #: ui/templates/vault/ui/partials/password_dialog.html
 #: ui/templates/vault/ui/partials/unlock_form.html
 msgid "Recovery key"
@@ -257,6 +259,7 @@ msgstr ""
 "perdez cet appareil."
 
 #: ui/templates/vault/ui/onboarding.html
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
 msgid "Download the emergency kit (PDF)"
 msgstr "Télécharger le kit de secours (PDF)"
 
@@ -506,6 +509,11 @@ msgstr "Exporter ce compte"
 #: ui/templates/vault/ui/partials/browser_sidebar.html
 msgid "Change your master password"
 msgstr "Changer votre mot de passe principal"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+msgid "Replace your recovery key"
+msgstr "Remplacer votre clé de récupération"
 
 #: ui/templates/vault/ui/partials/browser_sidebar.html
 msgid "Lock"
@@ -820,11 +828,13 @@ msgid "Current master password"
 msgstr "Mot de passe principal actuel"
 
 #: ui/templates/vault/ui/partials/password_dialog.html
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
 #: ui/templates/vault/ui/partials/unlock_form.html
 msgid "From your emergency kit. Dashes and case are ignored."
 msgstr "Depuis votre kit de secours. Tirets et casse ignorés."
 
 #: ui/templates/vault/ui/partials/password_dialog.html
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
 msgid "Recovery key remembered on this device. It is used without being shown."
 msgstr ""
 "Clé de récupération mémorisée sur cet appareil. Elle est utilisée sans être "
@@ -867,6 +877,76 @@ msgid "Breach check unavailable: you can still continue"
 msgstr ""
 "Vérification des fuites indisponible : vous pouvez tout de même continuer"
 
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+msgid ""
+"Your vaults are not re-encrypted. Your current key keeps working until you "
+"unlock with the new one."
+msgstr ""
+"Vos coffres-forts ne sont pas rechiffrés. Votre clé actuelle reste valable "
+"jusqu’à ce que vous déverrouilliez avec la nouvelle."
+
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+msgid ""
+"Replace your key when someone else may have seen it: a lost emergency kit, a "
+"photo of it, a shared computer that remembered it. A new one is created on "
+"this device and shown once."
+msgstr ""
+"Remplacez votre clé quand quelqu’un d’autre a pu la voir : un kit de secours "
+"perdu, une photo de ce kit, un ordinateur partagé qui l’a mémorisée. Une "
+"nouvelle clé est créée sur cet appareil et affichée une seule fois."
+
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+msgid "Current recovery key"
+msgstr "Clé de récupération actuelle"
+
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+msgid "Create a new key"
+msgstr "Créer une nouvelle clé"
+
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+msgid ""
+"Nothing has changed yet. This key replaces your current one when you confirm "
+"below; your vault then locks and asks for it. Confirm before leaving this "
+"page: a vault that locks first discards this key."
+msgstr ""
+"Rien n’a encore changé. Cette clé remplace l’actuelle quand vous confirmez "
+"ci-dessous ; votre coffre-fort se verrouille alors et vous la demande. "
+"Confirmez avant de quitter cette page : si le coffre-fort se verrouille "
+"avant, cette clé est abandonnée."
+
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+msgid ""
+"Save it somewhere safe and offline. With your master password, it is the "
+"only way into your vaults."
+msgstr ""
+"Conservez-la en lieu sûr, hors ligne. Avec votre mot de passe principal, "
+"c’est le seul moyen d’ouvrir vos coffres-forts."
+
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+msgid ""
+"I have saved my new recovery key. Without it, nobody can open my vaults."
+msgstr ""
+"J’ai conservé ma nouvelle clé de récupération. Sans elle, personne ne peut "
+"ouvrir mes coffres-forts."
+
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Remember my recovery key on this device"
+msgstr "Mémoriser ma clé de récupération sur cet appareil"
+
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid ""
+"Anything that can run code on this page can then read it, so leave it off on "
+"a shared computer."
+msgstr ""
+"Tout ce qui peut exécuter du code sur cette page pourra alors la lire : "
+"laissez cette option désactivée sur un ordinateur partagé."
+
+#: ui/templates/vault/ui/partials/recovery_key_dialog.html
+msgid "Replace my recovery key"
+msgstr "Remplacer ma clé"
+
 #: ui/templates/vault/ui/partials/switcher_menu.html
 msgid "Nothing can be done with this vault"
 msgstr "Aucune action possible sur ce coffre-fort"
@@ -900,16 +980,8 @@ msgid "Password changed - unlock with your new password."
 msgstr "Mot de passe changé - déverrouillez avec le nouveau."
 
 #: ui/templates/vault/ui/partials/unlock_form.html
-msgid "Remember my recovery key on this device"
-msgstr "Mémoriser ma clé de récupération sur cet appareil"
-
-#: ui/templates/vault/ui/partials/unlock_form.html
-msgid ""
-"Anything that can run code on this page can then read it, so leave it off on "
-"a shared computer."
-msgstr ""
-"Tout ce qui peut exécuter du code sur cette page pourra alors la lire : "
-"laissez cette option désactivée sur un ordinateur partagé."
+msgid "Recovery key replaced - unlock with your new key."
+msgstr "Clé de récupération remplacée - déverrouillez avec la nouvelle."
 
 #: ui/templates/vault/ui/partials/unlock_form.html
 msgid "Kept in this browser. It is used without being shown."

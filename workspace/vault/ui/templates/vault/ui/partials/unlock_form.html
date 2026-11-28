@@ -28,6 +28,17 @@
       </div>
     </div>
     <inline-alert type="success" message="{% translate "Password changed - unlock with your new password." %}" x-show="passwordChangedNotice" x-cloak></inline-alert>
+    <inline-alert type="success" message="{% translate "Recovery key replaced - unlock with your new key." %}" x-show="recoveryKeyNotice === 'replaced'" x-cloak></inline-alert>
+    <inline-alert type="success" x-show="recoveryKeyNotice === 'landed'" x-cloak>
+    <span x-text="recoveryKeyNoticeText()"></span>
+    </inline-alert>
+    <inline-alert type="warning" icon="key-round" x-show="recoveryKeyWarns()" x-cloak>
+    <span
+      x-text="recoveryKeyNoticeText()"
+      data-testid="recovery-notice"
+      :data-notice="recoveryKeyNotice"
+    ></span>
+    </inline-alert>
     <inline-alert type="error" x-show="error" x-cloak>
     <span x-text="error"></span>
     </inline-alert>

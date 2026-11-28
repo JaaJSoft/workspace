@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.template.loader import render_to_string
+from django.templatetags.static import static
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
@@ -227,6 +228,34 @@ class PasswordDialogWiringTests(SimpleTestCase):
             'masterPasswordClipboardPolicy())"',
             html,
         )
+
+
+class RecoveryKeyDialogWiringTests(TestCase):
+    """What the recovery key dialog takes from the page. The component is
+    covered by its own JS suite and the browser walk; neither notices the PDF
+    generator creeping back into the page's own scripts."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="owner", email="owner@example.com", password="pw"
+        )
+        AccountIdentity.objects.create(
+            user=self.user, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE
+        )
+        self.client.force_login(self.user)
+        self.html = self.client.get(reverse("vault_ui:index")).content.decode()
+        self.kit_bundle = static("vault/ui/js/vendor/vault-onboarding.js")
+
+    def test_the_kit_generator_is_fetched_on_demand(self):
+        # The vault page is the unlock path, and the generator outweighs
+        # everything else on it. The dialog is handed its address and appends
+        # the script tag itself; a tag in the template would load it on every
+        # unlock for a dialog that is opened once in an account's life.
+        self.assertNotIn(f'src="{self.kit_bundle}"', self.html)
+        self.assertIn(f'data-kit-bundle="{self.kit_bundle}"', self.html)
+
+    def test_the_kit_is_built_for_the_account_that_is_signed_in(self):
+        self.assertIn('data-email="owner@example.com"', self.html)
 
 
 class OnboardingStrengthMeterTests(TestCase):

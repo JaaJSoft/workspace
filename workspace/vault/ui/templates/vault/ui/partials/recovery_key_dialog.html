@@ -1,0 +1,213 @@
+{% load i18n static %}
+{% comment %}
+  Replacing the recovery key, mounted under x-if for the reason the password
+  dialog gives: the component holds the master password and then the new key,
+  and tearing it down on close or on lock is what lets go of them.
+
+  Two steps inside one box. The first opens the account with the current key
+  and seals it under a new one; the second shows that key and its emergency
+  kit. Nothing is sent before the second step is confirmed, so closing at any
+  point before that leaves the account exactly as it was.
+
+  Cancel and Escape wait for a step in flight; a lock still tears the dialog
+  down mid-flight, and the life check in the component is what keeps a step
+  from reporting into a dialog that is gone.
+{% endcomment %}
+<template x-if="recoveryKeyDialogOpen">
+  <div class="modal modal-open">
+    {# x-trap rather than a native dialog, and Escape on the window: see the password dialog. #}
+    <div
+      class="modal-box max-w-lg"
+      x-data="vaultRecoveryKeyChange()"
+      x-trap="true"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="vault-recovery-key-dialog-title"
+      data-email="{{ request.user.email }}"
+      data-kit-bundle="{% static 'vault/ui/js/vendor/vault-onboarding.js' %}"
+      @keydown.escape.window="busy || closeRecoveryKeyDialog()"
+    >
+      {% include "ui/partials/dialog_header.html" with icon="rotate-ccw-key" title=_("Replace your recovery key") title_id="vault-recovery-key-dialog-title" subtitle=_("Your vaults are not re-encrypted. Your current key keeps working until you unlock with the new one.") close_expr="busy || closeRecoveryKeyDialog()" only %}
+
+      <inline-alert type="error" class="mb-3" x-show="error" x-cloak>
+      <span x-text="error"></span>
+      </inline-alert>
+
+      <template x-if="step === 'credentials'">
+        <form @submit.prevent="prepare()">
+          <div class="flex flex-col gap-3">
+            <p class="text-sm text-base-content/70">
+              {% blocktranslate trimmed %}
+                Replace your key when someone else may have seen it: a lost
+                emergency kit, a photo of it, a shared computer that remembered
+                it. A new one is created on this device and shown once.
+              {% endblocktranslate %}
+            </p>
+
+            <label class="fieldset w-full">
+              <span class="text-sm">{% translate "Master password" %}</span>
+              <input
+                type="password"
+                class="input w-full"
+                autocomplete="current-password"
+                data-testid="recovery-password"
+                x-model="currentPassword"
+                :disabled="busy"
+              />
+            </label>
+
+            {# Mounted only while the key is asked for: a remembered key is never printed, as on the unlock form. #}
+            <template x-if="!secretRemembered">
+              <label class="fieldset w-full">
+                <span class="text-sm">{% translate "Current recovery key" %}</span>
+                <input
+                  type="text"
+                  class="input w-full font-mono placeholder:font-sans"
+                  placeholder="{% translate "From your emergency kit. Dashes and case are ignored." %}"
+                  spellcheck="false"
+                  autocomplete="off"
+                  data-testid="recovery-secret"
+                  x-model="secretText"
+                  :disabled="busy"
+                />
+              </label>
+            </template>
+            <template x-if="secretRemembered">
+              <div class="flex items-center gap-2 text-sm text-base-content/60">
+                <i data-lucide="key-round" class="w-4 h-4 shrink-0 text-base-content/50"></i>
+                <span>{% translate "Recovery key remembered on this device. It is used without being shown." %}</span>
+              </div>
+            </template>
+          </div>
+
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost"
+              data-testid="recovery-cancel"
+              :disabled="busy"
+              @click="closeRecoveryKeyDialog()"
+            >
+              {% translate "Cancel" %}
+            </button>
+            <button
+              type="submit"
+              class="btn btn-sm btn-module"
+              data-testid="recovery-prepare"
+              :disabled="!canPrepare()"
+            >
+              <span x-show="busy" x-cloak class="loading loading-spinner loading-xs"></span>
+              {% translate "Create a new key" %}
+            </button>
+          </div>
+        </form>
+      </template>
+
+      {% comment %}
+        x-if, not x-show: the step exists only once there is a key to show.
+        The key takes the focus when it appears, so a screen reader lands on
+        the one thing this step hands over - and the trap has something to
+        hold, the button that was focused having left with the first step.
+      {% endcomment %}
+      <template x-if="step === 'kit'">
+        <div
+          x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
+        >
+          <div class="flex flex-col gap-3">
+            {# Hidden while a rotation is out or went unanswered: this key may then be the one in place. #}
+            <inline-alert type="warning" x-show="!outcomeUnknown">
+            {% blocktranslate trimmed %}
+              Nothing has changed yet. This key replaces your current one when
+              you confirm below; your vault then locks and asks for it. Confirm
+              before leaving this page: a vault that locks first discards this
+              key.
+            {% endblocktranslate %}
+            </inline-alert>
+
+            <p class="text-sm text-base-content/70">
+              {% blocktranslate trimmed %}
+                Save it somewhere safe and offline. With your master password,
+                it is the only way into your vaults.
+              {% endblocktranslate %}
+            </p>
+
+            <pre
+              class="p-4 rounded-lg bg-base-200 font-mono text-sm whitespace-pre-wrap break-all"
+              data-step-focus
+              data-recovery-key
+              tabindex="-1"
+              x-text="groupedSecret()"
+            ></pre>
+
+            <button
+              type="button"
+              class="btn btn-outline btn-sm self-start"
+              data-testid="recovery-kit"
+              :disabled="busy"
+              @click="downloadKit()"
+            >
+              <i data-lucide="download" class="w-4 h-4"></i>
+              {% translate "Download the emergency kit (PDF)" %}
+            </button>
+
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm mt-0.5"
+                data-testid="recovery-acknowledged"
+                x-model="acknowledged"
+                :disabled="busy"
+              />
+              <span class="text-sm">
+                {% blocktranslate trimmed %}
+                  I have saved my new recovery key. Without it, nobody can open
+                  my vaults.
+                {% endblocktranslate %}
+              </span>
+            </label>
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm mt-0.5"
+                data-testid="recovery-remember"
+                x-model="remember"
+                :disabled="busy"
+              />
+              <span>
+                <span class="block text-sm">{% translate "Remember my recovery key on this device" %}</span>
+                <span class="block text-xs text-base-content/50">
+                  {% blocktranslate trimmed %}
+                    Anything that can run code on this page can then read it, so
+                    leave it off on a shared computer.
+                  {% endblocktranslate %}
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost"
+              data-testid="recovery-cancel"
+              :disabled="busy"
+              @click="closeRecoveryKeyDialog()"
+            >
+              {% translate "Cancel" %}
+            </button>
+            <button
+              type="button"
+              class="btn btn-sm btn-module"
+              data-testid="recovery-replace"
+              :disabled="!canReplace()"
+              @click="replace()"
+            >
+              <span x-show="busy" x-cloak class="loading loading-spinner loading-xs"></span>
+              {% translate "Replace my recovery key" %}
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</template>

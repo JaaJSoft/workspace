@@ -1,6 +1,6 @@
-"""The two dialogs that hold a secret, driven from the keyboard.
+"""The dialogs that hold a secret, driven from the keyboard.
 
-Both are mounted under x-if and drawn as a daisyUI modal rather than a native
+All are mounted under x-if and drawn as a daisyUI modal rather than a native
 <dialog>, so nothing the browser does for a modal happens on its own: the
 dialog has to announce itself, take focus when it opens, keep Tab inside, close
 on Escape and give focus back to the row that opened it. All of it is a
@@ -58,6 +58,15 @@ class DialogFocusTests(VaultBrowserCase):
             self._sidebar_row(re.compile(r"^Change (?:your master )?password$")),
             "[role=dialog][aria-labelledby=vault-password-dialog-title]",
             "Change master password",
+        )
+
+    def test_the_recovery_key_dialog_is_a_modal_from_the_keyboard(self):
+        self._assert_behaves_as_a_modal(
+            self._sidebar_row(
+                re.compile(r"^(?:Recovery key|Replace your recovery key)$")
+            ),
+            "[role=dialog][aria-labelledby=vault-recovery-key-dialog-title]",
+            "Replace your recovery key",
         )
 
     def test_the_export_dialog_is_a_modal_from_the_keyboard(self):

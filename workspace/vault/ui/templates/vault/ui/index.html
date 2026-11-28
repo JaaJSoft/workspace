@@ -45,6 +45,8 @@
 {% block drawer_attrs %}
   x-data="vaultBrowser()"
   @vault-password-changed="passwordChangeSucceeded()"
+  @vault-recovery-key-shown="recoveryKeyWasShown()"
+  @vault-recovery-key-outcome.window="recoveryKeyOutcome($event.detail.outcome, $event.detail.rotation)"
 {% endblock %}
 
 {% comment %}
@@ -107,7 +109,35 @@
             </inline-alert>
           </template>
 
-          <inline-alert type="warning" icon="key-round" message="{% translate "Unlocked with your previous password. Your new one takes over the first time you use it." %}" class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
+          <inline-alert type="warning" icon="key-round" message="{% translate "Unlocked with your previous password or recovery key. The new one takes over the first time you use it." %}" class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
+
+          {% comment %}
+              Keyed by the notice, not x-if: the dismiss button takes the
+              element out of the DOM, and one notice replacing another has to
+              build it again - x-if would keep the element it believes is
+              still there.
+          {% endcomment %}
+          <template
+            x-for="notice in (recoveryKeyWarns() ? [recoveryKeyNotice] : [])"
+            :key="notice"
+          >
+            <inline-alert type="warning" icon="key-round" dismissible class="mx-5 mt-4">
+            <span
+              x-text="recoveryKeyNoticeText()"
+              data-testid="recovery-notice"
+              :data-notice="notice"
+            ></span>
+            </inline-alert>
+          </template>
+          <template x-if="recoveryKeyNotice === 'landed'">
+            <inline-alert type="success" dismissible class="mx-5 mt-4">
+            <span
+              x-text="recoveryKeyNoticeText()"
+              data-testid="recovery-notice"
+              :data-notice="recoveryKeyNotice"
+            ></span>
+            </inline-alert>
+          </template>
 
           {% comment %}
               x-if, not x-show: inline-alert reads its attributes once, when
@@ -171,6 +201,7 @@
         {% include "vault/ui/partials/generator_dialog.html" %}
         {% include "vault/ui/partials/export_dialog.html" %}
         {% include "vault/ui/partials/password_dialog.html" %}
+        {% include "vault/ui/partials/recovery_key_dialog.html" %}
         {% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/switcher_menu.html" open="vaultMenu.open" close="closeVaultMenu()" x="vaultMenu.x" y="vaultMenu.y" id="vault-switcher-menu" %}
       </div>
     </template>
@@ -222,7 +253,10 @@
   <script src="{% static 'vault/ui/js/vault_export.js' %}"></script>
   <script src="{% static 'ui/js/password_strength.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_password_floor.js' %}"></script>
+  <script src="{% static 'vault/ui/js/envelope_rotation.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_password.js' %}"></script>
+  <script src="{% static 'vault/ui/js/emergency_kit.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_recovery_key.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_file_entry.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>
 {% endblock %}

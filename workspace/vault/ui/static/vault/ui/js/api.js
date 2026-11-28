@@ -35,10 +35,10 @@ window.vaultApi = (function () {
     fetchEnvelope: function () {
       return request('/api/v1/vault/account/envelope');
     },
-    // Every envelope write: the unlock's re-wrap and the password change. The
-    // server applies it only against the envelope named as expected, and
-    // answers 200 with no body: reading one would reject after the envelope
-    // has already been replaced.
+    // Every envelope write: the unlock's re-wrap, the password change and the
+    // recovery key replacement. The server applies it only against the
+    // envelope named as expected, and answers 200 with no body: reading one
+    // would reject after the envelope has already been replaced.
     rotateEnvelope: function (body) {
       return request('/api/v1/vault/account/rotate', { method: 'POST', body: body, bodiless: true });
     },

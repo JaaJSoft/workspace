@@ -132,6 +132,7 @@ window.vaultBrowser = (function () {
       ...window.vaultGeneratorMixin(),
       ...window.vaultExportMixin(),
       ...window.vaultResealDialogMixin(),
+      ...window.vaultRecoveryKeyDialogMixin(),
       ...window.vaultFileEntryMixin(),
       ...store,
 
@@ -153,8 +154,9 @@ window.vaultBrowser = (function () {
       // Set after three passes in a row that left some rows unmigrated.
       migrationWarning: false,
       migrationGeneration: 0,
-      // The session was opened by the envelope a password change replaced:
-      // the new password has not been used yet, and the old one still works.
+      // The session was opened by the envelope a password change or a new
+      // recovery key replaced: the new one has not been used yet, and the old
+      // one still works.
       unlockedWithPrevious: false,
       // The field schema of each entry type, rendered by the server from the
       // Python registry. The New menu is built from it rather than from a
@@ -273,6 +275,7 @@ window.vaultBrowser = (function () {
 
       afterUnlock: async function () {
         this.passwordChangedNotice = false;
+        this.recoveryKeyUnlocked();
         this.unlockedWithPrevious = window.vaultSession.openedWithPrevious();
         await this.load();
         this.startMigration();
@@ -348,6 +351,8 @@ window.vaultBrowser = (function () {
         this.clearExport();
         // And the password change holds the current and the new password.
         this.closePasswordDialog();
+        // The recovery key dialog holds the password too, then the new key.
+        this.closeRecoveryKeyDialog();
         // The notice names a folder, opened from its ciphertext.
         this.clearFileEntry();
         this.draft = null;

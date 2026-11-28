@@ -55,6 +55,30 @@ test('a device that remembers the key keeps the field unmounted and the section 
   assert.equal(component.secretMissing(), false);
 });
 
+test('the gate follows a key that was replaced under the open session', () => {
+  // The page loaded with one key and the device now holds another: the next
+  // unlock must use the new one, not the one in memory since mount.
+  const device = { remembered: STORED };
+  const { component } = gate(device);
+  device.remembered = 'NEW-KEY';
+  component.readRememberedSecret();
+  assert.equal(component.secretText, 'NEW-KEY');
+  assert.equal(component.secretRemembered, true);
+  assert.equal(component.secretRequired, false);
+});
+
+test('the gate asks for the key once the device no longer holds one', () => {
+  const device = { remembered: STORED };
+  const { component } = gate(device);
+  device.remembered = null;
+  component.readRememberedSecret();
+  assert.equal(component.secretText, '', 'the replaced key was still offered');
+  assert.equal(component.remember, false);
+  assert.equal(component.secretRemembered, false);
+  assert.equal(component.secretRequired, true);
+  assert.equal(component.secretPanelOpen, true);
+});
+
 test('an unreadable remembered key forgets the device and opens the section empty', async () => {
   const { component, calls } = gate({ remembered: STORED, fail: 'recovery-key' });
   component.password = 'pw';
@@ -75,6 +99,8 @@ test('a password failure with a remembered key puts that key back on screen', as
   assert.equal(component.secretText, STORED);
   assert.equal(component.secretRequired, true);
   assert.equal(component.secretPanelOpen, true);
+  // The two ways a remembered key stops being the right one.
+  assert.match(component.error, /was replaced since/);
   assert.match(component.error, /belongs to another account/);
 });
 

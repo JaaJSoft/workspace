@@ -19,7 +19,10 @@ FIXTURE = (
 
 # The names the module holds a recovery secret under. A new alias has to be
 # added here deliberately, which is the point: the catalogue is the contract.
-SECRET_NAMES = r"(secretKey|secret_key|secretText|secretBytes|recoverySecret)"
+SECRET_NAMES = (
+    r"(secretKey|secret_key|secretText|secretBytes|recoverySecret"
+    r"|nextSecretText|nextSecretBytes)"
+)
 
 # An outgoing call and a secret name close enough together to be one
 # statement. The module wraps fetch in its own post(), so listing the browser

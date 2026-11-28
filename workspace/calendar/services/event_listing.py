@@ -13,6 +13,7 @@ from uuid import UUID
 
 from django.db.models import OuterRef, Prefetch, Q, Subquery
 from django.utils import timezone
+from django.utils.functional import cached_property
 from django.utils.translation import gettext as _
 from rest_framework.exceptions import ValidationError
 
@@ -132,10 +133,13 @@ class EventListing:
 
     # -- what both readings share --
 
+    @cached_property
+    def _visible(self):
+        # Read once: every query of one reading starts from it.
+        return visible_events_q(self.user)
+
     def _events(self):
-        return self.narrow(
-            Event.objects.filter(visible_events_q(self.user), is_cancelled=False)
-        )
+        return self.narrow(Event.objects.filter(self._visible, is_cancelled=False))
 
     def _position(self, start, all_day, row_id):
         """Where a row sorts. An all-day event sits at the start of its day

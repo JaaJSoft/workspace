@@ -4,6 +4,8 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.utils import timezone as dj_timezone
 from rest_framework import status
@@ -83,6 +85,57 @@ class EventListTests(CalendarTestMixin, APITestCase):
         second = self.client.get(self.url, {**params, "offset": 2})
         self.assertEqual([e["title"] for e in second.data], ["Slot 2"])
         self.assertEqual(second["X-Has-More"], "false")
+
+    def test_the_list_takes_a_fixed_number_of_queries(self):
+        """Whatever it holds: plain events, series, occurrences changed on
+        their own, invitees."""
+
+        def fill(prefix):
+            day = timezone.now() + timedelta(days=1)
+            plain = Event.objects.create(
+                calendar=self.calendar,
+                title=f"{prefix} plain",
+                start=day,
+                owner=self.owner,
+            )
+            series = Event(
+                calendar=self.calendar,
+                title=f"{prefix} weekly",
+                start=day,
+                end=day + timedelta(hours=1),
+                owner=self.owner,
+            )
+            apply_rule(series, "RRULE:FREQ=DAILY")
+            series.save()
+            changed = Event.objects.create(
+                calendar=self.calendar,
+                title=f"{prefix} moved",
+                start=day + timedelta(days=1, hours=2),
+                owner=self.owner,
+                recurrence_parent=series,
+                original_start=day + timedelta(days=1),
+            )
+            for event in (plain, series, changed):
+                EventMember.objects.create(event=event, user=self.member)
+                EventMember.objects.create(event=event, email=f"{prefix}@example.com")
+
+        self.client.force_authenticate(self.owner)
+        params = {**self._range_params(), "calendar": f"{self.calendar.uuid},none"}
+
+        def queries():
+            with CaptureQueriesContext(connection) as captured:
+                resp = self.client.get(self.url, params)
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            return len(captured), len(resp.data)
+
+        fill("a")
+        few_queries, few_rows = queries()
+        for prefix in "bcde":
+            fill(prefix)
+        many_queries, many_rows = queries()
+
+        self.assertGreater(many_rows, few_rows * 3)
+        self.assertEqual(many_queries, few_queries)
 
     def test_a_list_with_no_end_cannot_be_counted(self):
         self.client.force_authenticate(self.owner)

@@ -82,7 +82,7 @@ def _next_start(series, now, today_label, exceptions):
     """Start of the first occurrence of *series* not over yet, or None.
 
     An occurrence under way counts. A cancelled one is skipped and a moved
-    one answers with its new start, as ``expand_recurring_events`` does.
+    one answers with its new start, as the event list does.
     """
     if series.all_day:
         after = today_label

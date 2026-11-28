@@ -16,11 +16,11 @@ const EVENT_B = '0190a2b4-0000-7000-8000-00000000000b';
 function rawEvent(uuid) {
   return {
     uuid,
-    calendar_id: 'c1',
+    calendar: { uuid: 'c1', name: 'Work', color: 'error' },
     title: 'Standup',
     start: '2026-03-20T09:00:00Z',
     end: '2026-03-20T10:00:00Z',
-    all_day: false,
+    is_all_day: false,
     owner: { id: 1 },
     members: [],
   };

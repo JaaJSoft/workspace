@@ -133,5 +133,5 @@ there too, under *Calendar subscriptions*
 `python manage.py calendar_recheck_recurrence` checks that every recurring
 event's stored series data matches its rule, and repairs it with `--fix`.
 
-The API (`/api/v1/calendars`, `/api/v1/events`, `/api/v1/external-calendars`,
-`/api/v1/polls`) is documented in the Swagger UI at `/api/schema/swagger-ui`.
+The API (`/api/v1/calendars`, `/api/v1/events`, `/api/v1/calendar/polls`) is
+documented in the Swagger UI at `/api/schema/swagger-ui`.

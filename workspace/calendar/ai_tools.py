@@ -588,8 +588,8 @@ that update_event and cancel_event take."""
 
         from django.utils import timezone
 
-        from workspace.calendar.queries import visible_calendars
-        from workspace.calendar.upcoming import event_instant, get_upcoming_page
+        from workspace.calendar.services.event_listing import EventListing
+        from workspace.calendar.upcoming import event_instant
         from workspace.users.services.settings import get_user_timezone
 
         now = timezone.now()
@@ -600,15 +600,13 @@ that update_event and cancel_event take."""
         # Tools run in a worker where the active zone is UTC, not the user's:
         # the zone decides which all-day events still count as today.
         user_tz = get_user_timezone(user)
-        events, _ = get_upcoming_page(user, after=now, limit=limit, tz=user_tz)
+        listed = EventListing(user, start=now, tz=user_tz)[:limit]
 
-        owned, subscribed = visible_calendars(user)
-        cal_names = {str(c.uuid): c.name for c in list(owned) + list(subscribed)}
         results = []
-        for e in events:
+        for e in (row.data for row in listed):
             if event_instant(e["start"]) > cutoff:
                 continue
-            if e["all_day"]:
+            if e["is_all_day"]:
                 # Already the bare day label; a clock time would be UTC
                 # midnight shifted into the user's zone, not the event's day.
                 start_text, end_text = e["start"], e.get("end") or ""
@@ -616,16 +614,14 @@ that update_event and cancel_event take."""
                 start_text = _local_clock(e["start"], user_tz)
                 end_text = _local_clock(e["end"], user_tz) if e.get("end") else ""
             entry = {
-                # A virtual occurrence's own uuid is a synthetic
-                # "<master>:<start>" pair no endpoint accepts; the master is
-                # what the edit tools address.
-                "event_id": e.get("master_event_id") or e["uuid"],
+                "event_id": e["uuid"],
                 "title": e["title"],
                 "start": start_text,
                 "end": end_text,
-                "all_day": e["all_day"],
+                "all_day": e["is_all_day"],
                 "location": e.get("location", ""),
-                "calendar": cal_names.get(e.get("calendar_id"), ""),
+                # None for an event the user is only invited to.
+                "calendar": (e["calendar"] or {}).get("name", ""),
             }
             if e.get("is_recurring"):
                 entry["recurring"] = True

@@ -77,7 +77,7 @@ class GuestsApiTests(CalendarTestMixin, APITestCase):
 
     def _create(self, **overrides):
         data = {
-            "calendar_id": str(self.calendar.uuid),
+            "calendar": str(self.calendar.uuid),
             "title": "Dinner",
             "start": (timezone.now() + timedelta(days=2)).isoformat(),
             "end": (timezone.now() + timedelta(days=2, hours=1)).isoformat(),
@@ -87,17 +87,18 @@ class GuestsApiTests(CalendarTestMixin, APITestCase):
 
     def test_create_with_guests(self):
         resp = self._create(
-            member_ids=[self.member.id],
+            members=[self.member.id],
             guests=[{"email": "Ada@Example.com", "name": "Ada Lovelace"}],
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        guests = [m for m in resp.data["members"] if m["user"] is None]
-        self.assertEqual(len(guests), 1)
-        self.assertEqual(guests[0]["email"], "ada@example.com")
-        self.assertEqual(guests[0]["name"], "Ada Lovelace")
-        self.assertEqual(guests[0]["status"], "pending")
-        accounts = [m["user"]["id"] for m in resp.data["members"] if m["user"]]
-        self.assertEqual(accounts, [self.member.id])
+        self.assertEqual(
+            resp.data["guests"],
+            [{"email": "ada@example.com", "name": "Ada Lovelace", "status": "pending"}],
+        )
+        self.assertEqual(
+            [(m["user"]["id"], m["status"]) for m in resp.data["members"]],
+            [(self.member.id, "pending")],
+        )
 
     def test_create_rejects_a_malformed_guest_email(self):
         resp = self._create(guests=[{"email": "not-an-email"}])
@@ -107,15 +108,14 @@ class GuestsApiTests(CalendarTestMixin, APITestCase):
         sync_guests(self.event, [{"email": "ada@example.com", "name": "Ada"}])
         url = f"/api/v1/events/{self.event.uuid}"
 
-        resp = self.client.put(url, {"member_ids": []}, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            [m["email"] for m in resp.data["members"]], ["ada@example.com"]
-        )
-
-        resp = self.client.put(url, {"guests": []}, format="json")
+        resp = self.client.patch(url, {"members": []}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["members"], [])
+        self.assertEqual([g["email"] for g in resp.data["guests"]], ["ada@example.com"])
+
+        resp = self.client.patch(url, {"guests": []}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["guests"], [])
 
     def test_guest_does_not_break_the_event_listing(self):
         sync_guests(self.event, [{"email": "ada@example.com", "name": "Ada"}])
@@ -128,7 +128,8 @@ class GuestsApiTests(CalendarTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event = next(e for e in resp.data if e["uuid"] == str(self.event.uuid))
-        self.assertIn("ada@example.com", [m["email"] for m in event["members"]])
+        self.assertEqual([g["email"] for g in event["guests"]], ["ada@example.com"])
+        self.assertEqual([m["user"]["username"] for m in event["members"]], ["member"])
 
     def test_event_card_renders_a_guest(self):
         sync_guests(self.event, [{"email": "ada@example.com", "name": "Ada"}])

@@ -128,13 +128,13 @@
         </template>
 
         <!-- Poll link -->
-        <template x-if="_panelRaw?.poll_id">
+        <template x-if="_panelRaw?.poll">
           <div class="flex items-center gap-2.5 text-sm">
             <i data-lucide="bar-chart-3" class="w-4 h-4 opacity-50 shrink-0"></i>
             <button
               type="button"
               class="link link-module"
-              @click="openPollDetail(_panelRaw.poll_id)"
+              @click="openPollDetail(_panelRaw.poll.uuid)"
             >
               {% translate "View poll" %}
             </button>
@@ -182,7 +182,7 @@
                 {% translate "Guests" %}
                 <span class="badge badge-xs badge-ghost" x-text="eventMembers.length"></span>
               </div>
-              <template x-for="member in eventMembers" :key="member.uuid">
+              <template x-for="member in eventMembers" :key="member.key">
                 <div class="flex items-center justify-between gap-2 text-sm">
                   <template x-if="member.user">
                     <user-avatar :user-id="member.user.id" :username="member.user.username" size="sm" presence card name></user-avatar>

@@ -23,12 +23,12 @@ msgstr "Événement créé"
 msgid "Event updated"
 msgstr "Événement modifié"
 
-#: ai_tools.py views/polls.py
+#: ai_tools.py services/polls.py
 #, python-format
 msgid "Poll invitation: \"%(title)s\""
 msgstr "Invitation au sondage « %(title)s »"
 
-#: ai_tools.py views/polls.py
+#: ai_tools.py services/polls.py
 #, python-format
 msgid "%(user)s invited you to vote on a poll."
 msgstr "%(user)s vous invite à répondre à un sondage."
@@ -52,6 +52,26 @@ msgctxt "activity source"
 msgid "Calendar"
 msgstr "Calendrier"
 
+#: serializers.py
+msgid "Unrecognized recurrence rule."
+msgstr "Règle de récurrence non reconnue."
+
+#: serializers.py
+msgid "The feed of a calendar cannot be changed."
+msgstr "Le flux d’un calendrier ne peut pas être modifié."
+
+#: serializers.py
+msgid "Cannot create events in an external calendar."
+msgstr "Impossible de créer des événements dans un calendrier externe."
+
+#: serializers.py
+msgid "Name at least one person or one list."
+msgstr "Indiquez au moins une personne ou une liste."
+
+#: services/event_listing.py
+msgid "A list with no end cannot be counted: pass `end`."
+msgstr "Une liste sans fin ne peut pas être comptée : indiquez `end`."
+
 #: services/event_scope.py
 msgid "Only the owner can edit this event."
 msgstr "Seul le propriétaire peut modifier cet événement."
@@ -60,7 +80,7 @@ msgstr "Seul le propriétaire peut modifier cet événement."
 msgid "This event comes from an external calendar and cannot be edited."
 msgstr "Cet événement provient d’un calendrier externe et ne peut pas être modifié."
 
-#: services/event_scope.py views/calendars.py views/external.py views/feeds.py
+#: services/event_scope.py views/calendars.py
 msgid "Calendar not found."
 msgstr "Calendrier introuvable."
 
@@ -78,12 +98,12 @@ msgstr "Vous ne participez plus à « %(title)s »"
 msgid "%(user)s removed you from an event."
 msgstr "%(user)s a mis fin à votre participation à un événement."
 
-#: services/event_scope.py views/events.py
+#: services/event_creation.py services/event_scope.py
 #, python-format
 msgid "Invited to \"%(title)s\""
 msgstr "Invitation à « %(title)s »"
 
-#: services/event_scope.py views/events.py
+#: services/event_creation.py services/event_scope.py
 #, python-format
 msgid "%(user)s invited you to an event."
 msgstr "%(user)s vous invite à un événement."
@@ -1114,84 +1134,80 @@ msgstr "Vous"
 msgid "Poll created with"
 msgstr "Sondage créé avec"
 
-#: ui/views.py views/polls.py
+#: services/polls.py ui/views.py
 msgctxt "default calendar name"
 msgid "Personal"
 msgstr "Personnel"
 
-#: views/events.py
-msgid "Calendar not found or not owned by you."
-msgstr "Ce calendrier est introuvable ou ne vous appartient pas."
+#: views/calendars.py
+msgid "Only its owner can change a calendar."
+msgstr "Seul son propriétaire peut modifier un calendrier."
 
-#: views/events.py
-msgid "Cannot create events in an external calendar."
-msgstr "Impossible de créer des événements dans un calendrier externe."
+#: views/calendars.py
+msgid "Only an external calendar has a feed to read."
+msgstr "Seul un calendrier externe a un flux à relire."
 
 #: views/events.py
 msgid "Event not found."
 msgstr "Événement introuvable."
 
 #: views/events.py
-msgid "Only the owner can edit."
-msgstr "Seul le propriétaire peut le modifier."
+msgid "Say which occurrences of the series are meant."
+msgstr "Précisez les occurrences de la série concernées."
 
 #: views/events.py
-msgid "Cannot edit events from an external calendar."
-msgstr "Impossible de modifier les événements d’un calendrier externe."
-
-#: views/events.py
-msgid "Only the owner can delete."
-msgstr "Seul le propriétaire peut le supprimer."
-
-#: views/events.py
-msgid "Cannot delete events from an external calendar."
-msgstr "Impossible de supprimer les événements d’un calendrier externe."
-
-#: views/events.py
-msgid "Choose which occurrences of the series to delete."
-msgstr "Choisissez les occurrences de la série à supprimer."
+msgid "Say which occurrence is meant."
+msgstr "Précisez l’occurrence concernée."
 
 #: views/events.py
 msgid "Not invited."
 msgstr "Vous n’êtes pas invité."
 
-#: views/external.py
-msgid "Sync started."
-msgstr "Synchronisation lancée."
-
-#: views/polls.py
+#: services/polls.py
 #, python-format
 msgid "Poll updated: \"%(title)s\""
 msgstr "Sondage modifié : « %(title)s »"
 
-#: views/polls.py
+#: services/polls.py
 msgid "Time slots have been updated. Please review your votes."
 msgstr "Les créneaux ont été modifiés. Vérifiez vos votes."
 
-#: views/polls.py
+#: services/polls.py
 #, python-format
 msgid "New vote on \"%(title)s\""
 msgstr "Nouveau vote sur « %(title)s »"
 
-#: views/polls.py
+#: services/polls.py
 #, python-format
 msgid "%(user)s voted on your poll."
 msgstr "%(user)s a répondu à votre sondage."
 
-#: views/polls.py
+#: services/polls.py
 #, python-format
 msgid "Poll finalized: \"%(title)s\""
 msgstr "Sondage finalisé : « %(title)s »"
 
-#: views/polls.py
+#: services/polls.py
 msgid "A date has been chosen."
 msgstr "Une date a été choisie."
+
+#: views/polls.py
+msgid "This poll is closed."
+msgstr "Ce sondage est clos."
+
+#: views/polls.py
+msgid "Poll not found."
+msgstr "Sondage introuvable."
+
+#: views/polls.py
+msgid "Only its creator can change a poll."
+msgstr "Seul son créateur peut modifier un sondage."
 
 #: views/polls.py
 msgid "Too many vote submissions. Please try again later."
 msgstr "Trop de votes envoyés. Réessayez plus tard."
 
-#: views/polls.py
+#: services/polls.py
 msgid "A guest voted on your poll."
 msgstr "Un invité a répondu à votre sondage."
 

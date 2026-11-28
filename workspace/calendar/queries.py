@@ -28,6 +28,14 @@ def visible_calendar_ids(user):
     return list(owned.union(subscribed.values_list("uuid", flat=True)).order_by())
 
 
+def reachable_calendars(user):
+    """The calendars *user* can see, as one queryset: their own, external
+    ones included, and the ones they subscribed to."""
+    return Calendar.objects.filter(uuid__in=visible_calendar_ids(user)).select_related(
+        "owner", "external_source"
+    )
+
+
 def member_event_ids(user):
     """Return ids of events *user* is a member of (invited/added).
 
@@ -39,11 +47,17 @@ def member_event_ids(user):
     return EventMember.objects.filter(user=user).values_list("event_id", flat=True)
 
 
+def undeclined_events(events, user):
+    """*events* without the ones *user* declined the invitation to."""
+    declined = EventMember.objects.filter(user=user, status=EventMember.Status.DECLINED)
+    return events.exclude(uuid__in=declined.values("event_id"))
+
+
 def visible_calendars(user):
     """Return (owned_qs, subscribed_qs) calendar querysets for *user*.
 
-    Excludes external-source calendars from the owned set (those are
-    managed separately via the external-calendars UI).
+    Excludes external-source calendars from the owned set: the page lists
+    them apart, and nobody writes an event into one.
 
     Both querysets ``select_related('external_source')`` so the serializer's
     ``is_external`` check (``hasattr(obj, 'external_source')``) hits the row

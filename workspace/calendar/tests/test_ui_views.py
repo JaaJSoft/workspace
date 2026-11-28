@@ -42,12 +42,13 @@ class CalendarIndexViewTests(TestCase):
         self.client.login(username="caluser", password="pass123")
         resp = self.client.get("/calendar")
         self.assertIn("calendars", resp.context)
+        # The calendars the API lists, with the default 'Personal' one
+        # created on first hit.
         data = resp.context["calendars"]
-        self.assertIn("owned", data)
-        self.assertIn("subscribed", data)
-        # Default 'Personal' calendar created on first hit:
-        self.assertEqual(len(data["owned"]), 1)
-        self.assertEqual(data["owned"][0]["name"], "Personal")
+        self.assertEqual(
+            [(c["name"], c["is_owned"], c["is_external"]) for c in data],
+            [("Personal", True, False)],
+        )
 
     # ── prefs - server-rendered to avoid double-fetch on init ──
     # The view passes the raw dict; the template renders it via |json_script

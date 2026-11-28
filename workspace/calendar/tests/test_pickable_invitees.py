@@ -42,11 +42,11 @@ class UnpickableInviteesTests(CalendarTestMixin, APITestCase):
         resp = self.client.post(
             "/api/v1/events",
             {
-                "calendar_id": str(self.calendar.uuid),
+                "calendar": str(self.calendar.uuid),
                 "title": "Kickoff",
                 "start": start.isoformat(),
                 "end": (start + timedelta(hours=1)).isoformat(),
-                "member_ids": [self.member.id, self.bot.id, self.gone.id],
+                "members": [self.member.id, self.bot.id, self.gone.id],
             },
             format="json",
         )
@@ -59,9 +59,9 @@ class UnpickableInviteesTests(CalendarTestMixin, APITestCase):
         )
 
     def test_update_ignores_bots_and_inactive_accounts(self):
-        resp = self.client.put(
+        resp = self.client.patch(
             f"/api/v1/events/{self.event.uuid}",
-            {"member_ids": [self.member.id, self.bot.id, self.gone.id]},
+            {"members": [self.member.id, self.bot.id, self.gone.id]},
             format="json",
         )
 
@@ -76,14 +76,11 @@ class UnpickableInviteesTests(CalendarTestMixin, APITestCase):
         self.event.save()
         occurrence = (self.event.start + timedelta(weeks=1)).isoformat()
 
-        resp = self.client.put(
+        resp = self.client.patch(
             f"/api/v1/events/{self.event.uuid}",
-            {
-                "scope": "this",
-                "original_start": occurrence,
-                "member_ids": [self.member.id, self.bot.id, self.gone.id],
-            },
+            {"members": [self.member.id, self.bot.id, self.gone.id]},
             format="json",
+            query_params={"occurrences": "this", "original_start": occurrence},
         )
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
@@ -93,9 +90,9 @@ class UnpickableInviteesTests(CalendarTestMixin, APITestCase):
     def test_poll_invite_ignores_bots_and_inactive_accounts(self):
         poll = Poll.objects.create(title="Lunch", created_by=self.owner)
 
-        resp = self.client.post(
-            f"/api/v1/polls/{poll.uuid}/invite",
-            {"user_ids": [self.member.id, self.bot.id, self.gone.id]},
+        resp = self.client.patch(
+            f"/api/v1/calendar/polls/{poll.uuid}",
+            {"invitees": [self.member.id, self.bot.id, self.gone.id]},
             format="json",
         )
 

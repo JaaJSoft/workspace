@@ -18,6 +18,8 @@ function pollSlotsError(data) {
 }
 
 window.calendarPollsMixin = function calendarPollsMixin() {
+  const POLL_PAGE_SIZE = 200;
+
   return {
     _pollLoads: window.latestOnly(),
 
@@ -44,14 +46,25 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       const requestId = this.pollsRequestId = (this.pollsRequestId || 0) + 1;
       this.pollsLoading = true;
       try {
-        const status = this.pollShowClosed ? 'all' : 'open';
-        const resp = await fetch(`/api/v1/polls?filter=${this.pollFilter}&status=${status}`, { credentials: 'same-origin' });
-        if (requestId !== this.pollsRequestId) return;
-        if (resp.ok) {
-          const polls = await resp.json();
+        // Read whole, a page at a time: the search box filters what is on
+        // screen, so a poll left on a later page would never be found.
+        const polls = [];
+        let complete = false;
+        for (let offset = 0; ; offset += POLL_PAGE_SIZE) {
+          const params = new URLSearchParams({
+            scope: this.pollFilter,
+            limit: String(POLL_PAGE_SIZE),
+            offset: String(offset),
+          });
+          if (!this.pollShowClosed) params.set('status', 'open');
+          const resp = await fetch(`/api/v1/calendar/polls?${params}`, { credentials: 'same-origin' });
           if (requestId !== this.pollsRequestId) return;
-          this.polls = polls;
+          if (!resp.ok) break;
+          polls.push(...await resp.json());
+          if (requestId !== this.pollsRequestId) return;
+          if (resp.headers.get('X-Has-More') !== 'true') { complete = true; break; }
         }
+        if (complete) this.polls = polls;
       } catch (e) {}
       if (requestId === this.pollsRequestId) {
         this.pollsLoading = false;
@@ -98,7 +111,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       this.pollCreating = true;
       this.pollFormError = null;
       try {
-        const resp = await fetch('/api/v1/polls', {
+        const resp = await fetch('/api/v1/calendar/polls', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -177,7 +190,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       this.currentPollError = null;
       let loaded = false;
       try {
-        const resp = await fetch(`/api/v1/polls/${uuid}`, { credentials: 'same-origin' });
+        const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, { credentials: 'same-origin' });
         if (!load.isCurrent()) return;
         if (resp.ok) {
           const poll = await resp.json();
@@ -187,7 +200,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
           const myVotes = {};
           for (const vote of (poll.votes || [])) {
             if (vote.user && String(vote.user.id) === userId) {
-              myVotes[vote.slot_id] = vote.choice;
+              myVotes[vote.slot] = vote.choice;
             }
           }
           this.currentPoll = poll;
@@ -210,12 +223,12 @@ window.calendarPollsMixin = function calendarPollsMixin() {
 
     async submitPollVotes() {
       if (!this.currentPoll) return;
-      const votes = Object.entries(this.pollMyVotes).map(([slot_id, choice]) => ({ slot_id, choice }));
+      const votes = Object.entries(this.pollMyVotes).map(([slot, choice]) => ({ slot, choice }));
       if (votes.length === 0) return;
       const pollUuid = this.currentPoll.uuid;
       this.pollVoting = true;
       try {
-        const resp = await fetch(`/api/v1/polls/${pollUuid}/vote`, {
+        const resp = await fetch(`/api/v1/calendar/polls/${pollUuid}/vote`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -235,11 +248,11 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       const pollUuid = this.currentPoll.uuid;
       this.pollFinalizing = true;
       try {
-        const resp = await fetch(`/api/v1/polls/${pollUuid}/finalize`, {
+        const resp = await fetch(`/api/v1/calendar/polls/${pollUuid}/finalize`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ slot_id: this.pollFinalizeSlotId }),
+          body: JSON.stringify({ slot: this.pollFinalizeSlotId }),
         });
         if (resp.ok) {
           const poll = await resp.json();
@@ -263,7 +276,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       });
       if (!ok) return;
       try {
-        const resp = await fetch(`/api/v1/polls/${uuid}`, {
+        const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, {
           method: 'DELETE',
           credentials: 'same-origin',
           headers: { 'X-CSRFToken': getCSRFToken() },
@@ -304,7 +317,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
             votes: {},
           });
         }
-        map.get(key).votes[vote.slot_id] = vote.choice;
+        map.get(key).votes[vote.slot] = vote.choice;
       }
       return Array.from(map.values());
     },
@@ -316,39 +329,37 @@ window.calendarPollsMixin = function calendarPollsMixin() {
     formatPollSlotDate(slot) { return pollUtils.formatSlotDate(slot); },
     formatPollSlotTime(slot) { return pollUtils.formatSlotTime(slot); },
 
+    // The invitees of a poll are one field of it: the whole list is sent.
+    async _setPollInvitees(userIds) {
+      const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ invitees: userIds }),
+      });
+      if (!resp.ok) return false;
+      this.currentPoll = await resp.json();
+      return true;
+    },
+
     async addPollInvitee(event) {
       const user = event.detail.user;
       if (!this.currentPoll) return;
-      // Skip if already invited
-      if ((this.currentPoll.invitees || []).find(i => i.user.id === user.id)) return;
+      const invited = (this.currentPoll.invitees || []).map(i => i.id);
+      if (invited.includes(user.id)) return;
       try {
-        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}/invite`, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ user_ids: [user.id] }),
-        });
-        if (resp.ok) {
-          this.currentPoll = await resp.json();
+        if (await this._setPollInvitees([...invited, user.id])) {
           if (window.AppAlert) window.AppAlert.success(interpolate(gettext('%(name)s invited!'), { name: user.username }, true), { duration: 2000 });
-
         }
       } catch (e) {}
     },
 
     async removePollInvitee(userId) {
       if (!this.currentPoll) return;
+      const kept = (this.currentPoll.invitees || []).map(i => i.id).filter(id => id !== userId);
       try {
-        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}/invite`, {
-          method: 'DELETE',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ user_ids: [userId] }),
-        });
-        if (resp.ok) {
-          this.currentPoll = await resp.json();
+        if (await this._setPollInvitees(kept)) {
           if (window.AppAlert) window.AppAlert.success(gettext('Invitation removed'), { duration: 2000 });
-
         }
       } catch (e) {}
     },
@@ -395,7 +406,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       this.pollEditSaving = true;
       this.pollFormError = null;
       try {
-        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}`, {
+        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}`, {
           method: 'PATCH',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -418,7 +429,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
           const myVotes = {};
           for (const vote of (this.currentPoll.votes || [])) {
             if (vote.user && String(vote.user.id) === userId) {
-              myVotes[vote.slot_id] = vote.choice;
+              myVotes[vote.slot] = vote.choice;
             }
           }
           this.pollMyVotes = myVotes;

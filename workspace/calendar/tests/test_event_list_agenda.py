@@ -1,13 +1,12 @@
-"""Tests for the cursor (agenda) mode of /api/v1/events.
+"""The agenda: GET /api/v1/events with a `start` and no `end`.
 
-The endpoint supports two modes:
-- Range mode (existing): ?start=&end=&calendar_ids= → flat JSON array.
-- Cursor mode (new): ?after=&after_id=&limit=&calendar_ids=&show_declined= →
-    {events: [...], next_after: "<iso>" | null, next_after_id: "<id>" | null}.
-Mode is selected by the presence of the `after` query param.
+The list of what starts from an instant on has no end while a series
+repeats, so it is read a page at a time: `limit` and `offset` over a bare
+array, the `X-Has-More` header saying whether a row follows. Every page of
+one reading names the same `start`.
 """
 
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -25,8 +24,8 @@ def _until(dt):
     return dt.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
-class CursorModeMixin:
-    """Common setup for cursor-mode tests."""
+class AgendaMixin:
+    """Common setup for the agenda tests."""
 
     url = "/api/v1/events"
 
@@ -47,9 +46,12 @@ class CursorModeMixin:
     def _iso(self, dt):
         return dt.isoformat()
 
-    def _get_cursor(self, after, **extra):
-        params = {"after": self._iso(after), "limit": 20, **extra}
+    def _get_agenda(self, start, **extra):
+        params = {"start": self._iso(start), "limit": 20, **extra}
         return self.client.get(self.url, params)
+
+    def _starts(self, resp):
+        return [datetime.fromisoformat(e["start"]) for e in resp.data]
 
     def _make_event(self, title, start, end=None, calendar=None):
         return Event.objects.create(
@@ -61,82 +63,55 @@ class CursorModeMixin:
         )
 
 
-class CursorModeEmptyTests(CursorModeMixin, APITestCase):
+class AgendaEmptyTests(AgendaMixin, APITestCase):
     def test_unauthenticated_rejected(self):
         self.client.force_authenticate(user=None)  # clear auth
         now = timezone.now()
-        resp = self._get_cursor(after=now)
+        resp = self._get_agenda(start=now)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_empty_database_returns_empty_page(self):
         now = timezone.now()
-        resp = self._get_cursor(after=now)
+        resp = self._get_agenda(start=now)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            resp.data, {"events": [], "next_after": None, "next_after_id": None}
-        )
-
-    def test_cursor_mode_selected_when_after_param_present(self):
-        """Response shape must be {events, next_after}, not a flat list."""
-        now = timezone.now()
-        resp = self._get_cursor(after=now)
-        self.assertIn("events", resp.data)
-        self.assertIn("next_after", resp.data)
-
-    def test_range_mode_still_returns_flat_list(self):
-        """Backward-compat: ?start=&end= → flat list."""
-        now = timezone.now()
-        resp = self.client.get(
-            self.url,
-            {
-                "start": self._iso(now),
-                "end": self._iso(now + timedelta(days=7)),
-            },
-        )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIsInstance(resp.data, list)
-
-    def test_missing_all_params_returns_400(self):
-        resp = self.client.get(self.url)
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data, [])
+        self.assertEqual(resp["X-Has-More"], "false")
 
 
-class CursorModeNonRecurringTests(CursorModeMixin, APITestCase):
+class AgendaNonRecurringTests(AgendaMixin, APITestCase):
     def test_fewer_than_limit_returns_all(self):
         now = timezone.now()
         for i in range(5):
             self._make_event(f"E{i}", now + timedelta(days=i + 1))
-        resp = self._get_cursor(after=now)
+        resp = self._get_agenda(start=now)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data["events"]), 5)
-        self.assertIsNone(resp.data["next_after"])
+        self.assertEqual(len(resp.data), 5)
+        self.assertEqual(resp["X-Has-More"], "false")
 
-    def test_exact_limit_returns_no_cursor(self):
+    def test_exact_limit_has_no_next_page(self):
         now = timezone.now()
         for i in range(20):
             self._make_event(f"E{i}", now + timedelta(days=i + 1))
-        resp = self._get_cursor(after=now)
-        self.assertEqual(len(resp.data["events"]), 20)
-        self.assertIsNone(resp.data["next_after"])
+        resp = self._get_agenda(start=now)
+        self.assertEqual(len(resp.data), 20)
+        self.assertEqual(resp["X-Has-More"], "false")
 
     def test_pagination(self):
         now = timezone.now()
         for i in range(30):
-            self._make_event(f"E{i}", now + timedelta(days=i + 1))
+            self._make_event(f"E{i:02d}", now + timedelta(days=i + 1))
 
-        resp1 = self._get_cursor(after=now)
-        self.assertEqual(len(resp1.data["events"]), 20)
-        self.assertIsNotNone(resp1.data["next_after"])
-
-        resp2 = self.client.get(
-            self.url,
-            {
-                "after": resp1.data["next_after"],
-                "limit": 20,
-            },
+        resp1 = self._get_agenda(start=now)
+        self.assertEqual(
+            [e["title"] for e in resp1.data], [f"E{i:02d}" for i in range(20)]
         )
-        self.assertEqual(len(resp2.data["events"]), 10)
-        self.assertIsNone(resp2.data["next_after"])
+        self.assertEqual(resp1["X-Has-More"], "true")
+
+        resp2 = self._get_agenda(start=now, offset=20)
+        self.assertEqual(
+            [e["title"] for e in resp2.data], [f"E{i:02d}" for i in range(20, 30)]
+        )
+        self.assertEqual(resp2["X-Has-More"], "false")
 
     def test_past_events_excluded(self):
         now = timezone.now()
@@ -144,37 +119,23 @@ class CursorModeNonRecurringTests(CursorModeMixin, APITestCase):
             self._make_event(f"Past{i}", now - timedelta(days=i + 1))
         for i in range(5):
             self._make_event(f"Future{i}", now + timedelta(days=i + 1))
-        resp = self._get_cursor(after=now)
-        self.assertEqual(len(resp.data["events"]), 5)
-        for e in resp.data["events"]:
+        resp = self._get_agenda(start=now)
+        self.assertEqual(len(resp.data), 5)
+        for e in resp.data:
             self.assertTrue(e["title"].startswith("Future"))
 
     def test_limit_param_respected(self):
         now = timezone.now()
         for i in range(10):
             self._make_event(f"E{i}", now + timedelta(days=i + 1))
-        resp = self.client.get(
-            self.url,
-            {
-                "after": self._iso(now),
-                "limit": 3,
-            },
-        )
-        self.assertEqual(len(resp.data["events"]), 3)
-        self.assertIsNotNone(resp.data["next_after"])
+        resp = self._get_agenda(start=now, limit=3)
+        self.assertEqual(len(resp.data), 3)
+        self.assertEqual(resp["X-Has-More"], "true")
 
-    def test_limit_param_capped_at_100(self):
-        now = timezone.now()
-        for i in range(101):
-            self._make_event(f"E{i}", now + timedelta(days=i + 1))
-        resp = self.client.get(
-            self.url,
-            {
-                "after": self._iso(now),
-                "limit": 500,
-            },
-        )
-        self.assertEqual(len(resp.data["events"]), 100)
+    def test_a_limit_past_the_maximum_is_refused(self):
+        resp = self._get_agenda(start=timezone.now(), limit=1001)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(resp.data), ["limit"])
 
     def test_events_sorted_by_start_ascending(self):
         now = timezone.now()
@@ -182,13 +143,13 @@ class CursorModeNonRecurringTests(CursorModeMixin, APITestCase):
         self._make_event("C", now + timedelta(days=3))
         self._make_event("A", now + timedelta(days=1))
         self._make_event("B", now + timedelta(days=2))
-        resp = self._get_cursor(after=now)
-        titles = [e["title"] for e in resp.data["events"]]
+        resp = self._get_agenda(start=now)
+        titles = [e["title"] for e in resp.data]
         self.assertEqual(titles, ["A", "B", "C"])
 
 
-class CursorModeRecurringTests(CursorModeMixin, APITestCase):
-    """Edge cases for recurring event expansion in cursor mode."""
+class AgendaRecurringTests(AgendaMixin, APITestCase):
+    """Edge cases for recurring event expansion in the agenda."""
 
     def _make_weekly(self, start, rec_end=None, title="Weekly"):
         event = Event(
@@ -206,22 +167,38 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
         return event
 
     def test_recurring_weekly_future_master(self):
-        """Weekly master starting tomorrow → 20 occurrences + cursor for 21st."""
+        """Weekly master starting tomorrow → 20 occurrences, and a 21st to
+        come. Each names its series and its slot."""
         now = timezone.now().replace(microsecond=0)
-        self._make_weekly(start=now + timedelta(days=1))
-        resp = self._get_cursor(after=now)
-        self.assertEqual(len(resp.data["events"]), 20)
-        self.assertIsNotNone(resp.data["next_after"])
+        master = self._make_weekly(start=now + timedelta(days=1))
+        resp = self._get_agenda(start=now)
+        self.assertEqual(len(resp.data), 20)
+        self.assertEqual(resp["X-Has-More"], "true")
+        self.assertEqual({e["uuid"] for e in resp.data}, {str(master.uuid)})
+        self.assertEqual(
+            [datetime.fromisoformat(e["original_start"]) for e in resp.data],
+            [master.start + timedelta(weeks=week) for week in range(20)],
+        )
+
+    def test_a_series_is_paged_through_like_any_list(self):
+        now = timezone.now().replace(microsecond=0)
+        master = self._make_weekly(start=now + timedelta(days=1))
+        second = self._get_agenda(start=now, limit=5, offset=5)
+        self.assertEqual(
+            self._starts(second),
+            [master.start + timedelta(weeks=week) for week in range(5, 10)],
+        )
+        self.assertEqual(second["X-Has-More"], "true")
 
     def test_recurring_master_in_past(self):
         """Master with start 1 year ago, no recurrence_end → 20 FUTURE
         occurrences returned. Master itself not in list; no occ has start < now."""
         now = timezone.now().replace(microsecond=0)
         self._make_weekly(start=now - timedelta(days=365))
-        resp = self._get_cursor(after=now)
-        self.assertEqual(len(resp.data["events"]), 20)
-        for e in resp.data["events"]:
-            self.assertGreaterEqual(e["start"], self._iso(now))
+        resp = self._get_agenda(start=now)
+        self.assertEqual(len(resp.data), 20)
+        for start in self._starts(resp):
+            self.assertGreaterEqual(start, now)
 
     def test_recurring_master_in_past_with_exception(self):
         """Past master + materialized exception next week.
@@ -246,14 +223,17 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
             original_start=target_occ,
         )
 
-        resp = self._get_cursor(after=now)
-        titles = [e["title"] for e in resp.data["events"]]
+        resp = self._get_agenda(start=now)
+        titles = [e["title"] for e in resp.data]
         self.assertIn("Moved meeting", titles)
         # The count is still 20 (exception replaced the virtual occurrence)
-        self.assertEqual(len(resp.data["events"]), 20)
-        # No two events share start == target_occ (i.e. no duplicate)
-        starts = [e["start"] for e in resp.data["events"]]
-        self.assertNotIn(self._iso(target_occ), starts)
+        self.assertEqual(len(resp.data), 20)
+        # Nothing is drawn at the slot it was moved from: no duplicate.
+        self.assertNotIn(target_occ, self._starts(resp))
+        moved = next(e for e in resp.data if e["title"] == "Moved meeting")
+        self.assertEqual(moved["uuid"], str(master.uuid))
+        self.assertEqual(datetime.fromisoformat(moved["original_start"]), target_occ)
+        self.assertTrue(moved["is_exception"])
 
     def test_recurring_master_in_past_with_cancelled(self):
         """Past master + a cancelled exception → that date is skipped entirely,
@@ -277,26 +257,25 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
             is_cancelled=True,
         )
 
-        resp = self._get_cursor(after=now)
-        self.assertEqual(len(resp.data["events"]), 20)
+        resp = self._get_agenda(start=now)
+        self.assertEqual(len(resp.data), 20)
         # Ensure cancelled title not in list
-        titles = [e["title"] for e in resp.data["events"]]
+        titles = [e["title"] for e in resp.data]
         self.assertNotIn("Cancelled occurrence", titles)
         # Ensure no event is at the cancelled occ start
-        starts = [e["start"] for e in resp.data["events"]]
-        self.assertNotIn(self._iso(cancelled_occ), starts)
+        self.assertNotIn(cancelled_occ, self._starts(resp))
 
     def test_recurring_respects_recurrence_end(self):
         """Weekly master, recurrence_end at week 4 → exactly 5 occurrences
-        (weeks 0..4), then next_after=None."""
+        (weeks 0..4), and nothing after them."""
         now = timezone.now().replace(microsecond=0)
         self._make_weekly(
             start=now + timedelta(days=1),
             rec_end=now + timedelta(weeks=4, days=1, hours=1),
         )
-        resp = self._get_cursor(after=now)
-        self.assertEqual(len(resp.data["events"]), 5)
-        self.assertIsNone(resp.data["next_after"])
+        resp = self._get_agenda(start=now)
+        self.assertEqual(len(resp.data), 5)
+        self.assertEqual(resp["X-Has-More"], "false")
 
     def test_recurring_monthly_stride(self):
         """Monthly master → correct strides across months."""
@@ -310,8 +289,8 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
         )
         apply_rule(event, "RRULE:FREQ=MONTHLY")
         event.save()
-        resp = self._get_cursor(after=now)
-        events = resp.data["events"]
+        resp = self._get_agenda(start=now)
+        events = resp.data
         self.assertEqual(len(events), 20)
         # sanity: first and last span roughly 19 months
         from dateutil.parser import parse as _p
@@ -331,10 +310,10 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
         )
         apply_rule(event, "RRULE:FREQ=WEEKLY;INTERVAL=2")
         event.save()
-        resp = self._get_cursor(after=now)
+        resp = self._get_agenda(start=now)
         from dateutil.parser import parse as _p
 
-        events = resp.data["events"]
+        events = resp.data
         diff = _p(events[1]["start"]) - _p(events[0]["start"])
         self.assertEqual(diff, timedelta(days=14))
 
@@ -355,14 +334,14 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
         )
         apply_rule(event, "RRULE:FREQ=DAILY")
         event.save()
-        resp = self._get_cursor(after=now)
-        # Compare parsed datetimes, not strings: DRF serializes UTC with a
-        # "Z" suffix and `make_virtual_occurrence` uses isoformat ("+00:00").
-        # Lex-sorting these strings is incorrect at the same instant.
-        from dateutil.parser import parse as _p
-
-        starts = [_p(e["start"]) for e in resp.data["events"]]
+        resp = self._get_agenda(start=now)
+        starts = self._starts(resp)
         self.assertEqual(starts, sorted(starts))
+        # Two rows at one instant keep the order of their creation.
+        self.assertEqual(
+            [e["title"] for e in resp.data][:6],
+            ["Daily", "N2", "Daily", "Daily", "N4", "Daily"],
+        )
 
     def test_all_day_event_sorts_with_timed_events(self):
         """An all-day event serializes its start as a bare date, which parses
@@ -378,17 +357,15 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
             end=day + timedelta(days=1),
             all_day=True,
         )
-        resp = self._get_cursor(after=now)
+        resp = self._get_agenda(start=now)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            [e["title"] for e in resp.data["events"]], ["Timed", "All day"]
-        )
+        self.assertEqual([e["title"] for e in resp.data], ["Timed", "All day"])
 
-    def test_cancelled_at_sentinel_position_preserves_next_after(self):
-        """Regression: if a cancelled exception falls at position limit+1
-        (the sentinel slot), `next_after` must still be set because the
-        series continues beyond. Naively over-fetching exactly `limit + 1`
-        and filtering would silently drop the cursor."""
+    def test_cancelled_at_sentinel_position_still_announces_a_next_page(self):
+        """Regression: if a cancelled occurrence falls at position limit+1
+        (the row read to know whether a page follows), `X-Has-More` must
+        still be true because the series continues beyond. Naively walking
+        exactly `limit + 1` slots and filtering would end the list there."""
         now = timezone.now().replace(microsecond=0)
         master = self._make_weekly(start=now - timedelta(days=365))
 
@@ -409,36 +386,29 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
             is_cancelled=True,
         )
 
-        resp = self._get_cursor(after=now)
-        self.assertEqual(len(resp.data["events"]), 20)
-        # next_after MUST NOT be None - the series continues
-        self.assertIsNotNone(
-            resp.data["next_after"],
-            msg="Cancelled exception at sentinel position silently truncated the cursor",
+        resp = self._get_agenda(start=now)
+        self.assertEqual(len(resp.data), 20)
+        self.assertEqual(
+            resp["X-Has-More"],
+            "true",
+            msg="A cancelled occurrence at the sentinel position ended the list",
         )
 
 
-class CursorModeFiltersTests(CursorModeMixin, APITestCase):
-    """Filter params: calendar_ids, show_declined. Plus access control."""
+class AgendaFiltersTests(AgendaMixin, APITestCase):
+    """Filter params: calendar, include_declined. Plus access control."""
 
-    def test_calendar_ids_filter_non_recurring(self):
+    def test_calendar_filter_non_recurring(self):
         now = timezone.now()
         cal2 = Calendar.objects.create(name="Other", owner=self.owner)
         self._make_event("InCal1", now + timedelta(days=1), calendar=self.cal)
         self._make_event("InCal2", now + timedelta(days=2), calendar=cal2)
 
-        resp = self.client.get(
-            self.url,
-            {
-                "after": self._iso(now),
-                "limit": 20,
-                "calendar_ids": str(self.cal.pk),
-            },
-        )
-        titles = [e["title"] for e in resp.data["events"]]
+        resp = self._get_agenda(start=now, calendar=str(self.cal.pk))
+        titles = [e["title"] for e in resp.data]
         self.assertEqual(titles, ["InCal1"])
 
-    def test_calendar_ids_filter_recurring(self):
+    def test_calendar_filter_recurring(self):
         """Recurring master on an excluded calendar → its occurrences do not
         leak into a filtered request."""
         now = timezone.now()
@@ -453,18 +423,11 @@ class CursorModeFiltersTests(CursorModeMixin, APITestCase):
         apply_rule(event, "RRULE:FREQ=WEEKLY")
         event.save()
 
-        resp = self.client.get(
-            self.url,
-            {
-                "after": self._iso(now),
-                "limit": 20,
-                "calendar_ids": str(self.cal.pk),  # NOT cal2
-            },
-        )
-        titles = [e["title"] for e in resp.data["events"]]
+        resp = self._get_agenda(start=now, calendar=str(self.cal.pk))
+        titles = [e["title"] for e in resp.data]
         self.assertNotIn("ExcludedWeekly", titles)
 
-    def test_calendar_ids_of_an_unseen_calendar_list_nothing(self):
+    def test_an_unseen_calendar_lists_nothing(self):
         now = timezone.now()
         foreign = Calendar.objects.create(name="Foreign", owner=self.other)
         Event.objects.create(
@@ -475,15 +438,34 @@ class CursorModeFiltersTests(CursorModeMixin, APITestCase):
             end=now + timedelta(days=1, hours=1),
         )
 
-        resp = self._get_cursor(after=now, calendar_ids=str(foreign.pk))
+        resp = self._get_agenda(start=now, calendar=str(foreign.pk))
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data["events"], [])
+        self.assertEqual(resp.data, [])
 
-    def test_malformed_calendar_ids_is_rejected(self):
-        resp = self._get_cursor(after=timezone.now(), calendar_ids="not-a-uuid")
+    def test_malformed_calendar_is_rejected(self):
+        resp = self._get_agenda(start=timezone.now(), calendar="not-a-uuid")
         self.assertEqual(resp.status_code, 400)
 
-    def test_show_declined_false_excludes_declined(self):
+    def test_invitations_are_listed_with_the_calendars_under_none(self):
+        """What the page asks for: the calendars ticked, and `none` for the
+        events one is only invited to, which sit in no calendar of theirs."""
+        now = timezone.now()
+        self._make_event("Mine", now + timedelta(days=1))
+        other_cal = Calendar.objects.create(name="Other", owner=self.other)
+        invited = Event.objects.create(
+            calendar=other_cal,
+            owner=self.other,
+            title="InvitedToThis",
+            start=now + timedelta(days=2),
+        )
+        EventMember.objects.create(event=invited, user=self.owner)
+
+        ticked = self._get_agenda(start=now, calendar=f"{self.cal.pk},none")
+        self.assertEqual([e["title"] for e in ticked.data], ["Mine", "InvitedToThis"])
+        alone = self._get_agenda(start=now, calendar=str(self.cal.pk))
+        self.assertEqual([e["title"] for e in alone.data], ["Mine"])
+
+    def test_declined_events_are_left_out_by_default(self):
         """An event where the user is a declined member is excluded by default."""
         now = timezone.now()
         other_cal = Calendar.objects.create(name="Other", owner=self.other)
@@ -500,11 +482,11 @@ class CursorModeFiltersTests(CursorModeMixin, APITestCase):
             status=EventMember.Status.DECLINED,
         )
 
-        resp = self._get_cursor(after=now)
-        titles = [e["title"] for e in resp.data["events"]]
+        resp = self._get_agenda(start=now)
+        titles = [e["title"] for e in resp.data]
         self.assertNotIn("InvitedToThis", titles)
 
-    def test_show_declined_true_includes_declined(self):
+    def test_include_declined_lists_them(self):
         now = timezone.now()
         other_cal = Calendar.objects.create(name="Other", owner=self.other)
         event = Event.objects.create(
@@ -520,20 +502,13 @@ class CursorModeFiltersTests(CursorModeMixin, APITestCase):
             status=EventMember.Status.DECLINED,
         )
 
-        resp = self.client.get(
-            self.url,
-            {
-                "after": self._iso(now),
-                "limit": 20,
-                "show_declined": "true",
-            },
-        )
-        titles = [e["title"] for e in resp.data["events"]]
+        resp = self._get_agenda(start=now, include_declined="true")
+        titles = [e["title"] for e in resp.data]
         self.assertIn("InvitedToThis", titles)
 
-    def test_show_declined_recurring(self):
-        """Recurring master the user has declined → occurrences filtered out
-        when show_declined=false."""
+    def test_declined_recurring(self):
+        """Recurring master the user has declined → occurrences left out
+        unless include_declined asks for them."""
         now = timezone.now()
         other_cal = Calendar.objects.create(name="Other", owner=self.other)
         master = Event(
@@ -551,8 +526,8 @@ class CursorModeFiltersTests(CursorModeMixin, APITestCase):
             status=EventMember.Status.DECLINED,
         )
 
-        resp = self._get_cursor(after=now)
-        titles = [e["title"] for e in resp.data["events"]]
+        resp = self._get_agenda(start=now)
+        titles = [e["title"] for e in resp.data]
         self.assertNotIn("DeclinedWeekly", titles)
 
     def test_access_control_other_users_events_not_visible(self):
@@ -568,65 +543,45 @@ class CursorModeFiltersTests(CursorModeMixin, APITestCase):
             end=now + timedelta(days=1, hours=1),
         )
 
-        resp = self._get_cursor(after=now)
-        titles = [e["title"] for e in resp.data["events"]]
+        resp = self._get_agenda(start=now)
+        titles = [e["title"] for e in resp.data]
         self.assertNotIn("BsPrivateEvent", titles)
 
 
-class CursorModeStabilityTests(CursorModeMixin, APITestCase):
-    def test_cursor_resumes_correctly_end_to_end(self):
-        """Create 30 events, paginate through all pages → union equals full set."""
+class AgendaPagingStabilityTests(AgendaMixin, APITestCase):
+    def _walk(self, start, limit):
+        """Every title the agenda serves, page after page, as served."""
+        titles = []
+        for number in range(40):
+            resp = self._get_agenda(start=start, limit=limit, offset=number * limit)
+            titles += [e["title"] for e in resp.data]
+            if resp["X-Has-More"] == "false":
+                return titles
+        self.fail(f"the pages never reached the end: {titles}")
+
+    def test_pages_cover_every_event_once_in_order(self):
         now = timezone.now()
         for i in range(30):
             self._make_event(f"E{i:02d}", now + timedelta(hours=i + 1))
 
-        all_titles = []
-        after = self._iso(now)
-        while True:
-            resp = self.client.get(self.url, {"after": after, "limit": 10})
-            all_titles.extend(e["title"] for e in resp.data["events"])
-            if resp.data["next_after"] is None:
-                break
-            after = resp.data["next_after"]
+        self.assertEqual(self._walk(now, 10), [f"E{i:02d}" for i in range(30)])
 
-        # Dedup (boundary events may appear twice; client must dedup by uuid).
-        # For this test, we use title uniqueness.
-        unique_titles = set(all_titles)
-        self.assertEqual(len(unique_titles), 30)
-        # Expected set
-        expected = {f"E{i:02d}" for i in range(30)}
-        self.assertEqual(unique_titles, expected)
-
-    def test_tied_events_beyond_a_page_are_reached_with_after_id(self):
-        """More events share one start than a page holds: next_after alone
-        would serve the same ones again, next_after_id moves past them."""
+    def test_tied_events_beyond_a_page_are_each_served_once(self):
+        """More events share one start than a page holds: the order needs a
+        tie-break that holds from one page to the next, or one of them would
+        be served twice and another never."""
         now = timezone.now().replace(microsecond=0)
         tied = now + timedelta(days=1)
         for title in ("A", "B", "C"):
             self._make_event(title, tied)
         self._make_event("D", tied + timedelta(hours=1))
 
-        titles, params = [], {"after": self._iso(now), "limit": 1}
-        for _ in range(10):
-            resp = self.client.get(self.url, params)
-            titles += [e["title"] for e in resp.data["events"]]
-            if resp.data["next_after"] is None:
-                break
-            params = {
-                "after": resp.data["next_after"],
-                "after_id": resp.data["next_after_id"],
-                "limit": 1,
-            }
+        titles = self._walk(now, 1)
 
         self.assertEqual(sorted(titles[:3]), ["A", "B", "C"])
         self.assertEqual(titles[3:], ["D"])
 
-    def test_malformed_after_id_is_rejected(self):
-        now = timezone.now()
-        resp = self._get_cursor(after=now, after_id="not-an-id")
-        self.assertEqual(resp.status_code, 400)
-
-    def test_cursor_tie_within_page(self):
+    def test_tie_within_page(self):
         """Three events sharing the same start → all appear in the same page."""
         now = timezone.now().replace(microsecond=0)
         tied = now + timedelta(days=1)
@@ -634,39 +589,25 @@ class CursorModeStabilityTests(CursorModeMixin, APITestCase):
         self._make_event("B", tied)
         self._make_event("C", tied)
 
-        resp = self._get_cursor(after=now)
-        titles = sorted(e["title"] for e in resp.data["events"])
+        resp = self._get_agenda(start=now)
+        titles = sorted(e["title"] for e in resp.data)
         self.assertEqual(titles, ["A", "B", "C"])
 
-    def test_cursor_tie_at_page_boundary(self):
-        """Events 20 and 21 share the same start. Page 1 returns 20 events.
-        Page 2 with after=<cursor> returns the boundary event (because >=),
-        so callers must dedup client-side. This test verifies the server
-        does not SILENTLY DROP the tied event."""
+    def test_tie_at_page_boundary(self):
+        """Events 20 and 21 share the same start: one closes the first page,
+        the other opens the second."""
         now = timezone.now().replace(microsecond=0)
         for i in range(19):
             self._make_event(f"E{i:02d}", now + timedelta(hours=i + 1))
-        # Two events share the same start (hour 20)
         tied = now + timedelta(hours=20)
         self._make_event("E19", tied)
         self._make_event("E20", tied)
 
-        resp1 = self._get_cursor(after=now)
-        self.assertEqual(len(resp1.data["events"]), 20)
-        self.assertIsNotNone(resp1.data["next_after"])
+        resp1 = self._get_agenda(start=now)
+        self.assertEqual(len(resp1.data), 20)
+        self.assertEqual(resp1["X-Has-More"], "true")
 
-        resp2 = self.client.get(
-            self.url,
-            {
-                "after": resp1.data["next_after"],
-                "limit": 20,
-            },
-        )
-        # Page 2 must include at least one event (the boundary tied one).
-        self.assertGreaterEqual(len(resp2.data["events"]), 1)
-        # The union of page 1 titles and page 2 titles (deduped) must contain
-        # all 21 distinct titles.
-        p1_titles = {e["title"] for e in resp1.data["events"]}
-        p2_titles = {e["title"] for e in resp2.data["events"]}
-        union = p1_titles | p2_titles
-        self.assertEqual(len(union), 21)
+        resp2 = self._get_agenda(start=now, offset=20)
+        self.assertEqual(len(resp2.data), 1)
+        titles = [e["title"] for e in [*resp1.data, *resp2.data]]
+        self.assertEqual(sorted(titles), [f"E{i:02d}" for i in range(21)])

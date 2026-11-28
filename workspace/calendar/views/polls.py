@@ -1,522 +1,196 @@
 import uuid
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db import transaction
-from django.db.models import Count, Prefetch, Q
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
+from django.http import Http404
 from django.utils.translation import gettext as _
-from django.utils.translation import pgettext
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import serializers, status
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.generics import (
+    GenericAPIView,
+    ListCreateAPIView,
+    RetrieveUpdateDestroyAPIView,
+)
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from workspace.common.client_address import client_address
+from workspace.common.exceptions import Conflict
 from workspace.common.uuids import parse_uuid_or_none
-from workspace.notifications.services.notifications import (
-    mark_source_read,
-)
-from workspace.users.queries import pickable_users
-from workspace.users.services.settings import get_setting
+from workspace.notifications.services.notifications import mark_source_read
 
-from ..models import Calendar, Event, EventMember, Poll, PollInvitee, PollSlot, PollVote
+from ..filters import PollFilter
+from ..models import Poll
 from ..serializers_polls import (
     GuestVoteSubmitSerializer,
-    PollCreateSerializer,
     PollFinalizeSerializer,
-    PollInviteSerializer,
-    PollListSerializer,
     PollSerializer,
-    PollUpdateSerializer,
+    PollWriteSerializer,
     PublicPollSerializer,
     VoteSubmitSerializer,
 )
-from ..services.notifications import notify_in_languages
+from ..services.polls import (
+    PollClosed,
+    attach_votes,
+    cast_votes,
+    create_poll,
+    detailed,
+    finalize_poll,
+    involving,
+    update_poll,
+    with_details,
+)
 
-User = get_user_model()
+
+def _closed():
+    return Conflict(_("This poll is closed."))
 
 
-def _poll_detail_queryset():
-    """Base queryset for poll detail views with all prefetches to avoid N+1."""
-    return Poll.objects.select_related("created_by").prefetch_related(
-        Prefetch(
-            "slots",
-            queryset=PollSlot.objects.annotate(
-                yes_count=Count("votes", filter=Q(votes__choice="yes")),
-                maybe_count=Count("votes", filter=Q(votes__choice="maybe")),
-            ).order_by("position", "start"),
+class PollRowsMixin:
+    """A poll, read by whoever holds its uuid - public to the instance by
+    design - and changed by its creator alone."""
+
+    queryset = Poll.objects.none()
+    serializer_class = PollSerializer
+    lookup_field = "uuid"
+
+    def get_queryset(self):
+        return with_details(Poll.objects.all())
+
+    def get_object(self):
+        try:
+            poll = super().get_object()
+        except Http404:
+            raise NotFound(_("Poll not found.")) from None
+        return attach_votes([poll])[0]
+
+    def own_poll(self):
+        poll = self.get_object()
+        if poll.created_by_id != self.request.user.id:
+            raise PermissionDenied(_("Only its creator can change a poll."))
+        return poll
+
+    def answer(self, poll, status_code=status.HTTP_200_OK):
+        return Response(self.get_serializer(detailed(poll)).data, status=status_code)
+
+
+@extend_schema(tags=["Calendar - Polls"])
+@extend_schema_view(
+    get=extend_schema(
+        summary="List the polls the caller created, was invited to or voted in",
+        description="Newest first.",
+    ),
+    post=extend_schema(
+        summary="Create a poll",
+        request=PollWriteSerializer,
+        responses={201: PollSerializer},
+    ),
+)
+class PollListView(PollRowsMixin, ListCreateAPIView):
+    filterset_class = PollFilter
+
+    def get_queryset(self):
+        return with_details(involving(self.request.user)).order_by(
+            "-created_at", "uuid"
+        )
+
+    def paginate_queryset(self, queryset):
+        return attach_votes(super().paginate_queryset(queryset))
+
+    def create(self, request, *args, **kwargs):
+        body = PollWriteSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        poll = create_poll(request.user, **body.validated_data)
+        return self.answer(poll, status.HTTP_201_CREATED)
+
+
+@extend_schema(tags=["Calendar - Polls"])
+@extend_schema_view(
+    get=extend_schema(summary="Get a poll"),
+    patch=extend_schema(
+        summary="Update a poll",
+        description=(
+            "Its creator only. The invitees of a poll that chose its time "
+            "cannot change anymore."
         ),
-        "invitees__user",
-    )
+        request=PollWriteSerializer,
+    ),
+    delete=extend_schema(summary="Delete a poll"),
+)
+class PollDetailView(PollRowsMixin, RetrieveUpdateDestroyAPIView):
+    http_method_names = ["get", "patch", "delete", "head", "options"]
 
-
-def _lock_open_poll(poll):
-    """Lock *poll*'s row for the rest of the transaction, 404 once it closed.
-
-    Votes are written under this lock, so a finalize either waits for them
-    or has already closed the poll and the vote is refused like any vote on a
-    closed poll.
-    """
-    return get_object_or_404(
-        Poll.objects.select_for_update(), pk=poll.pk, status=Poll.Status.OPEN
-    )
-
-
-def _live_slot_ids(poll, slot_ids):
-    """The ids among *slot_ids* that are slots of *poll*.
-
-    Read under the poll lock: the poll edit writes the poll row before it
-    deletes slots, so a slot it removed is already gone here and is skipped
-    like an unknown one instead of failing the vote on its foreign key.
-    """
-    return set(poll.slots.filter(uuid__in=slot_ids).values_list("uuid", flat=True))
-
-
-def _prefetch_poll_votes(poll):
-    """Prefetch all votes for a poll and attach them to the poll object."""
-    poll._prefetched_poll_votes = list(
-        PollVote.objects.filter(slot__poll=poll).select_related("user")
-    )
-    return poll
-
-
-@extend_schema(tags=["Calendar - Polls"])
-class PollListView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        summary="List polls",
-        parameters=[
-            {
-                "name": "filter",
-                "in": "query",
-                "schema": {"type": "string", "enum": ["mine", "shared"]},
-            },
-            {
-                "name": "status",
-                "in": "query",
-                "schema": {"type": "string", "enum": ["open", "closed", "all"]},
-            },
-        ],
-        responses=PollListSerializer(many=True),
-    )
-    def get(self, request):
-        filter_by = request.query_params.get("filter", "mine")
-        status_by = request.query_params.get("status", "open")
-
-        if filter_by == "shared":
-            voted_poll_ids = (
-                PollVote.objects.filter(user=request.user)
-                .values_list("slot__poll_id", flat=True)
-                .distinct()
-            )
-            invited_poll_ids = PollInvitee.objects.filter(
-                user=request.user
-            ).values_list("poll_id", flat=True)
-            polls = Poll.objects.filter(
-                Q(uuid__in=voted_poll_ids) | Q(uuid__in=invited_poll_ids)
-            ).exclude(created_by=request.user)
-        else:
-            polls = Poll.objects.filter(created_by=request.user)
-
-        if status_by != "all":
-            polls = polls.filter(status=status_by)
-
-        polls = polls.select_related("created_by").annotate(
-            _participant_count=Count(
-                "slots__votes__user",
-                distinct=True,
-            )
-            + Count(
-                "slots__votes__voter_token",
-                distinct=True,
-                filter=Q(slots__votes__user__isnull=True)
-                & ~Q(slots__votes__voter_token=""),
-            ),
-        )
-
-        return Response(PollListSerializer(polls, many=True).data)
-
-    @extend_schema(
-        summary="Create a poll", request=PollCreateSerializer, responses=PollSerializer
-    )
-    @transaction.atomic
-    def post(self, request):
-        ser = PollCreateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        d = ser.validated_data
-
-        poll = Poll.objects.create(
-            title=d["title"],
-            description=d["description"],
-            created_by=request.user,
-        )
-
-        sorted_slots = sorted(d["slots"], key=lambda s: s["start"])
-        for i, slot_data in enumerate(sorted_slots):
-            PollSlot.objects.create(
-                poll=poll,
-                start=slot_data["start"],
-                end=slot_data.get("end"),
-                position=i,
-            )
-
-        poll = _poll_detail_queryset().get(uuid=poll.uuid)
-        _prefetch_poll_votes(poll)
-        return Response(
-            PollSerializer(poll, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
-
-
-@extend_schema(tags=["Calendar - Polls"])
-class PollDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def _get_poll(self, poll_id, user):
-        return get_object_or_404(_poll_detail_queryset(), uuid=poll_id, created_by=user)
-
-    @extend_schema(summary="Get poll detail", responses=PollSerializer)
-    def get(self, request, poll_id):
-        # Public to the instance by design: whoever holds the link reads the poll.
-        poll = get_object_or_404(_poll_detail_queryset(), uuid=poll_id)
-
+    def retrieve(self, request, *args, **kwargs):
+        poll = self.get_object()
         mark_source_read(request.user, poll)
+        return Response(self.get_serializer(poll).data)
 
-        _prefetch_poll_votes(poll)
-        return Response(PollSerializer(poll, context={"request": request}).data)
+    def update(self, request, *args, **kwargs):
+        poll = self.own_poll()
+        body = PollWriteSerializer(data=request.data, partial=True)
+        body.is_valid(raise_exception=True)
+        try:
+            update_poll(poll, request.user, body.validated_data)
+        except PollClosed:
+            raise _closed() from None
+        return self.answer(poll)
 
-    @extend_schema(
-        summary="Update poll", request=PollUpdateSerializer, responses=PollSerializer
-    )
-    @transaction.atomic
-    def patch(self, request, poll_id):
-        poll = self._get_poll(poll_id, request.user)
-        ser = PollUpdateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-
-        d = ser.validated_data
-        for field in ("title", "description"):
-            if field in d:
-                setattr(poll, field, d[field])
-        poll.save(update_fields=["title", "description", "updated_at"])
-
-        if "slots" in d:
-            submitted_uuids = {
-                slot_data["uuid"] for slot_data in d["slots"] if slot_data.get("uuid")
-            }
-            existing = {s.uuid: s for s in poll.slots.all()}
-
-            # Delete removed slots (cascade deletes their votes, so read
-            # who voted on them first)
-            removed_uuids = set(existing) - submitted_uuids
-            voter_ids = []
-            if removed_uuids:
-                voter_ids = list(
-                    PollVote.objects.filter(
-                        slot__uuid__in=removed_uuids, user__isnull=False
-                    )
-                    .exclude(user=request.user)
-                    .values_list("user_id", flat=True)
-                    .distinct()
-                )
-                PollSlot.objects.filter(uuid__in=removed_uuids).delete()
-
-            # Update kept slots + create new ones (sorted by date)
-            sorted_slots = sorted(d["slots"], key=lambda s: s["start"])
-            for i, slot_data in enumerate(sorted_slots):
-                slot_uuid = slot_data.get("uuid")
-                if slot_uuid and slot_uuid in existing:
-                    slot = existing[slot_uuid]
-                    slot.start = slot_data["start"]
-                    slot.end = slot_data.get("end")
-                    slot.position = i
-                    slot.save(update_fields=["start", "end", "position"])
-                else:
-                    PollSlot.objects.create(
-                        poll=poll,
-                        start=slot_data["start"],
-                        end=slot_data.get("end"),
-                        position=i,
-                    )
-
-            if voter_ids:
-                voters = list(User.objects.filter(id__in=voter_ids))
-                if voters:
-                    notify_in_languages(
-                        recipients=voters,
-                        message=lambda: (
-                            _('Poll updated: "%(title)s"') % {"title": poll.title},
-                            _(
-                                "Time slots have been updated. Please review your votes."
-                            ),
-                        ),
-                        url=f"/calendar?poll={poll.pk}",
-                        actor=request.user,
-                        source=poll,
-                    )
-
-        poll = _poll_detail_queryset().get(uuid=poll.uuid)
-        _prefetch_poll_votes(poll)
-        return Response(PollSerializer(poll, context={"request": request}).data)
-
-    @extend_schema(summary="Delete poll")
-    def delete(self, request, poll_id):
-        poll = self._get_poll(poll_id, request.user)
-        poll.delete()
+    def destroy(self, request, *args, **kwargs):
+        self.own_poll().delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(tags=["Calendar - Polls"])
-class PollVoteView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class PollVoteView(PollRowsMixin, GenericAPIView):
     @extend_schema(
-        summary="Submit votes", request=VoteSubmitSerializer, responses=PollSerializer
+        summary="Vote on the times of a poll",
+        description=(
+            "Each vote replaces the one the caller gave that slot before. "
+            "Answers the poll."
+        ),
+        request=VoteSubmitSerializer,
+        responses=PollSerializer,
     )
-    def post(self, request, poll_id):
-        # Public to the instance by design: whoever holds the link votes.
-        poll = get_object_or_404(Poll, uuid=poll_id, status=Poll.Status.OPEN)
-        ser = VoteSubmitSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-
-        slot_ids = {v["slot_id"] for v in ser.validated_data["votes"]}
-
-        with transaction.atomic():
-            _lock_open_poll(poll)
-            valid_slots = _live_slot_ids(poll, slot_ids)
-            for vote_data in ser.validated_data["votes"]:
-                if vote_data["slot_id"] not in valid_slots:
-                    continue
-                PollVote.objects.update_or_create(
-                    slot_id=vote_data["slot_id"],
-                    user=request.user,
-                    defaults={"choice": vote_data["choice"]},
-                )
-
-        # Notify poll creator about the vote
-        if poll.created_by_id != request.user.id:
-            creator_prefs = get_setting(
-                poll.created_by, "calendar", "preferences", default={}
-            )
-            if creator_prefs.get("notifyPollVotes", True):
-                notify_in_languages(
-                    recipients=[poll.created_by],
-                    message=lambda: (
-                        _('New vote on "%(title)s"') % {"title": poll.title},
-                        _("%(user)s voted on your poll.")
-                        % {"user": request.user.username},
-                    ),
-                    url=f"/calendar?poll={poll.pk}",
-                    actor=request.user,
-                    source=poll,
-                )
-
+    def post(self, request, *args, **kwargs):
+        poll = self.get_object()
+        body = VoteSubmitSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        try:
+            cast_votes(poll, body.validated_data["votes"], user=request.user)
+        except PollClosed:
+            raise _closed() from None
         mark_source_read(request.user, poll)
-
-        poll = _poll_detail_queryset().get(uuid=poll.uuid)
-        _prefetch_poll_votes(poll)
-        return Response(PollSerializer(poll, context={"request": request}).data)
+        return self.answer(poll)
 
 
 @extend_schema(tags=["Calendar - Polls"])
-class PollFinalizeView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class PollFinalizeView(PollRowsMixin, GenericAPIView):
     @extend_schema(
-        summary="Finalize poll",
+        summary="Choose a time: close the poll and create its event",
+        description="Answers the poll, which now names its `event`.",
         request=PollFinalizeSerializer,
         responses=PollSerializer,
     )
-    @transaction.atomic
-    def post(self, request, poll_id):
-        open_poll = Poll.objects.filter(
-            uuid=poll_id, created_by=request.user, status=Poll.Status.OPEN
-        )
-        poll = get_object_or_404(open_poll)
-        # Note: we don't use _poll_detail_queryset() here because we modify the poll
-        # and re-fetch at the end
-        ser = PollFinalizeSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-
-        slot = get_object_or_404(
-            PollSlot, uuid=ser.validated_data["slot_id"], poll=poll
-        )
-
-        # The transition is the guard: of two concurrent finalizes only one
-        # closes the poll, and the other answers exactly like a finalize that
-        # found it closed instead of creating a second event.
-        closed = open_poll.update(
-            status=Poll.Status.CLOSED, chosen_slot=slot, updated_at=timezone.now()
-        )
-        if not closed:
-            get_object_or_404(open_poll.none())
-
-        # The event lands in a calendar its owner can edit: never one an
-        # external feed or a mail account writes into, whose next sync owns it.
-        calendar = (
-            Calendar.objects.filter(
-                owner=request.user,
-                external_source__isnull=True,
-                mail_account__isnull=True,
-            )
-            .order_by("name")
-            .first()
-        )
-        if not calendar:
-            calendar = Calendar.objects.create(
-                owner=request.user,
-                name=pgettext("default calendar name", "Personal"),
-                color="primary",
-            )
-
-        event = Event.objects.create(
-            calendar=calendar,
-            title=poll.title,
-            description=poll.description,
-            start=slot.start,
-            end=slot.end,
-            owner=request.user,
-        )
-
-        # Add members from yes/maybe votes (authenticated users only)
-        voter_ids = list(
-            PollVote.objects.filter(
-                slot=slot, choice__in=["yes", "maybe"], user__isnull=False
-            )
-            .exclude(user=request.user)
-            .values_list("user_id", flat=True)
-            .distinct()
-        )
-        EventMember.objects.bulk_create(
-            [
-                EventMember(
-                    event=event, user_id=uid, status=EventMember.Status.ACCEPTED
-                )
-                for uid in voter_ids
+    def post(self, request, *args, **kwargs):
+        poll = self.own_poll()
+        body = PollFinalizeSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        chosen = body.validated_data["slot"]
+        slot = next((slot for slot in poll.slots.all() if slot.uuid == chosen), None)
+        if slot is None:
+            unknown = serializers.PrimaryKeyRelatedField.default_error_messages[
+                "does_not_exist"
             ]
-        )
-
-        Poll.objects.filter(pk=poll.pk).update(event=event)
-
-        # Notify invitees about finalization. Only yes/maybe voters became
-        # EventMembers; the rest cannot open the event, so their notification
-        # is keyed on (and links to) the poll they can still access.
-        member_ids = set(voter_ids)
-        invitee_users = list(
-            User.objects.filter(poll_invitations__poll=poll).exclude(id=request.user.id)
-        )
-        attendees = [u for u in invitee_users if u.id in member_ids]
-        non_attendees = [u for u in invitee_users if u.id not in member_ids]
-
-        def finalized_message():
-            return (
-                _('Poll finalized: "%(title)s"') % {"title": poll.title},
-                _("A date has been chosen."),
-            )
-
-        if attendees:
-            notify_in_languages(
-                recipients=attendees,
-                message=finalized_message,
-                url=f"/calendar?event={event.pk}",
-                actor=request.user,
-                source=event,
-            )
-        if non_attendees:
-            notify_in_languages(
-                recipients=non_attendees,
-                message=finalized_message,
-                url=f"/calendar?poll={poll.pk}",
-                actor=request.user,
-                source=poll,
-            )
-
-        poll = _poll_detail_queryset().get(uuid=poll.uuid)
-        _prefetch_poll_votes(poll)
-        return Response(PollSerializer(poll, context={"request": request}).data)
+            raise ValidationError({"slot": [unknown.format(pk_value=chosen)]})
+        try:
+            finalize_poll(poll, request.user, slot)
+        except PollClosed:
+            raise _closed() from None
+        return self.answer(poll)
 
 
-@extend_schema(tags=["Calendar - Polls"])
-class PollInviteView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        summary="Invite users to a poll",
-        request=PollInviteSerializer,
-        responses=PollSerializer,
-    )
-    @transaction.atomic
-    def post(self, request, poll_id):
-        poll = get_object_or_404(
-            Poll,
-            uuid=poll_id,
-            created_by=request.user,
-            status=Poll.Status.OPEN,
-        )
-        ser = PollInviteSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-
-        user_ids = ser.validated_data["user_ids"]
-        newly_invited = list(
-            pickable_users()
-            .filter(id__in=user_ids)
-            .exclude(id=request.user.id)
-            .exclude(poll_invitations__poll=poll)
-        )
-        PollInvitee.objects.bulk_create(
-            [PollInvitee(poll=poll, user=user) for user in newly_invited],
-            ignore_conflicts=True,
-        )
-
-        if newly_invited:
-            notify_in_languages(
-                recipients=newly_invited,
-                message=lambda: (
-                    _('Poll invitation: "%(title)s"') % {"title": poll.title},
-                    _("%(user)s invited you to vote on a poll.")
-                    % {"user": request.user.username},
-                ),
-                url=f"/calendar?poll={poll.pk}",
-                actor=request.user,
-                source=poll,
-            )
-
-        poll = _poll_detail_queryset().get(uuid=poll.uuid)
-        _prefetch_poll_votes(poll)
-        return Response(PollSerializer(poll, context={"request": request}).data)
-
-    @extend_schema(
-        summary="Remove invited users from a poll",
-        request=PollInviteSerializer,
-        responses=PollSerializer,
-    )
-    @transaction.atomic
-    def delete(self, request, poll_id):
-        poll = get_object_or_404(
-            Poll,
-            uuid=poll_id,
-            created_by=request.user,
-            status=Poll.Status.OPEN,
-        )
-        ser = PollInviteSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-
-        user_ids = ser.validated_data["user_ids"]
-
-        PollInvitee.objects.filter(poll=poll, user_id__in=user_ids).delete()
-        PollVote.objects.filter(slot__poll=poll, user_id__in=user_ids).delete()
-
-        poll = _poll_detail_queryset().get(uuid=poll.uuid)
-        _prefetch_poll_votes(poll)
-        return Response(PollSerializer(poll, context={"request": request}).data)
-
-
-# -- Public (shared link) views --
+# -- The share link: people without an account --
 
 
 def _voter_cookie_name(poll):
@@ -534,49 +208,53 @@ def _guest_voter_token(request, poll):
     return str(voter_token) if voter_token else ""
 
 
-def _shared_poll_payload(poll, voter_token):
-    _prefetch_poll_votes(poll)
-    data = PublicPollSerializer(poll, context={"voter_token": voter_token}).data
-    if voter_token:
-        my_votes = [
-            v
-            for v in poll._prefetched_poll_votes
-            if v.user_id is None and v.voter_token == voter_token
-        ]
-        data["my_votes"] = {str(v.slot_id): v.choice for v in my_votes}
-        if my_votes:
-            data["my_guest_name"] = my_votes[0].guest_name
-            data["my_guest_email"] = my_votes[0].guest_email
-    return data
+class SharedPollMixin:
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    queryset = Poll.objects.none()
+    serializer_class = PublicPollSerializer
+
+    def shared_poll(self):
+        poll = (
+            with_details(Poll.objects.all())
+            .filter(share_token=self.kwargs["token"])
+            .first()
+        )
+        if poll is None:
+            raise NotFound(_("Poll not found."))
+        return poll
+
+    def answer(self, poll, voter_token):
+        context = {**self.get_serializer_context(), "voter_token": voter_token}
+        return Response(PublicPollSerializer(detailed(poll), context=context).data)
 
 
 @extend_schema(tags=["Calendar - Polls (Public)"])
-class SharedPollView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    @extend_schema(summary="Get poll via share link", responses=PublicPollSerializer)
-    def get(self, request, token):
-        poll = get_object_or_404(_poll_detail_queryset(), share_token=token)
-        voter_token = _guest_voter_token(request, poll)
-        return Response(_shared_poll_payload(poll, voter_token))
+class SharedPollView(SharedPollMixin, GenericAPIView):
+    @extend_schema(summary="Get a poll through its share link")
+    def get(self, request, *args, **kwargs):
+        poll = self.shared_poll()
+        return self.answer(poll, _guest_voter_token(request, poll))
 
 
 @extend_schema(tags=["Calendar - Polls (Public)"])
-class SharedPollVoteView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
+class SharedPollVoteView(SharedPollMixin, GenericAPIView):
     @extend_schema(
-        summary="Submit guest votes",
+        summary="Vote as a guest of the share link",
+        description=(
+            "The browser is handed a cookie that stands for the guest: "
+            "voting again from it replaces their votes."
+        ),
         request=GuestVoteSubmitSerializer,
         responses=PublicPollSerializer,
     )
-    def post(self, request, token):
-        poll = get_object_or_404(Poll, share_token=token, status=Poll.Status.OPEN)
+    def post(self, request, *args, **kwargs):
+        poll = self.shared_poll()
+        if poll.status != Poll.Status.OPEN:
+            raise _closed()
 
         # Rate limit: max 10 vote submissions per IP per hour
-        rate_key = f"poll_vote_rate:{token}:{client_address(request)}"
+        rate_key = f"poll_vote_rate:{poll.share_token}:{client_address(request)}"
         attempts = cache.get(rate_key, 0)
         if attempts >= 10:
             return Response(
@@ -585,53 +263,21 @@ class SharedPollVoteView(APIView):
             )
         cache.set(rate_key, attempts + 1, 3600)
 
-        ser = GuestVoteSubmitSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        d = ser.validated_data
-
+        body = GuestVoteSubmitSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
         voter_token = _guest_voter_token(request, poll) or str(uuid.uuid4())
-
-        slot_ids = {v["slot_id"] for v in d["votes"]}
-
-        with transaction.atomic():
-            _lock_open_poll(poll)
-            valid_slots = _live_slot_ids(poll, slot_ids)
-            for vote_data in d["votes"]:
-                if vote_data["slot_id"] not in valid_slots:
-                    continue
-                PollVote.objects.update_or_create(
-                    slot_id=vote_data["slot_id"],
-                    user=None,
-                    voter_token=voter_token,
-                    defaults={
-                        "choice": vote_data["choice"],
-                        "guest_name": d["guest_name"],
-                        "guest_email": d.get("guest_email", ""),
-                    },
-                )
-
-        # Notify poll creator about the guest vote
-        creator_prefs = get_setting(
-            poll.created_by, "calendar", "preferences", default={}
-        )
-        if creator_prefs.get("notifyPollVotes", True):
-
-            def guest_vote_message():
-                if d["guest_name"]:
-                    body = _("%(user)s voted on your poll.") % {"user": d["guest_name"]}
-                else:
-                    body = _("A guest voted on your poll.")
-                return _('New vote on "%(title)s"') % {"title": poll.title}, body
-
-            notify_in_languages(
-                recipients=[poll.created_by],
-                message=guest_vote_message,
-                url=f"/calendar?poll={poll.pk}",
-                source=poll,
+        try:
+            cast_votes(
+                poll,
+                body.validated_data["votes"],
+                voter_token=voter_token,
+                guest_name=body.validated_data["guest_name"],
+                guest_email=body.validated_data["guest_email"],
             )
+        except PollClosed:
+            raise _closed() from None
 
-        poll = _poll_detail_queryset().get(uuid=poll.uuid)
-        response = Response(_shared_poll_payload(poll, voter_token))
+        response = self.answer(poll, voter_token)
         response.set_cookie(
             _voter_cookie_name(poll),
             voter_token,

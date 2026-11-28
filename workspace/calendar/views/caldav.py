@@ -26,7 +26,6 @@ from django.http import HttpResponse, HttpResponsePermanentRedirect
 from django.urls import get_script_prefix
 from django.views.decorators.csrf import csrf_exempt
 
-from workspace.common.cache import invalidate
 from workspace.common.dav.properties import (
     PropertySet,
     failed_dependency,
@@ -467,7 +466,6 @@ class CalendarCollectionView(_CalDavView):
             setattr(calendar, key, value)
         if updates:
             calendar.save(update_fields=[*updates, "updated_at"])
-            invalidate("CalendarListView", user=request.user)
         multistatus.add_propstat(
             _calendar_path(username, calendar),
             found=[element(tags[key]) for key in updates],

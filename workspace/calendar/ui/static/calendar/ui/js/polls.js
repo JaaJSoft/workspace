@@ -15,8 +15,8 @@ window.pollUtils = {
   },
 
   chosenSlot(poll) {
-    if (!poll?.chosen_slot_id) return null;
-    return poll.slots.find(s => s.uuid === poll.chosen_slot_id) || null;
+    if (!poll?.chosen_slot) return null;
+    return poll.slots.find(s => s.uuid === poll.chosen_slot) || null;
   },
 
   // Every voter counts once, the visitor's own saved votes included: those are
@@ -35,7 +35,7 @@ window.pollUtils = {
   },
 
   isChosenSlot(poll, slotUuid) {
-    return poll?.status === 'closed' && poll?.chosen_slot_id === slotUuid;
+    return poll?.status === 'closed' && poll?.chosen_slot === slotUuid;
   },
 
   // The standalone guest page loads no localtime.js, so getUserLocale() may

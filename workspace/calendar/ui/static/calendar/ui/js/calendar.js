@@ -1,6 +1,7 @@
 window.calendarApp = function calendarApp() {
-  // Read server-rendered calendars from <script id="calendars-data" type="application/json">.
-  let calendarsData = { owned: [], subscribed: [] };
+  // The calendars the viewer can see, as GET /api/v1/calendars lists them,
+  // read from <script id="calendars-data" type="application/json">.
+  let calendarsData = [];
   const calsEl = document.getElementById('calendars-data');
   if (calsEl) {
     try { calendarsData = JSON.parse(calsEl.textContent); } catch (e) {}
@@ -21,8 +22,10 @@ window.calendarApp = function calendarApp() {
 
     // Sidebar
     ...window.sidebarPreference.drawerMixin('calendar'),
-    ownedCalendars: calendarsData?.owned || [],
-    subscribedCalendars: calendarsData?.subscribed || [],
+    // An external calendar is one of the viewer's, listed apart: its feed
+    // fills it, so nobody writes an event into it.
+    ownedCalendars: calendarsData.filter(c => c.is_owned && !c.is_external),
+    subscribedCalendars: calendarsData.filter(c => !c.is_owned),
     visibleCalendars: {},  // { uuid: true } for reactive tracking
 
     // Calendar form state
@@ -34,7 +37,7 @@ window.calendarApp = function calendarApp() {
     calendarFeed: { loading: false, busy: false, url: null },
 
     // External calendars
-    externalCalendars: [],
+    externalCalendars: calendarsData.filter(c => c.is_owned && c.is_external),
     showExternalModal: false,
     externalForm: { name: '', url: '', color: 'primary' },
     savingExternal: false,
@@ -106,8 +109,11 @@ window.calendarApp = function calendarApp() {
     // Agenda view state (custom list view, not FullCalendar)
     agenda: {
       events: [],
-      nextAfter: null,
-      nextAfterId: null,
+      // The instant the list was opened at, and how many rows were read
+      // from it: every page counts its offset from that same instant.
+      start: null,
+      offset: 0,
+      hasMore: false,
       loading: false,
       // A stream reconnection reloading the list in place (refreshAgenda).
       refreshing: false,
@@ -164,9 +170,6 @@ window.calendarApp = function calendarApp() {
           }
         } catch (e) {}
       }
-
-      // Load external calendars
-      this._loadExternalCalendars();
 
       window.matchMedia('(max-width: 1023px)').addEventListener('change', () => {
         if (this.calendar) this.$nextTick(() => this.calendar.updateSize());

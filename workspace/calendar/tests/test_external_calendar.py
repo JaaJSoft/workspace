@@ -9,7 +9,6 @@ from rest_framework.test import APITestCase
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.models_external import ExternalCalendar
 from workspace.calendar.recurrence import occurrences_in_range
-from workspace.calendar.serializers_external import ExternalCalendarUpdateSerializer
 from workspace.calendar.services.ics_sync import sync_external_calendar
 from workspace.common.task_priority import INTERACTIVE_PRIORITY
 from workspace.common.tests.network import FakeNetwork, http_response
@@ -698,50 +697,42 @@ class SyncTaskTests(TestCase):
 
 
 class ExternalCalendarAPITests(APITestCase):
+    """Creating a calendar with a feed sends its first sync. What the API
+    answers about an external calendar is in ``test_calendars_api``."""
+
     def setUp(self):
         self.user = User.objects.create_user(
             username="api_user",
             email="api@test.com",
             password="pass123",
         )
-        self.other = User.objects.create_user(
-            username="other",
-            email="other@test.com",
-            password="pass123",
-        )
-        self.url = "/api/v1/external-calendars"
+        self.url = "/api/v1/calendars"
 
-    def test_unauthenticated_rejected(self):
-        resp = self.client.get(self.url)
-        self.assertEqual(resp.status_code, http_status.HTTP_403_FORBIDDEN)
-
-    @patch("workspace.calendar.views.external.sync_external_calendar_task")
-    def test_create_external_calendar(self, mock_task):
-
+    @patch("workspace.calendar.services.calendars.sync_external_calendar_task")
+    def test_the_first_sync_is_sent_once_the_calendar_is_committed(self, mock_task):
         self.client.force_authenticate(self.user)
         with self.captureOnCommitCallbacks() as callbacks:
             resp = self.client.post(
                 self.url,
                 {
-                    "url": "https://example.com/feed.ics",
+                    "source_url": "https://example.com/feed.ics",
                     "name": "My External",
                     "color": "blue",
                 },
             )
-        # The first sync is sent once the calendar is committed, not before.
+        # A worker starting before the commit would find no such calendar.
         mock_task.apply_async.assert_not_called()
         for callback in callbacks:
             callback()
         self.assertEqual(resp.status_code, http_status.HTTP_201_CREATED)
         self.assertEqual(resp.data["name"], "My External")
         self.assertTrue(resp.data["is_external"])
-        self.assertIn("external_source", resp.data)
         ext = ExternalCalendar.objects.get(calendar__owner=self.user)
         mock_task.apply_async.assert_called_once_with(
             [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
         )
 
-    @patch("workspace.calendar.views.external.sync_external_calendar_task")
+    @patch("workspace.calendar.services.calendars.sync_external_calendar_task")
     def test_create_survives_a_first_sync_that_cannot_be_sent(self, mock_task):
         mock_task.apply_async.side_effect = RuntimeError("broker down")
         self.client.force_authenticate(self.user)
@@ -750,7 +741,7 @@ class ExternalCalendarAPITests(APITestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 resp = self.client.post(
                     self.url,
-                    {"url": "https://example.com/feed.ics", "name": "Feed"},
+                    {"source_url": "https://example.com/feed.ics", "name": "Feed"},
                 )
 
         self.assertEqual(resp.status_code, http_status.HTTP_201_CREATED)
@@ -758,88 +749,15 @@ class ExternalCalendarAPITests(APITestCase):
             ExternalCalendar.objects.filter(calendar__owner=self.user).exists()
         )
 
-    def test_list_external_calendars(self):
-        cal = Calendar.objects.create(name="Ext1", owner=self.user)
-        ExternalCalendar.objects.create(calendar=cal, url="https://example.com/1.ics")
-        cal2 = Calendar.objects.create(name="Ext2", owner=self.other)
-        ExternalCalendar.objects.create(calendar=cal2, url="https://example.com/2.ics")
-
-        self.client.force_authenticate(self.user)
-        resp = self.client.get(self.url)
-        self.assertEqual(resp.status_code, http_status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 1)
-        self.assertEqual(resp.data[0]["name"], "Ext1")
-
-    def test_update_external_calendar(self):
-        cal = Calendar.objects.create(name="Old Name", owner=self.user)
-        ext = ExternalCalendar.objects.create(
-            calendar=cal, url="https://example.com/1.ics"
-        )
-
-        self.client.force_authenticate(self.user)
-        resp = self.client.put(
-            f"{self.url}/{ext.uuid}",
-            {"name": "New Name", "color": "red"},
-        )
-        self.assertEqual(resp.status_code, http_status.HTTP_200_OK)
-        cal.refresh_from_db()
-        self.assertEqual(cal.name, "New Name")
-        self.assertEqual(cal.color, "red")
-
-    def test_a_rename_keeps_a_sync_revision_bumped_meanwhile(self):
-        cal = Calendar.objects.create(name="Old Name", owner=self.user)
-        ext = ExternalCalendar.objects.create(
-            calendar=cal, url="https://example.com/1.ics"
-        )
-        validate = ExternalCalendarUpdateSerializer.is_valid
-
-        def sync_ran_meanwhile(serializer, *args, **kwargs):
-            Calendar.objects.filter(pk=cal.pk).update(sync_revision=7)
-            return validate(serializer, *args, **kwargs)
-
-        self.client.force_authenticate(self.user)
-        with patch.object(
-            ExternalCalendarUpdateSerializer,
-            "is_valid",
-            autospec=True,
-            side_effect=sync_ran_meanwhile,
-        ):
-            resp = self.client.put(f"{self.url}/{ext.uuid}", {"name": "New Name"})
-        self.assertEqual(resp.status_code, http_status.HTTP_200_OK)
-        cal.refresh_from_db()
-        self.assertEqual(cal.name, "New Name")
-        self.assertEqual(cal.sync_revision, 7)
-
-    def test_delete_external_calendar(self):
-        cal = Calendar.objects.create(name="ToDelete", owner=self.user)
-        ext = ExternalCalendar.objects.create(
-            calendar=cal, url="https://example.com/del.ics"
-        )
-
-        self.client.force_authenticate(self.user)
-        resp = self.client.delete(f"{self.url}/{ext.uuid}")
-        self.assertEqual(resp.status_code, http_status.HTTP_204_NO_CONTENT)
-        self.assertFalse(Calendar.objects.filter(pk=cal.pk).exists())
-
-    def test_cannot_access_others_external_calendar(self):
-        cal = Calendar.objects.create(name="Private", owner=self.other)
-        ext = ExternalCalendar.objects.create(
-            calendar=cal, url="https://example.com/priv.ics"
-        )
-
-        self.client.force_authenticate(self.user)
-        resp = self.client.put(f"{self.url}/{ext.uuid}", {"name": "Hacked"})
-        self.assertEqual(resp.status_code, http_status.HTTP_404_NOT_FOUND)
-
-    @patch("workspace.calendar.views.external.sync_external_calendar_task")
-    def test_manual_sync(self, mock_task):
+    @patch("workspace.calendar.services.calendars.sync_external_calendar_task")
+    def test_a_manual_sync_jumps_the_queue(self, mock_task):
         cal = Calendar.objects.create(name="SyncMe", owner=self.user)
         ext = ExternalCalendar.objects.create(
             calendar=cal, url="https://example.com/sync.ics"
         )
 
         self.client.force_authenticate(self.user)
-        resp = self.client.post(f"{self.url}/{ext.uuid}/sync")
+        resp = self.client.post(f"{self.url}/{cal.uuid}/sync")
         self.assertEqual(resp.status_code, http_status.HTTP_202_ACCEPTED)
         mock_task.apply_async.assert_called_once_with(
             [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
@@ -1028,10 +946,11 @@ class FeedSubscriptionUrlTests(APITestCase):
         ):
             with self.subTest(url=url):
                 resp = self.client.post(
-                    "/api/v1/external-calendars",
-                    {"url": url, "name": "Internal"},
+                    "/api/v1/calendars",
+                    {"source_url": url, "name": "Internal"},
                     format="json",
                 )
                 self.assertEqual(resp.status_code, 400)
-                self.assertIn("url", resp.json())
+                self.assertIn("source_url", resp.json())
         self.assertFalse(ExternalCalendar.objects.exists())
+        self.assertFalse(Calendar.objects.exists())

@@ -78,11 +78,11 @@ class EventNotificationLanguageTests(CalendarTestMixin, APITestCase):
         response = self.client.post(
             "/api/v1/events",
             {
-                "calendar_id": str(self.calendar.uuid),
+                "calendar": str(self.calendar.uuid),
                 "title": "Planning",
                 "start": start.isoformat(),
                 "end": (start + timedelta(hours=1)).isoformat(),
-                "member_ids": [self.member.id, self.outsider.id],
+                "members": [self.member.id, self.outsider.id],
             },
             format="json",
         )
@@ -101,12 +101,12 @@ class EventNotificationLanguageTests(CalendarTestMixin, APITestCase):
     def test_answer_reaches_the_organiser_in_their_language(self):
         set_setting(self.owner, "core", "language", "fr")
         self.client.force_authenticate(self.member)
-        response = self.client.post(
-            f"/api/v1/events/{self.event.uuid}/respond",
+        response = self.client.put(
+            f"/api/v1/events/{self.event.uuid}/response",
             {"status": "declined"},
             format="json",
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 204)
         self.assertEqual(_title(self.owner), "member a refusé « Team Meeting »")
 
     def test_cancellation_is_written_in_the_member_language(self):
@@ -140,9 +140,9 @@ class PollNotificationLanguageTests(APITestCase):
 
     def test_invitation_is_written_in_the_invitee_language(self):
         self.client.force_authenticate(self.creator)
-        response = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.voter.id]},
+        response = self.client.patch(
+            f"/api/v1/calendar/polls/{self.poll.uuid}",
+            {"invitees": [self.voter.id]},
             format="json",
         )
         self.assertEqual(response.status_code, 200)
@@ -154,8 +154,8 @@ class PollNotificationLanguageTests(APITestCase):
         slot = self.poll.slots.first()
         self.client.force_authenticate(self.voter)
         response = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/vote",
-            {"votes": [{"slot_id": str(slot.uuid), "choice": "yes"}]},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
+            {"votes": [{"slot": str(slot.uuid), "choice": "yes"}]},
             format="json",
         )
         self.assertEqual(response.status_code, 200)
@@ -286,12 +286,13 @@ class ErrorMessageLanguageTests(TestCase):
             end=start + timedelta(hours=1),
         )
         EventMember.objects.create(event=event, user=self.user)
-        response = self.client.put(
+        response = self.client.patch(
             f"/api/v1/events/{event.pk}",
             {"title": "Mine now"},
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
-            response.json()["detail"], "Seul le propriétaire peut le modifier."
+            response.json()["detail"],
+            "Seul le propriétaire peut modifier cet événement.",
         )

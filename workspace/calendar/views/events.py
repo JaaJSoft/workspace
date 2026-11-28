@@ -1,502 +1,272 @@
-import logging
-from datetime import UTC, datetime
-
-from dateutil.parser import parse as dateutil_parse
-from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.db.models import OuterRef, Prefetch, Q, Subquery
+from django.utils import timezone
 from django.utils.translation import gettext as _
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from django_filters.utils import translate_validation
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.generics import GenericAPIView, ListCreateAPIView
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
-from workspace.common.booleans import is_truthy
-from workspace.common.mixins import CacheControlMixin
-from workspace.common.uuids import parse_uuid_or_none
-from workspace.notifications.services.notifications import (
-    mark_source_read,
-    mark_sources_read,
-)
-from workspace.users.queries import pickable_users
+from workspace.common.views import LinkView
+from workspace.notifications.services.notifications import mark_sources_read
 
-from ..models import Calendar, Event, EventMember
-from ..queries import visible_events_q
-from ..recurrence import (
-    expand_recurring_events,
-    make_virtual_occurrence,
-    overlap_q,
-)
+from ..filters import EventFilter
+from ..models import Event, EventMember
 from ..serializers import (
-    EventCreateSerializer,
-    EventRespondSerializer,
+    EventResponseSerializer,
     EventSerializer,
-    EventUpdateSerializer,
+    EventWriteSerializer,
+    OccurrenceQuerySerializer,
+    SeriesWriteQuerySerializer,
 )
-from ..services import recurrence_rule
+from ..services.event_creation import create_event
+from ..services.event_listing import (
+    EventListing,
+    find_occurrence,
+    occurrence_answer,
+    with_details,
+)
 from ..services.event_scope import (
     EventScopeError,
+    assert_writable,
     cancel_event,
-    is_external_calendar,
     update_event,
 )
-from ..services.guests import sync_guests
-from ..services.invitations import NotInvitedError, respond_to_invitation
-from ..services.notifications import notify_in_languages
-from ..services.timezones import current_timezone_name
-from ..upcoming import get_upcoming_page
+from ..services.invitations import respond_to_invitation, withdraw_response
 
 
-def _mark_displayed_events_read(user, event_pks):
-    """Displayed events are demonstrably seen - settle their notifications.
-
-    A recurring occurrence's synthetic ``<master>:<start>`` id resolves to
-    the master row, which is also what the notification cron keys on.
-    """
-    pks = {str(pk).split(":", 1)[0] for pk in event_pks if pk}
-    if pks:
-        mark_sources_read(user, [Event(pk=pk) for pk in pks])
+def _refusal(error):
+    """The API error a refusal of the scope service stands for."""
+    if error.status_code == status.HTTP_403_FORBIDDEN:
+        return PermissionDenied(error.detail)
+    return ValidationError({"detail": error.detail})
 
 
-def _parse_dt(value):
-    """Parse datetime string, handling URL-encoded timezone offsets."""
-    if not value:
-        return None
-    try:
-        from django.utils import timezone
-
-        dt = dateutil_parse(value)
-        if dt.tzinfo is None:
-            dt = timezone.make_aware(dt)
-        return dt
-    # OverflowError: a run of digits dateutil reads as a number too large.
-    except ValueError, TypeError, OverflowError:
-        return None
-
-
-def _parse_calendar_ids(value):
-    """UUIDs of a comma-separated ``calendar_ids`` value, or None if one is malformed."""
-    ids = []
-    for raw in value.split(","):
-        if not raw.strip():
-            continue
-        cal_id = parse_uuid_or_none(raw.strip())
-        if cal_id is None:
-            return None
-        ids.append(cal_id)
-    return ids
-
-
-def _sort_instant(value):
-    """Comparable UTC instant for a serialized start value.
-
-    Date-only all-day labels parse as midnight in the active (user)
-    timezone, so an all-day event sorts at the top of that user-local day,
-    ahead of its timed events, regardless of the offsets in the strings.
-    """
-    dt = _parse_dt(value)
-    if dt is None:
-        return datetime.min.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
-
-
-User = get_user_model()
-logger = logging.getLogger(__name__)
-
-
-def _invalid_calendar_ids():
-    return Response(
-        {"detail": 'Invalid "calendar_ids": expected comma-separated UUIDs.'},
-        status=status.HTTP_400_BAD_REQUEST,
-    )
-
-
-def _prefetch_event(qs):
-    from workspace.calendar.models import Poll
-
-    return (
-        qs.prefetch_related(
-            Prefetch(
-                "members",
-                queryset=EventMember.objects.select_related("user"),
-            ),
-        )
-        .select_related("owner", "calendar")
-        .annotate(
-            _poll_id=Subquery(
-                Poll.objects.filter(event=OuterRef("pk")).values("uuid")[:1]
-            ),
-        )
-    )
+def _answer(event, context):
+    """*event* as the API answers it, read again with what that takes."""
+    row = with_details(Event.objects.filter(pk=event.pk)).get()
+    return EventSerializer(row, context=context).data
 
 
 @extend_schema(tags=["Calendar"])
-class EventListView(CacheControlMixin, APIView):
-    permission_classes = [IsAuthenticated]
+@extend_schema_view(
+    get=extend_schema(
+        summary="List events, recurring ones as their occurrences",
+        description=(
+            "In the order of an agenda: by start, an all-day event at the "
+            "start of its day. With `start` and `end`, the events "
+            "overlapping that window; with `start` alone, the ones starting "
+            "from it on, a list that has no end while a series repeats and "
+            "so cannot be counted. An occurrence carries the uuid of its "
+            "series and its `original_start`."
+        ),
+    ),
+    post=extend_schema(
+        summary="Create an event",
+        request=EventWriteSerializer,
+        responses={201: EventSerializer},
+    ),
+)
+class EventListView(ListCreateAPIView):
+    queryset = Event.objects.none()
+    serializer_class = EventSerializer
+    filterset_class = EventFilter
 
-    @extend_schema(
-        summary="List events (range mode) or next N upcoming events (cursor mode)",
-        parameters=[
-            OpenApiParameter(
-                name="start",
-                type=str,
-                required=False,
-                description="Range mode: start of window",
-            ),
-            OpenApiParameter(
-                name="end",
-                type=str,
-                required=False,
-                description="Range mode: end of window",
-            ),
-            OpenApiParameter(
-                name="after",
-                type=str,
-                required=False,
-                description="Cursor mode: return events starting at or after this datetime",
-            ),
-            OpenApiParameter(
-                name="after_id",
-                type=str,
-                required=False,
-                description="Cursor mode: next_after_id of the previous page, "
-                "sent with its next_after",
-            ),
-            OpenApiParameter(
-                name="limit",
-                type=int,
-                required=False,
-                description="Cursor mode: max events per page (default 20, max 100)",
-            ),
-            OpenApiParameter(
-                name="calendar_ids",
-                type=str,
-                required=False,
-                description="Comma-separated calendar UUIDs",
-            ),
-            OpenApiParameter(
-                name="show_declined",
-                type=bool,
-                required=False,
-                description="Cursor mode: include declined events",
-            ),
-        ],
-    )
-    def get(self, request):
-        after_param = request.query_params.get("after")
-        if after_param is not None and after_param.strip():
-            return self._get_cursor(request, after_param)
-        return self._get_range(request)
-
-    def _get_cursor(self, request, after_param):
-        after = _parse_dt(after_param)
-        if after is None:
-            return Response(
-                {"detail": 'Invalid "after" datetime.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            limit = int(request.query_params.get("limit", 20))
-        except TypeError, ValueError:
-            limit = 20
-        limit = max(1, min(limit, 100))
-
-        calendar_ids_param = request.query_params.get("calendar_ids")
-        calendar_ids = None
-        if calendar_ids_param is not None:
-            calendar_ids = _parse_calendar_ids(calendar_ids_param)
-            if calendar_ids is None:
-                return _invalid_calendar_ids()
-
-        show_declined = is_truthy(request.query_params.get("show_declined"))
-
-        after_id = request.query_params.get("after_id") or None
-        if (
-            after_id is not None
-            and parse_uuid_or_none(after_id.split(":", 1)[0]) is None
-        ):
-            return Response(
-                {"detail": 'Invalid "after_id": expected an event id.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        events, cursor = get_upcoming_page(
-            user=request.user,
-            after=after,
-            limit=limit,
-            calendar_ids=calendar_ids,
-            show_declined=show_declined,
-            after_id=after_id,
+    def list(self, request, *args, **kwargs):
+        asked = EventFilter(
+            request.query_params, queryset=self.queryset, request=request
         )
-        _mark_displayed_events_read(request.user, [e.get("uuid") for e in events])
-        return Response(
-            {
-                "events": events,
-                # Pass both back as after / after_id for the next page.
-                "next_after": cursor.after.isoformat() if cursor else None,
-                "next_after_id": cursor.event_id if cursor else None,
-            }
+        if not asked.is_valid():
+            raise translate_validation(asked.errors)
+        listing = EventListing(
+            request.user,
+            start=asked.form.cleaned_data["start"] or timezone.now(),
+            end=asked.form.cleaned_data["end"],
+            narrow=asked.filter_queryset,
+            context=self.get_serializer_context(),
         )
-
-    def _get_range(self, request):
-        start = request.query_params.get("start")
-        end = request.query_params.get("end")
-        if not start or not end:
-            return Response(
-                {"detail": 'Both "start" and "end" query parameters are required.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        range_start = _parse_dt(start)
-        range_end = _parse_dt(end)
-        if range_start is None or range_end is None:
-            return Response(
-                {"detail": "Invalid start or end datetime."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        calendar_ids_param = request.query_params.get("calendar_ids")
-        calendar_ids = None
-        if calendar_ids_param is not None:
-            calendar_ids = _parse_calendar_ids(calendar_ids_param)
-            if calendar_ids is None:
-                return _invalid_calendar_ids()
-
-        cal_or_member = visible_events_q(request.user, calendar_ids)
-        in_range = overlap_q(range_start, range_end)
-
-        # Non-recurring events (exclude exceptions)
-        non_recurring = Event.objects.filter(
-            cal_or_member,
-            in_range,
-            is_recurring=False,
-            recurrence_parent__isnull=True,
-            is_cancelled=False,
+        page = self.paginate_queryset(listing)
+        # Displayed events are demonstrably seen: settle their notifications.
+        mark_sources_read(
+            request.user, [Event(pk=pk) for pk in {row.row_id for row in page}]
         )
-        non_recurring = _prefetch_event(non_recurring).order_by("start")
+        return self.get_paginated_response([row.data for row in page])
 
-        non_recurring_data = EventSerializer(non_recurring, many=True).data
-
-        # Recurring masters with an occurrence in the range, or with one moved
-        # into it from a slot outside it (past the end of the rule included).
-        moved_in = Event.objects.filter(
-            in_range, recurrence_parent__isnull=False, is_cancelled=False
-        ).values("recurrence_parent_id")
-        masters = Event.objects.filter(
-            cal_or_member,
-            is_recurring=True,
-            recurrence_parent__isnull=True,
-            is_cancelled=False,
-        ).filter(
-            Q(start__lt=range_end)
-            & (Q(recurrence_until__isnull=True) | Q(recurrence_until__gte=range_start))
-            | Q(uuid__in=moved_in)
+    def create(self, request, *args, **kwargs):
+        body = EventWriteSerializer(
+            data=request.data, context=self.get_serializer_context()
         )
-        masters = _prefetch_event(masters)
-
-        recurring_data = expand_recurring_events(masters, range_start, range_end)
-
-        # Merge and sort as instants: values mix date-only all-day labels
-        # with ISO datetimes whose offsets can differ, so a plain string
-        # sort would misorder them.
-        all_events = non_recurring_data + recurring_data
-        all_events.sort(key=lambda e: _sort_instant(e.get("start")))
-        _mark_displayed_events_read(request.user, [e.get("uuid") for e in all_events])
-        return Response(all_events)
-
-    @extend_schema(summary="Create an event", request=EventCreateSerializer)
-    @transaction.atomic
-    def post(self, request):
-        ser = EventCreateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        data = ser.validated_data
-
-        # Validate calendar ownership
-        try:
-            cal = Calendar.objects.get(pk=data["calendar_id"], owner=request.user)
-        except Calendar.DoesNotExist:
-            return Response(
-                {"detail": _("Calendar not found or not owned by you.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if is_external_calendar(cal.pk):
-            return Response(
-                {"detail": _("Cannot create events in an external calendar.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        event = Event(
-            calendar=cal,
+        body.is_valid(raise_exception=True)
+        data = body.validated_data
+        event = create_event(
+            request.user,
+            calendar=data["calendar"],
             title=data["title"],
-            description=data["description"],
             start=data["start"],
-            end=data["end"],
-            all_day=data["all_day"],
-            # All-day events are zone-less day labels; timed events anchor
-            # their wall clock in the creator's active timezone.
-            timezone="" if data["all_day"] else current_timezone_name(),
-            location=data["location"],
-            owner=request.user,
+            end=data.get("end"),
+            all_day=data.get("all_day", False),
+            description=data.get("description", ""),
+            location=data.get("location", ""),
+            rule=data.get("recurrence_rule", ""),
+            member_ids=data.get("members", ()),
+            guests=data.get("guests", ()),
         )
-        recurrence_rule.apply_rule(event, data.get("recurrence_rule", ""))
-        event.save()
+        return Response(
+            _answer(event, self.get_serializer_context()),
+            status=status.HTTP_201_CREATED,
+        )
 
-        member_ids = data.get("member_ids", [])
-        if member_ids:
-            users = list(
-                pickable_users().filter(id__in=member_ids).exclude(id=request.user.id)
-            )
-            EventMember.objects.bulk_create(
-                [EventMember(event=event, user=u) for u in users]
-            )
-            notify_in_languages(
-                recipients=users,
-                message=lambda: (
-                    _('Invited to "%(title)s"') % {"title": event.title},
-                    _("%(user)s invited you to an event.")
-                    % {"user": request.user.username},
-                ),
-                url=f"/calendar?event={event.pk}",
-                actor=request.user,
-                source=event,
-            )
-        if data["guests"]:
-            sync_guests(event, data["guests"])
 
-        event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
-        return Response(EventSerializer(event).data, status=status.HTTP_201_CREATED)
+class OccurrenceMixin:
+    """An event the caller can see, or with ``original_start`` one occurrence
+    of it. One they cannot see answers like one that does not exist."""
+
+    queryset = Event.objects.none()
+    serializer_class = EventSerializer
+    query_serializer = OccurrenceQuerySerializer
+
+    def read_query(self, query_serializer=None):
+        asked = (query_serializer or self.query_serializer)(
+            data=self.request.query_params
+        )
+        asked.is_valid(raise_exception=True)
+        return asked.validated_data
+
+    def find(self, asked):
+        occurrence = find_occurrence(
+            self.request.user, self.kwargs["uuid"], asked.get("original_start")
+        )
+        if occurrence is None:
+            raise NotFound(_("Event not found."))
+        return occurrence
 
 
 @extend_schema(tags=["Calendar"])
-class EventDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+@extend_schema_view(
+    get=extend_schema(
+        summary="Get an event, or one occurrence of a recurring one",
+        parameters=[OccurrenceQuerySerializer],
+    ),
+    patch=extend_schema(
+        summary="Update an event, or part of a recurring one",
+        description=(
+            "Answers the event written: the occurrence for `this`, the "
+            "series that now starts there for `future`."
+        ),
+        parameters=[SeriesWriteQuerySerializer],
+        request=EventWriteSerializer,
+    ),
+    delete=extend_schema(
+        summary="Delete an event, or part of a recurring one",
+        parameters=[SeriesWriteQuerySerializer],
+    ),
+)
+class EventDetailView(OccurrenceMixin, GenericAPIView):
+    def writable(self, occurrence):
+        try:
+            assert_writable(occurrence.series, self.request.user)
+        except EventScopeError as error:
+            raise _refusal(error) from None
 
-    def _get_event(self, event_id, user):
-        """The event if *user* can see it; an event they cannot see answers
-        the same 404 as one that does not exist."""
-        event = _prefetch_event(
-            Event.objects.filter(visible_events_q(user), pk=event_id)
-        ).first()
-        if not event:
-            return None, Response(
-                {"detail": _("Event not found.")}, status=status.HTTP_404_NOT_FOUND
+    def part_asked(self, occurrence, asked):
+        """Which occurrences of the series a write is about, and from which
+        slot. Never guessed: taking a missing answer for the whole series
+        would turn "skip this Monday" into deleting the weekly meeting."""
+        if not occurrence.series.is_recurring:
+            return "all", None
+        part = asked.get("occurrences")
+        if part is None:
+            raise ValidationError(
+                {"occurrences": [_("Say which occurrences of the series are meant.")]}
             )
-        return event, None
-
-    @extend_schema(summary="Get event detail")
-    def get(self, request, event_id):
-        event, err = self._get_event(event_id, request.user)
-        if err:
-            return err
-
-        mark_source_read(request.user, event)
-
-        # If original_start is provided, return the specific occurrence
-        original_start_str = request.query_params.get("original_start")
-        if original_start_str and event.is_recurring:
-            original_start = _parse_dt(original_start_str)
-            if original_start:
-                # Single prefetched query: the serializer below needs the
-                # members/calendar relations _prefetch_event attaches.
-                exc = _prefetch_event(
-                    Event.objects.filter(
-                        recurrence_parent=event,
-                        original_start=original_start,
-                    )
-                ).first()
-                if exc:
-                    return Response(EventSerializer(exc).data)
-                # Build virtual occurrence
-                occ = make_virtual_occurrence(event, original_start)
-                return Response(occ)
-
-        return Response(EventSerializer(event).data)
-
-    @extend_schema(summary="Update an event", request=EventUpdateSerializer)
-    def put(self, request, event_id):
-        event, err = self._get_event(event_id, request.user)
-        if err:
-            return err
-        if event.owner_id != request.user.id:
-            return Response(
-                {"detail": _("Only the owner can edit.")},
-                status=status.HTTP_403_FORBIDDEN,
+        if part != "all" and occurrence.original_start is None:
+            raise ValidationError(
+                {"original_start": [_("Say which occurrence is meant.")]}
             )
-        if is_external_calendar(event.calendar_id):
-            return Response(
-                {"detail": _("Cannot edit events from an external calendar.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        return part, occurrence.original_start
 
-        ser = EventUpdateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        data = ser.validated_data
-        scope = data.pop("scope", "all")
-        original_start = data.pop("original_start", None)
+    def get(self, request, *args, **kwargs):
+        occurrence = self.find(self.read_query())
+        mark_sources_read(request.user, {occurrence.series, occurrence.row})
+        return Response(occurrence_answer(occurrence, self.get_serializer_context()))
 
+    def patch(self, request, *args, **kwargs):
+        asked = self.read_query(SeriesWriteQuerySerializer)
+        occurrence = self.find(asked)
+        self.writable(occurrence)
+        body = EventWriteSerializer(
+            data=request.data, partial=True, context=self.get_serializer_context()
+        )
+        body.is_valid(raise_exception=True)
+        part, original_start = self.part_asked(occurrence, asked)
+        # The names the scope service knows these two by.
+        data = dict(body.validated_data)
+        if "calendar" in data:
+            data["calendar_id"] = data.pop("calendar").pk
+        if "members" in data:
+            data["member_ids"] = data.pop("members")
         try:
             written = update_event(
-                event, data, request.user, scope=scope, original_start=original_start
+                occurrence.series,
+                data,
+                request.user,
+                scope=part,
+                original_start=original_start,
             )
-        except EventScopeError as exc:
-            return Response({"detail": exc.detail}, status=exc.status_code)
+        except EventScopeError as error:
+            raise _refusal(error) from None
+        return Response(_answer(written, self.get_serializer_context()))
 
-        written = _prefetch_event(Event.objects.filter(pk=written.pk)).first()
-        return Response(EventSerializer(written).data)
-
-    @extend_schema(summary="Delete an event")
-    def delete(self, request, event_id):
-        event, err = self._get_event(event_id, request.user)
-        if err:
-            return err
-        if event.owner_id != request.user.id:
-            return Response(
-                {"detail": _("Only the owner can delete.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if is_external_calendar(event.calendar_id):
-            return Response(
-                {"detail": _("Cannot delete events from an external calendar.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        scope = request.query_params.get("scope")
-        if event.is_recurring and not scope:
-            # Guessing "all" would turn "skip this Monday" into deleting the
-            # whole series.
-            return Response(
-                {"detail": _("Choose which occurrences of the series to delete.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+    def delete(self, request, *args, **kwargs):
+        asked = self.read_query(SeriesWriteQuerySerializer)
+        occurrence = self.find(asked)
+        self.writable(occurrence)
+        part, original_start = self.part_asked(occurrence, asked)
         try:
             cancel_event(
-                event,
+                occurrence.series,
                 request.user,
-                scope=scope or "all",
-                original_start=_parse_dt(request.query_params.get("original_start")),
+                scope=part,
+                original_start=original_start,
             )
-        except EventScopeError as exc:
-            return Response({"detail": exc.detail}, status=exc.status_code)
+        except EventScopeError as error:
+            raise _refusal(error) from None
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Calendar"])
-class EventRespondView(APIView):
-    permission_classes = [IsAuthenticated]
+@extend_schema(
+    tags=["Calendar"],
+    parameters=[OccurrenceQuerySerializer],
+    description=(
+        "With `original_start`, the answer is for that occurrence when it "
+        "was changed on its own and carries its own invitees; for the series "
+        "otherwise."
+    ),
+)
+@extend_schema_view(
+    put=extend_schema(summary="Accept or decline an invitation"),
+    delete=extend_schema(summary="Take an answer back: the invitation is pending"),
+)
+class EventResponseView(OccurrenceMixin, LinkView):
+    serializer_class = EventResponseSerializer
 
-    @extend_schema(summary="Respond to an invitation", request=EventRespondSerializer)
-    def post(self, request, event_id):
-        ser = EventRespondSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        try:
-            membership, _event = respond_to_invitation(
-                event_id, request.user, ser.validated_data["status"]
+    def get_object(self):
+        occurrence = self.find(self.read_query())
+        invitations = {
+            invitation.event_id: invitation
+            for invitation in EventMember.objects.filter(
+                event__in={occurrence.series, occurrence.row}, user=self.request.user
             )
-        except NotInvitedError:
-            return Response(
-                {"detail": _("Not invited.")}, status=status.HTTP_403_FORBIDDEN
-            )
-        return Response({"status": membership.status})
+        }
+        invitation = invitations.get(occurrence.row.pk) or invitations.get(
+            occurrence.series.pk
+        )
+        if invitation is None:
+            raise PermissionDenied(_("Not invited."))
+        return invitation
+
+    def perform_link(self, invitation, data):
+        respond_to_invitation(invitation.event_id, self.request.user, data["status"])
+
+    def perform_unlink(self, invitation):
+        withdraw_response(invitation.event_id, self.request.user)

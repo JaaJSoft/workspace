@@ -29,11 +29,11 @@ class EventCreateNotificationTests(CalendarNotificationTestBase):
         resp = self.client.post(
             self.url,
             {
-                "calendar_id": str(self.calendar.uuid),
+                "calendar": str(self.calendar.uuid),
                 "title": "Planning",
                 "start": (timezone.now() + timedelta(days=1)).isoformat(),
                 "end": (timezone.now() + timedelta(days=1, hours=1)).isoformat(),
-                "member_ids": [self.member.id],
+                "members": [self.member.id],
             },
             format="json",
         )
@@ -51,7 +51,7 @@ class EventCreateNotificationTests(CalendarNotificationTestBase):
         resp = self.client.post(
             self.url,
             {
-                "calendar_id": str(self.calendar.uuid),
+                "calendar": str(self.calendar.uuid),
                 "title": "Solo",
                 "start": (timezone.now() + timedelta(days=1)).isoformat(),
                 "end": (timezone.now() + timedelta(days=1, hours=1)).isoformat(),
@@ -66,11 +66,11 @@ class EventCreateNotificationTests(CalendarNotificationTestBase):
         resp = self.client.post(
             self.url,
             {
-                "calendar_id": str(self.calendar.uuid),
+                "calendar": str(self.calendar.uuid),
                 "title": "Planning",
                 "start": (timezone.now() + timedelta(days=1)).isoformat(),
                 "end": (timezone.now() + timedelta(days=1, hours=1)).isoformat(),
-                "member_ids": [self.member.id, self.owner.id],
+                "members": [self.member.id, self.owner.id],
             },
             format="json",
         )
@@ -86,7 +86,7 @@ class EventUpdateNotificationTests(CalendarNotificationTestBase):
 
     def test_update_event_notifies_members(self):
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(self.event.uuid),
             {"title": "Renamed Meeting"},
             format="json",
@@ -99,7 +99,7 @@ class EventUpdateNotificationTests(CalendarNotificationTestBase):
 
     def test_update_event_does_not_notify_owner(self):
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(self.event.uuid),
             {"title": "Renamed"},
             format="json",
@@ -109,9 +109,9 @@ class EventUpdateNotificationTests(CalendarNotificationTestBase):
 
     def test_add_member_notifies_new_member(self):
         self.client.force_authenticate(self.owner)
-        self.client.put(
+        self.client.patch(
             self.url(self.event.uuid),
-            {"member_ids": [self.member.id, self.outsider.id]},
+            {"members": [self.member.id, self.outsider.id]},
             format="json",
         )
         notifs = self._notifs_for(self.outsider)
@@ -120,9 +120,9 @@ class EventUpdateNotificationTests(CalendarNotificationTestBase):
 
     def test_remove_member_notifies_removed_user(self):
         self.client.force_authenticate(self.owner)
-        self.client.put(
+        self.client.patch(
             self.url(self.event.uuid),
-            {"member_ids": []},
+            {"members": []},
             format="json",
         )
         notifs = self._notifs_for(self.member)
@@ -188,16 +188,16 @@ class EventRespondNotificationTests(CalendarNotificationTestBase):
     """Tests for notifications when responding to an invitation."""
 
     def url(self, event_id):
-        return f"/api/v1/events/{event_id}/respond"
+        return f"/api/v1/events/{event_id}/response"
 
     def test_accept_notifies_owner(self):
         self.client.force_authenticate(self.member)
-        resp = self.client.post(
+        resp = self.client.put(
             self.url(self.event.uuid),
             {"status": "accepted"},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         notifs = self._notifs_for(self.owner)
         self.assertEqual(notifs.count(), 1)
         n = notifs.first()
@@ -208,12 +208,12 @@ class EventRespondNotificationTests(CalendarNotificationTestBase):
 
     def test_decline_notifies_owner(self):
         self.client.force_authenticate(self.member)
-        resp = self.client.post(
+        resp = self.client.put(
             self.url(self.event.uuid),
             {"status": "declined"},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         notifs = self._notifs_for(self.owner)
         self.assertEqual(notifs.count(), 1)
         self.assertIn("declined", notifs.first().title)
@@ -222,12 +222,12 @@ class EventRespondNotificationTests(CalendarNotificationTestBase):
         """If the owner is somehow also a member, responding should not self-notify."""
         EventMember.objects.create(event=self.event, user=self.owner)
         self.client.force_authenticate(self.owner)
-        resp = self.client.post(
+        resp = self.client.put(
             self.url(self.event.uuid),
             {"status": "accepted"},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(self._notifs_for(self.owner).count(), 0)
 
 

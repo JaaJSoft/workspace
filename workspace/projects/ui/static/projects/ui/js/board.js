@@ -2193,13 +2193,27 @@ function taskPanel() {
           );
           return;
         }
-        // The links this request created: a file already linked adds none.
-        this.fileLinks = this.fileLinks.concat(await resp.json());
+        // Read again rather than appended: the answer holds the links this
+        // request created, and a file linked by a request whose answer was
+        // lost, or from another tab, is in none.
+        const created = await resp.json();
+        this.fileLinks = (await this.fetchFileLinks()) || this.fileLinks.concat(created);
         this.$refs.linkFileDialog.close();
       } catch (e) {
         this.fileLinkError = gettext('Could not link the files.');
       } finally {
         this.fileLinkSaving = false;
+      }
+    },
+
+    // The task's linked files as the server holds them, null when they
+    // cannot be read.
+    async fetchFileLinks() {
+      try {
+        const resp = await fetch(this.data.file_links_url, { credentials: 'same-origin' });
+        return resp.ok ? await resp.json() : null;
+      } catch (e) {
+        return null;
       }
     },
 

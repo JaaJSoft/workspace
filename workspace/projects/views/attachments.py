@@ -1,4 +1,3 @@
-from django.db import transaction
 from django.http import Http404
 from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
@@ -59,10 +58,9 @@ class AttachmentListView(TaskRowsMixin, ListCreateAPIView):
                 {"files": [_("One or more files not found or not accessible.")]}
             )
         try:
-            with transaction.atomic():
-                created = create_attachments(
-                    request.user, self.task, body.validated_data["file"], picked
-                )
+            created = create_attachments(
+                request.user, self.task, body.validated_data["file"], picked
+            )
         except FileNotFoundError, OSError:
             raise ValidationError(
                 {"files": [_("One or more workspace file contents are unavailable.")]}

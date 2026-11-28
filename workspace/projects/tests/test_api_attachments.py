@@ -115,6 +115,26 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(TaskAttachment.objects.count(), 0)
 
+    def test_a_refused_request_leaves_no_blob_behind(self):
+        """An upload stored before the copy of a workspace file fails loses
+        its row to the rollback: its bytes must go too."""
+        src = self._make_file(self.member)
+        default_storage.delete(src.content.name)
+        self.client.force_authenticate(self.member)
+        resp = self.client.post(
+            self.url,
+            data={
+                "file": [SimpleUploadedFile("notes.txt", b"minutes")],
+                "files": [str(src.uuid)],
+            },
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(TaskAttachment.objects.count(), 0)
+        self.assertEqual(
+            list(default_storage.iter_blobs(f"projects/tasks/{self.task.uuid}")), []
+        )
+
     def test_empty_request_is_rejected(self):
         self.client.force_authenticate(self.member)
         resp = self.client.post(self.url, data={}, format="json")

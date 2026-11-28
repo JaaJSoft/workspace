@@ -865,11 +865,12 @@ test('openLinkedTask opens a task of this project here and another on its board'
   assert.deepStrictEqual(visited, ['/projects/p2/board?task=t3']);
 });
 
-test('confirmLinkFiles names the files and adds the links it gets back', async () => {
+test('confirmLinkFiles names the files, then reads the list of the task again', async () => {
   const created = [{ uuid: 'fl2', file: { uuid: 'd2', name: 'b.md' } }];
-  const { panel, calls } = panelWithRequests([answer(201, created)]);
+  const listed = [{ uuid: 'fl1', file: { uuid: 'd1', name: 'a.md' } }, ...created];
+  const { panel, calls } = panelWithRequests([answer(201, created), answer(200, listed)]);
   panel.$refs = { linkFileDialog: { close() {} } };
-  panel.fileLinks = [{ uuid: 'fl1', file: { uuid: 'd1', name: 'a.md' } }];
+  panel.fileLinks = [listed[0]];
   panel.pendingFileLinks = [{ uuid: 'd2' }];
   panel.fileLinkPermission = 'rw';
 
@@ -877,8 +878,36 @@ test('confirmLinkFiles names the files and adds the links it gets back', async (
 
   assert.deepStrictEqual(JSON.parse(JSON.stringify(calls)), [
     ['POST', '/api/v1/projects/tasks/t1/file-links', { files: ['d2'], permission: 'rw' }],
+    ['GET', '/api/v1/projects/tasks/t1/file-links', null],
   ]);
   assert.deepStrictEqual(Array.from(panel.fileLinks, (l) => l.uuid), ['fl1', 'fl2']);
+});
+
+test('a link whose first answer was lost shows up when the request is sent again', async () => {
+  // The first request linked the file and its answer never arrived: sent
+  // again, it creates nothing, and the server answers no link.
+  const linked = [{ uuid: 'fl1', file: { uuid: 'd1', name: 'a.md' } }];
+  const { panel } = panelWithRequests([answer(201, []), answer(200, linked)]);
+  panel.$refs = { linkFileDialog: { close() {} } };
+  panel.fileLinks = [];
+  panel.pendingFileLinks = [{ uuid: 'd1' }];
+
+  await panel.confirmLinkFiles();
+
+  assert.deepStrictEqual(Array.from(panel.fileLinks, (l) => l.uuid), ['fl1']);
+});
+
+test('confirmLinkFiles keeps the links it was answered when the list cannot be read', async () => {
+  const created = [{ uuid: 'fl2', file: { uuid: 'd2', name: 'b.md' } }];
+  const { panel } = panelWithRequests([answer(201, created), answer(500, {})]);
+  panel.$refs = { linkFileDialog: { close() {} } };
+  panel.fileLinks = [{ uuid: 'fl1', file: { uuid: 'd1', name: 'a.md' } }];
+  panel.pendingFileLinks = [{ uuid: 'd2' }];
+
+  await panel.confirmLinkFiles();
+
+  assert.deepStrictEqual(Array.from(panel.fileLinks, (l) => l.uuid), ['fl1', 'fl2']);
+  assert.equal(panel.fileLinkError, '');
 });
 
 test('confirmLinkFiles shows a refusal on its files in the dialog', async () => {

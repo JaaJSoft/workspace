@@ -7,6 +7,7 @@ pass. The bytes follow the row, never the other way round, because a blob
 lives at the path its row derives and the storage overwrites in place.
 """
 
+import codecs
 import logging
 import posixpath
 import uuid
@@ -80,6 +81,29 @@ def _put_back_blobs(storage, source_path, storage_path, backup_path, moved, back
         )
 
 
+def _decodes_as_utf8(content):
+    """True when *content* decodes as UTF-8, read chunk by chunk."""
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    try:
+        for chunk in content.chunks():
+            decoder.decode(chunk)
+        decoder.decode(b"", final=True)
+    except UnicodeDecodeError:
+        return False
+    finally:
+        content.seek(0)
+    return True
+
+
+def _is_note_save(file_obj, content, name):
+    """Whether an editor's save keeps *file_obj* the Markdown note it was."""
+    return (
+        file_obj.type == "markdown"
+        and detection.label_from_name(name) == "markdown"
+        and _decodes_as_utf8(content)
+    )
+
+
 def update_content(
     file_obj,
     content,
@@ -90,6 +114,7 @@ def update_content(
     expected_hash=None,
     check_quota=True,
     bulk=False,
+    edit=False,
 ):
     """Replace a file's content, updating size, MIME type and hash.
 
@@ -119,6 +144,11 @@ def update_content(
 
     ``check_quota=False`` is for a caller that has already checked the
     bucket itself, and ``bulk`` for a bulk job, as for ``tree.create_file``.
+
+    ``edit`` marks a save from an editor, which replaces a document with a
+    version of itself. A Markdown note saved that way keeps its type without
+    content detection, and its processing waits for the editing to settle
+    (``record_event``'s ``settle``) instead of running after every autosave.
     """
     if check_quota:
         check_write_allowed(
@@ -127,10 +157,16 @@ def update_content(
             additional_bytes=content.size - (file_obj.size or 0),
         )
 
-    detected = detection.detect_from_stream(content, name or file_obj.name)
-    # Honour the extension when Magika's content label is generic (a sparse
-    # ".md" reads as txt) so an edited note keeps type=markdown.
-    file_type = detection.refine_with_name(detected.label, name or file_obj.name)
+    name = name or file_obj.name
+    note_save = edit and _is_note_save(file_obj, content, name)
+    if note_save:
+        detected = detection.detect_from_name(name)
+        file_type = detected.label
+    else:
+        detected = detection.detect_from_stream(content, name)
+        # Honour the extension when Magika's content label is generic (a
+        # sparse ".md" reads as txt) so an edited note keeps type=markdown.
+        file_type = detection.refine_with_name(detected.label, name)
     content_field = File._meta.get_field("content")
 
     def blob_path(row):
@@ -188,7 +224,13 @@ def update_content(
     clear_failures(file_obj)
     if file_obj.size:
         FILES_UPLOAD_BYTES.inc(file_obj.size)
-    record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED, bulk=bulk)
+    record_event(
+        file_obj,
+        acting_user,
+        FileEvent.Action.CONTENT_REPLACED,
+        bulk=bulk,
+        settle=note_save,
+    )
     return file_obj
 
 

@@ -11,6 +11,10 @@ from .env import env_bool
 RECENT_FILES_LIMIT = int(os.getenv("RECENT_FILES_LIMIT", "25"))
 RECENT_FILES_MAX_LIMIT = int(os.getenv("RECENT_FILES_MAX_LIMIT", "200"))
 TRASH_RETENTION_DAYS = int(os.getenv("TRASH_RETENTION_DAYS", "30"))
+# Age past which a file event may be purged: a year covers the activity feeds
+# and the profile heatmap. The newest events of each file, which its timeline
+# lists, stay whatever their age (services/events.py).
+FILES_EVENT_RETENTION_DAYS = int(os.getenv("FILES_EVENT_RETENTION_DAYS", "365"))
 
 STORAGE_QUOTA_BYTES = int(
     os.getenv("STORAGE_QUOTA_BYTES", str(1 * 1024 * 1024 * 1024))

@@ -892,6 +892,7 @@ class FileSerializer(serializers.ModelSerializer):
                         mime_type=explicit_mime_type,
                         acting_user=acting_user,
                         expected_hash=self.context.get("expected_content_hash"),
+                        edit=True,
                     )
             else:
                 instance.content = uploaded

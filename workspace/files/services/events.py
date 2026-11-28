@@ -7,9 +7,12 @@ raw events into UI-ready timeline rows.
 """
 
 import logging
+from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Min, Q
+from django.utils import timezone
 
 from workspace.common.task_priority import LOW_PRIORITY
 
@@ -19,16 +22,37 @@ from ..queries import FilePermission, access_arms, accessible_file_ids
 logger = logging.getLogger(__name__)
 
 
-def record_event(file, actor, action, metadata=None, *, bulk=False):
+# How many events a file's timeline lists, newest first.
+TIMELINE_EVENTS_LIMIT = 200
+
+# A repeat of one of these actions by the same person, within this long of
+# the file's previous event, folds into that event instead of adding a row:
+# the note editor saves every few seconds while someone types.
+COALESCE_WINDOW = timedelta(minutes=5)
+_COALESCED_ACTIONS = frozenset({FileEvent.Action.CONTENT_REPLACED})
+
+# Longer than the note editor's 30 s save interval while someone keeps typing,
+# so a whole writing session reaches its handlers once, after its last save.
+SETTLE_SECONDS = 60
+
+
+def record_event(file, actor, action, metadata=None, *, bulk=False, settle=False):
     """Persist a single audit row for an action performed on a file.
 
     Failures are logged and swallowed - audit logging must never bring
     down the user's primary action (rename, share, ...). On success, the
     event's handlers are scheduled to run after the transaction commits.
 
+    A content replacement by the same actor shortly after the previous one
+    renews that event rather than adding one (``COALESCE_WINDOW``).
+
     ``bulk=True`` marks the event as one of many from a long job nobody
     waits on file by file (an import): the tasks it sets off go out at low
     priority, behind those of the files people are uploading.
+
+    ``settle=True`` holds the handlers back until the file's content has not
+    changed for ``SETTLE_SECONDS``: each write queues them late, with the
+    hash it wrote, and only the last write finds its hash still in place.
     """
     if file is None:
         return None
@@ -39,21 +63,40 @@ def record_event(file, actor, action, metadata=None, *, bulk=False):
     state = getattr(file, "_state", None)
     if state is not None and state.adding:
         return None
+    if actor is not None and not actor.is_authenticated:
+        actor = None
     try:
-        event = FileEvent.objects.create(
-            file=file,
-            actor=actor if (actor is not None and actor.is_authenticated) else None,
-            action=action,
-            metadata=metadata or {},
-        )
+        event = _repeated_event(file, actor, action, metadata)
+        if event is None:
+            event = FileEvent.objects.create(
+                file=file, actor=actor, action=action, metadata=metadata or {}
+            )
+        else:
+            event.renew()
     except Exception:
         logger.exception("Failed to record file event %s for file %s", action, file.pk)
         return None
-    _schedule_dispatch(event, bulk=bulk)
+    _schedule_dispatch(event, bulk=bulk, settle=settle)
     return event
 
 
-def _schedule_dispatch(event, *, bulk):
+def _repeated_event(file, actor, action, metadata):
+    """The file's newest event when *action* by *actor* repeats it, else None."""
+    if action not in _COALESCED_ACTIONS or metadata:
+        return None
+    latest = FileEvent.objects.filter(file=file).order_by("-created_at").first()
+    if (
+        latest is None
+        or latest.action != action
+        or latest.actor_id != (actor.pk if actor is not None else None)
+        or latest.created_at < timezone.now() - COALESCE_WINDOW
+    ):
+        return None
+    latest.file = file
+    return latest
+
+
+def _schedule_dispatch(event, *, bulk, settle):
     """Run the event's handlers after the surrounding transaction commits.
 
     on_commit guarantees the worker sees committed data and that rolled-back
@@ -77,10 +120,18 @@ def _schedule_dispatch(event, *, bulk):
         from workspace.files.tasks import run_file_event_handlers
 
         event_uuid = str(event.uuid)
+        content_hash = event.file.content_hash if settle else None
 
         def _enqueue_dispatch():
             try:
-                run_file_event_handlers.delay(event_uuid)
+                if settle:
+                    run_file_event_handlers.apply_async(
+                        (event_uuid,),
+                        {"content_hash": content_hash},
+                        countdown=SETTLE_SECONDS,
+                    )
+                else:
+                    run_file_event_handlers.delay(event_uuid)
             except Exception:
                 logger.exception(
                     "Failed to enqueue file-event dispatch for %s", event_uuid
@@ -89,6 +140,36 @@ def _schedule_dispatch(event, *, bulk):
         transaction.on_commit(_enqueue_dispatch)
     except Exception:
         logger.exception("Failed to schedule dispatch for file event %s", event.uuid)
+
+
+def purge_expired_events():
+    """Delete the events no surface shows any more; return how many went.
+
+    An event goes once it is older than ``FILES_EVENT_RETENTION_DAYS``, which
+    covers the activity feeds and the profile heatmap, and is not one of the
+    ``TIMELINE_EVENTS_LIMIT`` newest of its file, which the file's timeline
+    lists whatever their age. A file's newest event always stays, and its
+    ``last_event_at`` keeps pointing at a real event.
+    """
+    cutoff = timezone.now() - timedelta(days=settings.FILES_EVENT_RETENTION_DAYS)
+    crowded = list(
+        FileEvent.objects.order_by()
+        .values("file_id")
+        .annotate(count=Count("pk"), oldest=Min("created_at"))
+        .filter(count__gt=TIMELINE_EVENTS_LIMIT, oldest__lt=cutoff)
+        .values_list("file_id", flat=True)
+    )
+    deleted = 0
+    for file_id in crowded:
+        events = FileEvent.objects.filter(file_id=file_id)
+        shown = list(
+            events.order_by("-created_at").values_list("pk", flat=True)[
+                :TIMELINE_EVENTS_LIMIT
+            ]
+        )
+        count, _ = events.filter(created_at__lt=cutoff).exclude(pk__in=shown).delete()
+        deleted += count
+    return deleted
 
 
 # Who else holds the file and which public links reach it: the properties

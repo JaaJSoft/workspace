@@ -91,6 +91,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.purge_trash",
         "schedule": crontab(hour=2, minute=30),  # Every day at 2:30 AM
     },
+    "purge-file-events": {
+        "task": "files.purge_events",
+        "schedule": crontab(hour=2, minute=35),  # Every day at 2:35 AM
+    },
     # Bytes a killed worker staged and never moved into place: a new file's, or
     # an upload's.
     "purge-staged-blobs": {

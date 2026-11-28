@@ -82,6 +82,7 @@ listing and opened behind a cover.
 The properties panel (*Properties*, or Ctrl+I) shows a file's size, dates,
 location and tags, who it is shared with and its public links, a comment
 thread, and an activity timeline: who created, renamed, moved or shared it.
+Saves by the same person a few minutes apart show as one *Updated* entry.
 PDFs and office documents add their title, author, subject, keywords, page
 count and authoring dates; audio and video files their length, codecs and
 dimensions.
@@ -167,6 +168,7 @@ a *Retry* action.
 |---|---|---|
 | `STORAGE_QUOTA_BYTES` | 1 GB | Personal quota of a user without a quota of their own. |
 | `TRASH_RETENTION_DAYS` | `30` | Days before trashed items are purged (nightly, or `purge_trash`). |
+| `FILES_EVENT_RETENTION_DAYS` | `365` | Days before a file event is purged (nightly). The 200 newest events of each file, which its timeline lists, are kept whatever their age. |
 | `RECENT_FILES_LIMIT`, `RECENT_FILES_MAX_LIMIT` | `25`, `200` | Items in the *Recent* view, by default and at most. |
 | `FILES_TEXT_VIEWER_MAX_BYTES` | 5 MB | Larger text files open raw in a new tab. |
 | `FILES_EBOOK_READER_MAX_BYTES` | 256 MB | Larger e-books are download-only. |

@@ -708,23 +708,23 @@ class ConcurrentWriteTests(APITestCase):
     def _during_the_write(self, competitor):
         """Run *competitor* once, after the guards passed and before the write.
 
-        ``detect_from_stream`` is the first thing ``update_content`` touches
-        once the viewset has decided the guards still hold, which puts it
-        exactly in the window the conditional write exists to close.
+        The quota check is the first thing ``update_content`` does once the
+        viewset has decided the guards still hold, which puts it exactly in
+        the window the conditional write exists to close.
         """
-        from workspace.files.services import detection
+        from workspace.files.services import content_writes
 
-        real = detection.detect_from_stream
+        real = content_writes.check_write_allowed
         fired = []
 
-        def inject(stream, filename=""):
+        def inject(**kwargs):
             if not fired:
                 fired.append(True)
                 competitor()
-            return real(stream, filename)
+            return real(**kwargs)
 
         return patch(
-            "workspace.files.services.detection.detect_from_stream", inject
+            "workspace.files.services.content_writes.check_write_allowed", inject
         ), fired
 
     def test_the_second_writer_is_refused(self):

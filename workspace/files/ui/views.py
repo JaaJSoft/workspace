@@ -41,6 +41,11 @@ from workspace.files.sensitivity import (
     sensitive_level,
     with_sensitivity,
 )
+from workspace.files.services.events import (
+    TIMELINE_EVENTS_LIMIT,
+    events_for_file,
+    readable_events,
+)
 from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
 from workspace.files.services.image_edits import versioned_thumbnail_url
 from workspace.files.services.pins import visible_pins
@@ -90,7 +95,6 @@ from .viewers import (
 
 RECENT_FILES_LIMIT = settings.RECENT_FILES_LIMIT
 INITIAL_EVENTS_LIMIT = 15
-MAX_EVENTS_LIMIT = 200
 # A public share link has no authentication behind it, so an unbounded
 # listing would let anyone turn one link into a folder-dump DoS.
 SHARED_FOLDER_PAGE_SIZE = 200
@@ -751,7 +755,7 @@ def events(request, uuid):
 
     Loaded by alpine-ajax for the initial fetch, "Load more" clicks, and
     action-filter changes. Params:
-    - ``limit`` (int, default 15, capped at MAX_EVENTS_LIMIT)
+    - ``limit`` (int, default 15, capped at TIMELINE_EVENTS_LIMIT)
     - ``action`` (str, one of FileEvent.Action values; invalid/empty = no filter)
     Offset is always 0 so the swap is idempotent.
     """
@@ -768,11 +772,9 @@ def events(request, uuid):
         events_limit = int(request.GET.get("limit", INITIAL_EVENTS_LIMIT))
     except TypeError, ValueError:
         events_limit = INITIAL_EVENTS_LIMIT
-    events_limit = max(INITIAL_EVENTS_LIMIT, min(events_limit, MAX_EVENTS_LIMIT))
+    events_limit = max(INITIAL_EVENTS_LIMIT, min(events_limit, TIMELINE_EVENTS_LIMIT))
 
     action_filter = request.GET.get("action", "").strip()
-
-    from workspace.files.services.events import events_for_file, readable_events
 
     base_qs = events_for_file(file_obj, permission)
     # The dropdown only offers filters that yield matches on this file:
@@ -799,7 +801,7 @@ def events(request, uuid):
     action_qs = f"&action={action_filter}" if action_filter else ""
     refresh_url = f"{base_url}?limit={events_limit}{action_qs}"
     load_more_url = None
-    if total_event_count > events_limit and events_limit < MAX_EVENTS_LIMIT:
+    if total_event_count > events_limit and events_limit < TIMELINE_EVENTS_LIMIT:
         load_more_url = f"{base_url}?limit={events_limit + 15}{action_qs}"
 
     return render(
@@ -809,7 +811,7 @@ def events(request, uuid):
             "file": file_obj,
             "file_events": file_events,
             "events_limit": events_limit,
-            "max_events_limit": MAX_EVENTS_LIMIT,
+            "max_events_limit": TIMELINE_EVENTS_LIMIT,
             "action_filter": action_filter,
             "grouped_actions": grouped_actions,
             "total_event_count": total_event_count,

@@ -1162,16 +1162,27 @@ class FileEvent(models.Model):
             return
         with transaction.atomic(using=kwargs.get("using")):
             super().save(*args, **kwargs)
-            row = File.objects.using(self._state.db).filter(pk=self.file_id)
-            at = self.created_at
-            row.filter(Q(last_event_at__isnull=True) | Q(last_event_at__lt=at)).update(
-                last_event_at=at
-            )
-            if self.actor_id is not None:
-                row = row.exclude(owner_id=self.actor_id)
-            row.filter(
-                Q(last_foreign_event_at__isnull=True) | Q(last_foreign_event_at__lt=at)
-            ).update(last_foreign_event_at=at)
+            self._stamp_file()
+
+    def renew(self):
+        """Move the event to now: a repeat of it, folded into this row."""
+        self.created_at = timezone.now()
+        with transaction.atomic(using=self._state.db):
+            super().save(update_fields=["created_at"])
+            self._stamp_file()
+
+    def _stamp_file(self):
+        """Bring the file's recency columns up to this event's time."""
+        row = File.objects.using(self._state.db).filter(pk=self.file_id)
+        at = self.created_at
+        row.filter(Q(last_event_at__isnull=True) | Q(last_event_at__lt=at)).update(
+            last_event_at=at
+        )
+        if self.actor_id is not None:
+            row = row.exclude(owner_id=self.actor_id)
+        row.filter(
+            Q(last_foreign_event_at__isnull=True) | Q(last_foreign_event_at__lt=at)
+        ).update(last_foreign_event_at=at)
         if FileEvent.file.is_cached(self):
             # A later full save() of that instance must not write the old values back.
             file = self.file

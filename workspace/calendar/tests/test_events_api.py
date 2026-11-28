@@ -606,6 +606,94 @@ class EventResponseTests(CalendarTestMixin, APITestCase):
         self.assertEqual(self._status(event=changed), EventMember.Status.DECLINED)
 
 
+class ChangedOccurrenceVisibilityTests(CalendarTestMixin, APITestCase):
+    """An occurrence changed on its own carries its own invitees. Someone
+    invited to the series and taken off that occurrence does not see what
+    it became, in the list or one by one."""
+
+    def setUp(self):
+        super().setUp()
+        self.start = (timezone.now() + timedelta(days=1)).replace(microsecond=0)
+        self.series = Event(
+            calendar=self.calendar,
+            title="Weekly",
+            start=self.start,
+            end=self.start + timedelta(hours=1),
+            owner=self.owner,
+        )
+        apply_rule(self.series, "RRULE:FREQ=WEEKLY")
+        self.series.save()
+        EventMember.objects.create(event=self.series, user=self.member)
+        self.slot = self.start + timedelta(weeks=1)
+        self.changed = Event.objects.create(
+            calendar=self.calendar,
+            title="Salary review",
+            start=self.slot,
+            end=self.slot + timedelta(hours=1),
+            owner=self.owner,
+            recurrence_parent=self.series,
+            original_start=self.slot,
+        )
+
+    def _window(self):
+        return {
+            "start": self.start.isoformat(),
+            "end": (self.start + timedelta(weeks=3)).isoformat(),
+        }
+
+    def test_the_list_leaves_the_slot_empty_for_someone_taken_off_it(self):
+        self.client.force_authenticate(self.member)
+        for params in (self._window(), {"start": self.start.isoformat()}):
+            with self.subTest(params=params):
+                resp = self.client.get("/api/v1/events", {**params, "limit": 3})
+                self.assertEqual(resp.status_code, status.HTTP_200_OK)
+                self.assertNotIn("Salary review", resp.content.decode())
+                slots = [
+                    datetime.fromisoformat(e["original_start"])
+                    for e in resp.data
+                    if e["uuid"] == str(self.series.uuid)
+                ]
+                self.assertIn(self.start, slots)
+                self.assertNotIn(self.slot, slots)
+
+    def test_the_slot_answers_like_an_event_that_does_not_exist(self):
+        self.client.force_authenticate(self.member)
+        query = {"original_start": self.slot.isoformat()}
+        hidden = self.client.get(f"/api/v1/events/{self.series.uuid}", query)
+        by_row = self.client.get(f"/api/v1/events/{self.changed.uuid}")
+        absent = self.client.get(f"/api/v1/events/{uuid.uuid4()}", query)
+        self.assertEqual(absent.status_code, status.HTTP_404_NOT_FOUND)
+        for resp in (hidden, by_row):
+            self.assertEqual(
+                (resp.status_code, resp.content), (absent.status_code, absent.content)
+            )
+        card = self.client.get(
+            f"/calendar/events/{self.series.uuid}/card",
+            {"start": self.slot.isoformat()},
+        )
+        self.assertNotIn("Salary review", card.content.decode())
+
+    def test_someone_still_on_the_occurrence_sees_it(self):
+        EventMember.objects.create(event=self.changed, user=self.member)
+        self.client.force_authenticate(self.member)
+        listed = self.client.get("/api/v1/events", self._window())
+        self.assertIn("Salary review", [e["title"] for e in listed.data])
+        read = self.client.get(
+            f"/api/v1/events/{self.series.uuid}",
+            {"original_start": self.slot.isoformat()},
+        )
+        self.assertEqual(read.status_code, status.HTTP_200_OK)
+        self.assertEqual(read.data["title"], "Salary review")
+
+    def test_the_owner_and_a_subscriber_of_the_calendar_see_it(self):
+        CalendarSubscription.objects.create(user=self.outsider, calendar=self.calendar)
+        for user in (self.owner, self.outsider):
+            with self.subTest(user=user.username):
+                self.client.force_authenticate(user)
+                listed = self.client.get("/api/v1/events", self._window())
+                self.assertIn("Salary review", [e["title"] for e in listed.data])
+
+
 # ---------- Search ----------
 
 

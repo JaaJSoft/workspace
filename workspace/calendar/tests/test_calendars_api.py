@@ -319,6 +319,34 @@ class ExternalCalendarTests(CalendarTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         task.apply_async.assert_not_called()
 
+    def test_the_feed_is_its_owners_to_know(self, task):
+        """A feed address often carries the secret that opens it: someone
+        subscribed to the calendar reads its events, not where they come
+        from nor why the last reading failed."""
+        source = self._external()
+        ExternalCalendar.objects.filter(pk=source.pk).update(last_error="401 for t0ken")
+        CalendarSubscription.objects.create(user=self.member, calendar=source.calendar)
+
+        # The page embeds the same list: a session, as a browser holds one.
+        self.client.force_login(self.member)
+        for resp in (
+            self.client.get(f"{self.url}/{source.calendar_id}"),
+            self.client.get(self.url),
+            self.client.get("/calendar"),
+        ):
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            self.assertNotIn(FEED, resp.content.decode())
+            self.assertNotIn("t0ken", resp.content.decode())
+        read = self.client.get(f"{self.url}/{source.calendar_id}").data
+        self.assertTrue(read["is_external"])
+        self.assertIsNone(read["source_url"])
+        self.assertEqual(read["sync_error"], "")
+
+        self.client.force_login(self.owner)
+        own = self.client.get(f"{self.url}/{source.calendar_id}").data
+        self.assertEqual(own["source_url"], FEED)
+        self.assertEqual(own["sync_error"], "401 for t0ken")
+
     def test_sync_is_the_owners(self, task):
         source = self._external()
         CalendarSubscription.objects.create(user=self.member, calendar=source.calendar)

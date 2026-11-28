@@ -26,6 +26,12 @@ from .timezones import all_day_label
 
 _instant = InstantField().to_representation
 
+# How many events the list with no end is read from one `start`. Reading a
+# page costs what reading every row before it costs - each series is walked
+# from the start again - so the depth is bounded, and a reader going further
+# moves `start` forward to the last event it holds.
+AGENDA_DEPTH = 10_000
+
 
 class Listed(NamedTuple):
     """One row of the list: where it sorts, the database row behind it (what
@@ -108,6 +114,20 @@ class EventListing:
     def __getitem__(self, piece):
         if self.end is not None:
             return self._in_window()[piece]
+        # The paginator reads one row past the page to know whether one
+        # follows.
+        if piece.stop > AGENDA_DEPTH + 1:
+            raise ValidationError(
+                {
+                    "offset": [
+                        _(
+                            "A list with no end is read %(depth)s events deep "
+                            "at most: move `start` forward."
+                        )
+                        % {"depth": AGENDA_DEPTH}
+                    ]
+                }
+            )
         return self._from_start(piece.stop)[piece]
 
     # -- what both readings share --
@@ -202,10 +222,13 @@ class EventListing:
                     )
                     if (row.uuid, occurrence_start) not in replaced
                 )
-            changed = Event.objects.filter(
-                in_window, recurrence_parent_id__in=list(series), is_cancelled=False
+            # Through what the reader can see: an occurrence changed on its
+            # own carries its own invitees, and someone taken off it finds
+            # its slot empty.
+            changed = self._events().filter(
+                in_window, recurrence_parent_id__in=list(series)
             )
-            listed.extend(self._rows(with_details(self.narrow(changed))))
+            listed.extend(self._rows(with_details(changed)))
 
         listed.sort(key=lambda row: row.position)
         self._window = listed
@@ -290,9 +313,10 @@ def find_occurrence(user, uuid, original_start=None):
     """The event *uuid* names for *user*, or None when they cannot see it.
 
     With *original_start*, the occurrence of the series at that slot. A slot
-    the series dropped is no occurrence anymore. An occurrence changed on its
-    own is found through its series, and by the uuid of its own row as well:
-    the links of earlier notifications carry it.
+    the series dropped is no occurrence anymore, and neither is, for someone
+    taken off it, one changed on its own: it carries its own invitees. Such
+    an occurrence is found through its series, and by the uuid of its own row
+    as well: the links of earlier notifications carry it.
     """
     visible = with_details(Event.objects.filter(visible_events_q(user)))
     row = visible.filter(pk=uuid).first()
@@ -312,10 +336,15 @@ def find_occurrence(user, uuid, original_start=None):
         return Occurrence(row.recurrence_parent, row, row.original_start)
     if original_start is None or not row.is_recurring:
         return Occurrence(row, None, None)
-    changed = with_details(
-        Event.objects.filter(recurrence_parent=row, original_start=original_start)
+    replaced = Event.objects.filter(
+        recurrence_parent=row, original_start=original_start
+    )
+    if not replaced.exists():
+        return Occurrence(row, None, original_start)
+    changed = visible.filter(
+        recurrence_parent=row, original_start=original_start, is_cancelled=False
     ).first()
-    if changed is not None and changed.is_cancelled:
+    if changed is None:
         return None
     return Occurrence(row, changed, original_start)
 

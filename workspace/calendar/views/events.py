@@ -56,9 +56,10 @@ def _answer(event, context):
             "In the order of an agenda: by start, an all-day event at the "
             "start of its day. With `start` and `end`, the events "
             "overlapping that window; with `start` alone, the ones starting "
-            "from it on, a list that has no end while a series repeats and "
-            "so cannot be counted. An occurrence carries the uuid of its "
-            "series and its `original_start`."
+            "from it on, a list that has no end while a series repeats: it "
+            "cannot be counted, and is read ten thousand events deep at "
+            "most, after which `start` has to move forward. An occurrence "
+            "carries the uuid of its series and its `original_start`."
         ),
     ),
     post=extend_schema(

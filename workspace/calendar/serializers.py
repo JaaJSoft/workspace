@@ -76,7 +76,8 @@ class CalendarSerializer(ApiModelSerializer):
         allow_null=True,
         help_text=(
             "The ICS feed an external calendar is filled from. Set when the "
-            "calendar is created, and never changed afterwards."
+            "calendar is created, and never changed afterwards. Null for "
+            "anyone but its owner, like `sync_error` is empty."
         ),
     )
     last_synced_at = serializers.SerializerMethodField()
@@ -118,7 +119,17 @@ class CalendarSerializer(ApiModelSerializer):
 
     def get_sync_error(self, calendar) -> str:
         source = external_source(calendar)
-        return source.last_error if source is not None else ""
+        if source is None or not self.get_is_owned(calendar):
+            return ""
+        return source.last_error
+
+    def to_representation(self, calendar):
+        data = super().to_representation(calendar)
+        # A feed address often carries the secret that opens it: it is the
+        # owner's to know, like the reason its last reading failed.
+        if not self.get_is_owned(calendar):
+            data["source_url"] = None
+        return data
 
     def validate_source_url(self, value):
         if not value:

@@ -14,6 +14,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, Event, EventMember
+from workspace.calendar.services.event_listing import AGENDA_DEPTH
 from workspace.calendar.services.recurrence_rule import apply_rule
 
 User = get_user_model()
@@ -136,6 +137,21 @@ class AgendaNonRecurringTests(AgendaMixin, APITestCase):
         resp = self._get_agenda(start=timezone.now(), limit=1001)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(list(resp.data), ["limit"])
+
+    def test_the_agenda_is_read_to_a_fixed_depth_from_one_start(self):
+        """The work of a page grows with its offset: past the depth, the
+        reader moves `start` forward instead."""
+        now = timezone.now()
+        deepest = self._get_agenda(start=now, limit=20, offset=AGENDA_DEPTH - 20)
+        self.assertEqual(deepest.status_code, status.HTTP_200_OK)
+        past = self._get_agenda(start=now, limit=20, offset=AGENDA_DEPTH - 19)
+        self.assertEqual(past.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(past.data), ["offset"])
+        # A window has an end: it is read whole whatever the offset.
+        window = self._get_agenda(
+            start=now, end=self._iso(now + timedelta(days=1)), offset=10**9
+        )
+        self.assertEqual(window.status_code, status.HTTP_200_OK)
 
     def test_events_sorted_by_start_ascending(self):
         now = timezone.now()

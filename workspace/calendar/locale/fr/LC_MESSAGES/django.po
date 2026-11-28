@@ -72,6 +72,14 @@ msgstr "Indiquez au moins une personne ou une liste."
 msgid "A list with no end cannot be counted: pass `end`."
 msgstr "Une liste sans fin ne peut pas être comptée : indiquez `end`."
 
+#: services/event_listing.py
+#, python-format
+msgid ""
+"A list with no end is read %(depth)s events deep at most: move `start` "
+"forward."
+msgstr ""
+"Une liste sans fin se lit sur %(depth)s événements au plus : avancez `start`."
+
 #: services/event_scope.py
 msgid "Only the owner can edit this event."
 msgstr "Seul le propriétaire peut modifier cet événement."

@@ -202,7 +202,7 @@ def _classify_message_queryset(owner, message_uuids):
             "from_name",
             "from_email",
             "snippet",
-            "reply_to",
+            "reply_to_addresses",
             "to_addresses",
             "cc_addresses",
             "date",
@@ -229,7 +229,7 @@ def _classify_payload(message, account_email, user_tz):
     pointing elsewhere, the folder the server filed it in, attachments and
     whether it continues a thread.
     """
-    from workspace.mail.services.addresses import recipient_summary
+    from workspace.mail.services.addresses import format_addresses, recipient_summary
 
     role, recipient_count = recipient_summary(
         account_email, message.to_addresses, message.cc_addresses
@@ -239,7 +239,7 @@ def _classify_payload(message, account_email, user_tz):
         "from_name": message.from_name,
         "from_email": message.from_email,
         "snippet": message.snippet or "",
-        "reply_to": message.reply_to,
+        "reply_to": format_addresses(message.reply_to_addresses),
         "recipient_role": role,
         "recipient_count": recipient_count,
         "date": message.date.astimezone(user_tz) if message.date else None,

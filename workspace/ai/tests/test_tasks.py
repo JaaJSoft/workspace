@@ -1000,7 +1000,7 @@ class ClassifyMailMessagesTests(TestCase):
             snippet="Attached",
             from_name="Billing",
             from_email="billing@acme.com",
-            reply_to="no-reply@acme.com",
+            reply_to_addresses=[{"name": "", "email": "no-reply@acme.com"}],
             to_addresses=[{"name": "", "email": "team@acme.com"}],
             cc_addresses=[{"name": "", "email": "cls@test.com"}],
             date=datetime(2026, 8, 30, 9, 12, tzinfo=UTC),

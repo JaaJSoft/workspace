@@ -64,6 +64,47 @@ class ImapParseTests(TestCase):
         msg = _parse_message(raw, self.account, self.folder, uid=43, flags=())
         self.assertEqual(msg.in_reply_to, "")
 
+    def test_reply_to_is_parsed_into_addresses(self):
+        raw = (
+            b"From: no-reply@example.com\r\n"
+            b"Reply-To: support@example.com\r\n"
+            b"Date: Thu, 14 May 2026 10:00:00 +0000\r\n"
+            b"\r\n"
+            b"Body\r\n"
+        )
+        msg = _parse_message(raw, self.account, self.folder, uid=44, flags=())
+        self.assertEqual(
+            msg.reply_to_addresses, [{"name": "", "email": "support@example.com"}]
+        )
+
+    def test_reply_to_with_two_addresses_and_an_encoded_name(self):
+        raw = (
+            b"From: list@example.com\r\n"
+            b'Reply-To: "Doe, Jane" <jane@example.com>,\r\n'
+            b" =?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <juergen@example.de>\r\n"
+            b"Date: Thu, 14 May 2026 10:00:00 +0000\r\n"
+            b"\r\n"
+            b"Body\r\n"
+        )
+        msg = _parse_message(raw, self.account, self.folder, uid=45, flags=())
+        self.assertEqual(
+            msg.reply_to_addresses,
+            [
+                {"name": "Doe, Jane", "email": "jane@example.com"},
+                {"name": "Jürgen Müller", "email": "juergen@example.de"},
+            ],
+        )
+
+    def test_reply_to_absent_is_empty(self):
+        raw = (
+            b"From: alice@example.com\r\n"
+            b"Date: Thu, 14 May 2026 10:00:00 +0000\r\n"
+            b"\r\n"
+            b"Body\r\n"
+        )
+        msg = _parse_message(raw, self.account, self.folder, uid=46, flags=())
+        self.assertEqual(msg.reply_to_addresses, [])
+
     def test_references_header_is_captured_unfolded(self):
         """References is routinely folded across lines; the stored chain must
         be a single space-separated list so a reply can extend it."""

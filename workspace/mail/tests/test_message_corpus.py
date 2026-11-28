@@ -359,7 +359,10 @@ class MessageCorpusTests(TestCase):
         self.assertEqual(
             message.bcc_addresses, [{"name": "", "email": "secret@example.com"}]
         )
-        self.assertEqual(message.reply_to, "Achats <achats@example.net>")
+        self.assertEqual(
+            message.reply_to_addresses,
+            [{"name": "Achats", "email": "achats@example.net"}],
+        )
         self.assertEqual(message.in_reply_to, "<parent@example.com>")
         self.assertEqual(
             message.references,

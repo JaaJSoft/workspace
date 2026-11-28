@@ -390,7 +390,7 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
             "to_addresses",
             "cc_addresses",
             "bcc_addresses",
-            "reply_to",
+            "reply_to_addresses",
             "date",
             "snippet",
             "body_text",

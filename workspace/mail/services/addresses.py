@@ -36,13 +36,18 @@ def _flatten_entry(entry):
     return email or name
 
 
-def derive_recipients_text(to_addresses, cc_addresses):
-    """Flatten the to/cc JSON lists into one searchable text value."""
+def format_addresses(*fields):
+    """Render address JSON lists as one ``Name <email>, email, ...`` text."""
     parts = []
-    for field in (to_addresses, cc_addresses):
+    for field in fields:
         if isinstance(field, list):
             parts.extend(filter(None, (_flatten_entry(entry) for entry in field)))
     return ", ".join(parts)
+
+
+def derive_recipients_text(to_addresses, cc_addresses):
+    """Flatten the to/cc JSON lists into one searchable text value."""
+    return format_addresses(to_addresses, cc_addresses)
 
 
 def _entry_emails(field):

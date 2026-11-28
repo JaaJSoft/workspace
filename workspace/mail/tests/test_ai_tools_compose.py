@@ -291,6 +291,19 @@ class ReplyToEmailTests(MailComposeToolsTestCase):
         raw = save.call_args.args[1]
         self.assertIn(b"To: alice@example.com, bob@example.com", raw)
 
+    def test_reply_goes_to_the_reply_to_address(self):
+        self.parent.reply_to_addresses = [{"email": "support@example.com"}]
+        self.parent.save(update_fields=["reply_to_addresses"])
+        with patch(
+            "workspace.mail.services.imap_messages.save_draft",
+            return_value=self._draft_row(),
+        ) as save:
+            self._call(
+                self.tools.reply_to_email,
+                ReplyToEmailParams(uuid=self.parent.uuid, body="Yes."),
+            )
+        self.assertIn(b"To: support@example.com\r\n", save.call_args.args[1])
+
     def test_another_users_message_is_not_reachable(self):
         stranger = User.objects.create_user(username="stranger", password="pw")
         other_account = MailAccount.objects.create(

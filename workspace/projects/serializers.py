@@ -17,7 +17,7 @@ from workspace.common.serializers import (
 from workspace.common.services.mentions import render_comment_body
 from workspace.files.services.filetype import get_color, get_icon
 from workspace.users.queries import nameable_groups
-from workspace.users.serializers import UserSummarySerializer
+from workspace.users.serializers import GroupSummarySerializer, UserSummarySerializer
 
 from .models import (
     Epic,
@@ -101,11 +101,6 @@ def _nameable_groups(queryset, context):
     return queryset.filter(
         pk__in=nameable_groups(request.user, already_named=already_named).values("pk")
     )
-
-
-class GroupSummarySerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    name = serializers.CharField()
 
 
 class ProjectSerializer(ApiModelSerializer):

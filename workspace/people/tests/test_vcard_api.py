@@ -1,3 +1,4 @@
+import uuid
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
@@ -37,20 +38,28 @@ class ImportApiTests(APITestCase):
     def test_import_into_group(self):
         response = self.client.post(
             "/api/v1/people/import",
-            {"file": upload(), "scope": f"group:{self.team.id}"},
+            {"file": upload(), "group": self.team.id},
             format="multipart",
         )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(Person.objects.filter(group=self.team).count(), 2)
 
-    def test_foreign_group_is_400(self):
+    def test_a_group_one_is_not_in_is_refused_like_one_that_does_not_exist(self):
         other = Group.objects.create(name="other")
-        response = self.client.post(
-            "/api/v1/people/import",
-            {"file": upload(), "scope": f"group:{other.id}"},
-            format="multipart",
-        )
-        self.assertEqual(response.status_code, 400)
+
+        def refusal(group_id):
+            response = self.client.post(
+                "/api/v1/people/import",
+                {"file": upload(), "group": group_id},
+                format="multipart",
+            )
+            return response.status_code, response.content.replace(
+                str(group_id).encode(), b"<id>"
+            )
+
+        absent = refusal(987654)
+        self.assertEqual(absent[0], 400)
+        self.assertEqual(refusal(other.id), absent)
         self.assertFalse(Person.objects.exists())
 
     def test_missing_file_is_400(self):
@@ -68,7 +77,7 @@ class ImportApiTests(APITestCase):
         self.assertIn("file", response.data)
 
     def test_too_large_is_400(self):
-        from workspace.people.views.vcard import IMPORT_MAX_SIZE
+        from workspace.people.serializers import IMPORT_MAX_SIZE
 
         response = self.client.post(
             "/api/v1/people/import",
@@ -127,34 +136,53 @@ class ExportApiTests(APITestCase):
         self.assertIn("KIND:group", text)
         self.assertIn(f"MEMBER:urn:uuid:{self.jane.uuid}", text)
 
-    def test_export_one_scope(self):
-        response = self.client.get("/api/v1/people/export", {"scope": "mine"})
+    def test_export_one_address_book(self):
+        response = self.client.get("/api/v1/people/export", {"group": "none"})
         self.assertEqual(
             response["Content-Disposition"], 'attachment; filename="my-contacts.vcf"'
         )
         text = response.content.decode()
         self.assertIn("FN:Jane", text)
         self.assertNotIn("FN:Team Contact", text)
-        response = self.client.get(
-            "/api/v1/people/export", {"scope": f"group:{self.team.id}"}
-        )
+        self.assertIn("KIND:group", text)
+        for params in ({"group": self.team.id}, {"group_name": "Team"}):
+            with self.subTest(params=params):
+                response = self.client.get("/api/v1/people/export", params)
+                text = response.content.decode()
+                self.assertIn("FN:Team Contact", text)
+                self.assertNotIn("FN:Jane", text)
+                # The lists of another address book stay out of the file.
+                self.assertNotIn("KIND:group", text)
+        response = self.client.get("/api/v1/people/export", {"group": self.team.id})
         self.assertEqual(
             response["Content-Disposition"], 'attachment; filename="team.vcf"'
         )
-        text = response.content.decode()
-        self.assertIn("FN:Team Contact", text)
-        self.assertNotIn("FN:Jane", text)
-        self.assertNotIn("KIND:group", text)
 
-    def test_unknown_scope_is_400(self):
-        response = self.client.get("/api/v1/people/export", {"scope": "group:999"})
-        self.assertEqual(response.status_code, 400)
-
-    def test_export_one_person(self):
-        response = self.client.get(
-            "/api/v1/people/export", {"person": str(self.jane.uuid)}
-        )
+    def test_export_takes_the_filters_of_the_contact_list(self):
+        response = self.client.get("/api/v1/people/export", {"q": "jane"})
         self.assertEqual(response.status_code, 200)
+        text = response.content.decode()
+        self.assertIn("FN:Jane", text)
+        self.assertNotIn("FN:Team Contact", text)
+
+    def test_a_group_one_is_not_in_exports_nothing(self):
+        other = Group.objects.create(name="other")
+        create_person(group=other, display_name="Others")
+        response = self.client.get("/api/v1/people/export", {"group": other.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.decode().count("BEGIN:VCARD"), 0)
+
+    def test_malformed_filters_are_400(self):
+        for name in ("group", "list"):
+            with self.subTest(name):
+                response = self.client.get("/api/v1/people/export", {name: "nope"})
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(list(response.data), [name])
+
+    def test_download_one_person(self):
+        response = self.client.get(f"/api/v1/people/{self.jane.uuid}/download")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/vcard; charset=utf-8")
         self.assertEqual(
             response["Content-Disposition"],
             'attachment; filename="Jane \\"JD\\" Doe.vcf"',
@@ -163,35 +191,8 @@ class ExportApiTests(APITestCase):
         self.assertEqual(text.count("BEGIN:VCARD"), 1)
         self.assertIn("EMAIL;TYPE=work:jane@example.com", text)
 
-    def test_export_foreign_person_is_404(self):
-        response = self.client.get(
-            "/api/v1/people/export", {"person": str(self.bobs.uuid)}
-        )
-        self.assertEqual(response.status_code, 404)
-
-    def test_malformed_filters_are_400(self):
-        for name in ("person", "list"):
-            with self.subTest(name):
-                response = self.client.get("/api/v1/people/export", {name: "nope"})
-                self.assertEqual(response.status_code, 400)
-                self.assertIn(name, response.data)
-
-    def test_person_wins_over_list_and_scope(self):
-        response = self.client.get(
-            "/api/v1/people/export",
-            {
-                "person": str(self.jane.uuid),
-                "list": str(self.friends.uuid),
-                "scope": f"group:{self.team.id}",
-            },
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content.decode().count("BEGIN:VCARD"), 1)
-
-    def test_export_list_with_members(self):
-        response = self.client.get(
-            "/api/v1/people/export", {"list": str(self.friends.uuid)}
-        )
+    def test_download_list_with_members(self):
+        response = self.client.get(f"/api/v1/people/lists/{self.friends.uuid}/download")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response["Content-Disposition"], 'attachment; filename="Friends.vcf"'
@@ -201,21 +202,25 @@ class ExportApiTests(APITestCase):
         self.assertIn("FN:Jane", text)
         self.assertIn("KIND:group", text)
 
-    def test_export_foreign_list_is_404(self):
+    def test_a_download_out_of_reach_answers_like_one_that_does_not_exist(self):
         theirs = create_list(owner=self.bob, name="Theirs")
-        response = self.client.get("/api/v1/people/export", {"list": str(theirs.uuid)})
-        self.assertEqual(response.status_code, 404)
-
-    def test_old_vcf_routes_are_gone(self):
-        self.assertEqual(
-            self.client.get(f"/api/v1/people/{self.jane.uuid}/vcf").status_code, 404
-        )
-        self.assertEqual(
-            self.client.get(
-                f"/api/v1/people/lists/{self.friends.uuid}/vcf"
-            ).status_code,
-            404,
-        )
+        for hidden, absent in (
+            (
+                f"/api/v1/people/{self.bobs.uuid}/download",
+                f"/api/v1/people/{uuid.uuid4()}/download",
+            ),
+            (
+                f"/api/v1/people/lists/{theirs.uuid}/download",
+                f"/api/v1/people/lists/{uuid.uuid4()}/download",
+            ),
+        ):
+            with self.subTest(path=hidden):
+                answer, missing = self.client.get(hidden), self.client.get(absent)
+                self.assertEqual(answer.status_code, 404)
+                self.assertEqual(
+                    (answer.status_code, answer.content),
+                    (missing.status_code, missing.content),
+                )
 
     def test_person_payload_carries_source_and_import_uid_read_only(self):
         response = self.client.get(f"/api/v1/people/{self.jane.uuid}")
@@ -233,7 +238,9 @@ class ExportApiTests(APITestCase):
 
     def test_export_action_is_offered(self):
         response = self.client.post(
-            "/api/v1/people/actions", {"uuids": [str(self.jane.uuid)]}, format="json"
+            "/api/v1/people/available-actions",
+            {"uuids": [str(self.jane.uuid)]},
+            format="json",
         )
         ids = [a["id"] for a in response.data[str(self.jane.uuid)]]
         self.assertIn("export", ids)

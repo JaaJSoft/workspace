@@ -1,40 +1,32 @@
-from django.db import IntegrityError, transaction
+import math
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.urls import reverse
 from django.utils.translation import gettext as _
-from drf_spectacular.types import OpenApiTypes
+from django.utils.translation import gettext_lazy
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from workspace.common.qr import QR_IMAGE_KINDS
+from workspace.common.serializers import ApiModelSerializer, SummaryField
+from workspace.common.services.image import SOURCE_TYPES
 from workspace.users.queries import pickable_users
+from workspace.users.serializers import GroupSummarySerializer, UserSummarySerializer
 
 from .models import ADDRESS_TYPES, EMAIL_TYPES, PHONE_TYPES, Person, PersonList
-from .services.persons import create_person, move_to_scope, update_person
 
-SCOPE_MINE = "mine"
-SCOPE_GROUP_PREFIX = "group:"
+User = get_user_model()
 
 
-def scope_label(obj):
-    """The wire form of a scope: ``mine`` or ``group:<id>``."""
-    if obj.owner_id is not None:
-        return SCOPE_MINE
-    return f"{SCOPE_GROUP_PREFIX}{obj.group_id}"
+def own_groups(queryset, context):
+    """The groups whose address book the caller may file a contact in: the
+    ones they are in. A group owns its book, so naming it takes being in it."""
+    return queryset.filter(pk__in=context["request"].user.groups.values("pk"))
 
 
-def parse_scope(user, raw):
-    """Turn a wire scope into ``{"owner": user}`` or ``{"group": group}``.
-
-    Raises ``serializers.ValidationError`` on an unknown form or a group the
-    user is not a member of - the two look the same from outside on purpose.
-    """
-    if raw == SCOPE_MINE:
-        return {"owner": user}
-    if isinstance(raw, str) and raw.startswith(SCOPE_GROUP_PREFIX):
-        group_id = raw[len(SCOPE_GROUP_PREFIX) :]
-        if group_id.isdigit():
-            group = user.groups.filter(pk=int(group_id)).first()
-            if group is not None:
-                return {"group": group}
-    raise serializers.ValidationError(_("Unknown scope."))
+def pickable(queryset, context):
+    return queryset.filter(pk__in=pickable_users().values("pk"))
 
 
 class EmailEntrySerializer(serializers.Serializer):
@@ -80,37 +72,46 @@ class AddressEntrySerializer(serializers.Serializer):
         return attrs
 
 
-class LinkedUserSerializer(serializers.Serializer):
-    id = serializers.IntegerField(source="pk")
-    username = serializers.CharField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
-    avatar_url = serializers.SerializerMethodField()
+LINKED_USER_TAKEN = gettext_lazy("Another contact is already linked to this account.")
 
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_avatar_url(self, obj):
-        return f"/api/v1/users/{obj.pk}/avatar"
+_GROUP_HELP = (
+    "The group whose address book holds it; null for the caller's own address book."
+)
 
 
-def _linked_user_clash():
-    return serializers.ValidationError(
-        {"linked_user_id": [_("Another contact is already linked to this account.")]}
-    )
+def book_of(instance, attrs, user):
+    """``{"owner": ...}`` or ``{"group": ...}``: the address book a write
+    leaves the row in. A null ``group`` is the caller's own book."""
+    if "group" in attrs:
+        group = attrs["group"]
+        return {"group": group} if group is not None else {"owner": user}
+    if instance is not None:
+        if instance.owner_id is not None:
+            return {"owner": instance.owner}
+        return {"group": instance.group}
+    return {"owner": user}
 
 
-class PersonSerializer(serializers.ModelSerializer):
+class PersonSerializer(ApiModelSerializer):
     emails = EmailEntrySerializer(many=True, required=False)
     phones = PhoneEntrySerializer(many=True, required=False)
     addresses = AddressEntrySerializer(many=True, required=False)
-    linked_user = LinkedUserSerializer(read_only=True)
-    linked_user_id = serializers.PrimaryKeyRelatedField(
-        source="linked_user",
-        queryset=pickable_users(),
+    group = SummaryField(
+        GroupSummarySerializer,
+        queryset=Group.objects.all(),
+        narrow=own_groups,
         allow_null=True,
         required=False,
-        write_only=True,
+        help_text=_GROUP_HELP,
     )
-    scope = serializers.CharField(required=False)
+    linked_user = SummaryField(
+        UserSummarySerializer,
+        queryset=User.objects.all(),
+        narrow=pickable,
+        allow_null=True,
+        required=False,
+        help_text="The workspace account this contact is, when it is one.",
+    )
     # vCard properties keyed by property name: a bare model JSONField would
     # take a string or a list just as happily and the round trip would break.
     extra_properties = serializers.DictField(required=False)
@@ -133,9 +134,8 @@ class PersonSerializer(serializers.ModelSerializer):
             "notes",
             "source",
             "import_uid",
+            "group",
             "linked_user",
-            "linked_user_id",
-            "scope",
             "has_avatar",
             "avatar_url",
             "created_at",
@@ -149,31 +149,21 @@ class PersonSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        # DRF derives a validator from the unique constraints that would make
+        # `group` and `linked_user` required together. One contact per account
+        # and per address book is checked in validate(), and by the
+        # constraints themselves when two writes race.
+        validators = []
 
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_avatar_url(self, obj):
-        if obj.linked_user_id is not None:
-            return f"/api/v1/users/{obj.linked_user_id}/avatar"
-        if obj.has_avatar:
-            return f"/api/v1/people/{obj.uuid}/avatar"
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_avatar_url(self, person):
+        """The image of the linked account, or the contact's own; null
+        without either."""
+        if person.linked_user_id is not None:
+            return reverse("user-avatar-retrieve", args=[person.linked_user_id])
+        if person.has_avatar:
+            return reverse("person-avatar", args=[person.uuid])
         return None
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data["scope"] = scope_label(instance)
-        return data
-
-    def validate_scope(self, value):
-        return parse_scope(self.context["request"].user, value)
-
-    def _current_scope(self, attrs):
-        if "scope" in attrs:
-            return attrs["scope"]
-        if self.instance is not None:
-            if self.instance.owner_id is not None:
-                return {"owner": self.instance.owner}
-            return {"group": self.instance.group}
-        return {"owner": self.context["request"].user}
 
     def validate(self, attrs):
         if "linked_user" in attrs:
@@ -183,90 +173,56 @@ class PersonSerializer(serializers.ModelSerializer):
         else:
             linked = None
         if linked is not None:
-            clash = Person.objects.filter(
-                linked_user=linked, **self._current_scope(attrs)
-            )
+            book = book_of(self.instance, attrs, self.context["request"].user)
+            clash = Person.objects.filter(linked_user=linked, **book)
             if self.instance is not None:
                 clash = clash.exclude(pk=self.instance.pk)
             if clash.exists():
-                raise serializers.ValidationError(
-                    {
-                        "linked_user_id": _(
-                            "Another contact is already linked to this account."
-                        )
-                    }
-                )
+                raise serializers.ValidationError({"linked_user": [LINKED_USER_TAKEN]})
         return attrs
 
-    def create(self, validated_data):
-        scope = validated_data.pop("scope", None) or {
-            "owner": self.context["request"].user
-        }
-        try:
-            with transaction.atomic():
-                return create_person(**scope, **validated_data)
-        except IntegrityError as exc:
-            raise _linked_user_clash() from exc
 
-    def update(self, instance, validated_data):
-        scope = validated_data.pop("scope", None)
-        # `validate` checked the scope holds no other contact for that account,
-        # but a concurrent write can land between the check and here: the
-        # partial unique constraints are what actually decides, and their
-        # IntegrityError is the same refusal, not a 500.
-        try:
-            with transaction.atomic():
-                if validated_data:
-                    update_person(instance, **validated_data)
-                if scope is not None:
-                    target_owner = scope.get("owner")
-                    target_group = scope.get("group")
-                    if (target_owner, target_group) != (
-                        instance.owner,
-                        instance.group,
-                    ):
-                        move_to_scope(instance, owner=target_owner, group=target_group)
-        except IntegrityError as exc:
-            raise _linked_user_clash() from exc
-        return instance
-
-
-class PersonListSerializer(serializers.ModelSerializer):
-    scope = serializers.CharField(required=False)
+class PersonListSerializer(ApiModelSerializer):
+    group = SummaryField(
+        GroupSummarySerializer,
+        queryset=Group.objects.all(),
+        narrow=own_groups,
+        allow_null=True,
+        required=False,
+        help_text=_GROUP_HELP + " Set when the list is created.",
+    )
     member_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = PersonList
-        fields = ["uuid", "name", "scope", "member_count", "created_at"]
+        fields = ["uuid", "name", "group", "member_count", "created_at"]
         read_only_fields = ["uuid", "created_at"]
+        # As for a contact: a name taken in the address book is refused by
+        # the constraint, which the views turn into an error on `name`.
+        validators = []
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data["scope"] = scope_label(instance)
-        return data
-
-    def validate_scope(self, value):
-        if self.instance is not None:
+    def validate_group(self, group):
+        if self.instance is not None and group != self.instance.group:
             raise serializers.ValidationError(
                 _("A list cannot change scope; create one in the other address book.")
             )
-        return parse_scope(self.context["request"].user, value)
+        return group
 
 
-class ListMembersSerializer(serializers.Serializer):
-    uuids = serializers.ListField(
-        child=serializers.UUIDField(), min_length=1, max_length=200
-    )
+class ListDataSerializer(serializers.Serializer):
+    """What a batch about a contact list takes: the list."""
+
+    list = serializers.UUIDField()
 
 
 class PersonPromoteSerializer(serializers.Serializer):
-    """A mail correspondent (``email``, ``name``) or a workspace account (``user_id``)."""
+    """A mail correspondent (``email``, ``name``) or a workspace account (``user``)."""
 
     email = serializers.EmailField(max_length=254, required=False)
     name = serializers.CharField(
         max_length=255, required=False, allow_blank=True, default=""
     )
-    user_id = serializers.PrimaryKeyRelatedField(
+    user = serializers.PrimaryKeyRelatedField(
         source="account",
         queryset=pickable_users(),
         required=False,
@@ -274,5 +230,84 @@ class PersonPromoteSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if ("email" in attrs) == ("account" in attrs):
-            raise serializers.ValidationError("Give either an email or a user_id.")
+            raise serializers.ValidationError(_("Give either an email or a user."))
+        return attrs
+
+
+class OwnGroupField(serializers.PrimaryKeyRelatedField):
+    def get_queryset(self):
+        return self.context["request"].user.groups.all()
+
+
+IMPORT_MAX_SIZE = 20 * 1024 * 1024
+
+
+class PersonImportSerializer(serializers.Serializer):
+    file = serializers.FileField(help_text="A .vcf file, 20 MB at most.")
+    group = OwnGroupField(
+        queryset=Group.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text=_GROUP_HELP,
+    )
+
+    def validate_file(self, upload):
+        if upload.size > IMPORT_MAX_SIZE:
+            raise serializers.ValidationError(
+                _("File too large. Maximum size is 20 MB.")
+            )
+        return upload
+
+
+class ImportReportSerializer(serializers.Serializer):
+    created = serializers.IntegerField(help_text="Contacts the file added.")
+    updated = serializers.IntegerField(
+        help_text="Contacts the file brought up to date."
+    )
+    lists = serializers.IntegerField(help_text="Contact lists the file carried.")
+
+
+class QRCodeQuerySerializer(serializers.Serializer):
+    # `kind`, not `format`: DRF reserves the latter for picking a renderer
+    # and answers 404 for a value none of them declares.
+    kind = serializers.ChoiceField(
+        choices=QR_IMAGE_KINDS, required=False, default="svg"
+    )
+
+
+AVATAR_MAX_SIZE = 10 * 1024 * 1024
+
+
+class AvatarUploadSerializer(serializers.Serializer):
+    """The image, and the square of it to keep, in its own pixels."""
+
+    file = serializers.FileField(
+        help_text="A JPEG, PNG, WebP or GIF image, 10 MB at most."
+    )
+    crop_x = serializers.FloatField(required=False, default=0)
+    crop_y = serializers.FloatField(required=False, default=0)
+    crop_w = serializers.FloatField()
+    crop_h = serializers.FloatField()
+
+    def validate_file(self, image):
+        if image.content_type not in SOURCE_TYPES:
+            raise serializers.ValidationError(
+                _("Unsupported image type. Use JPEG, PNG, WebP, or GIF.")
+            )
+        if image.size > AVATAR_MAX_SIZE:
+            raise serializers.ValidationError(
+                _("Image too large. Maximum size is 10 MB.")
+            )
+        return image
+
+    def validate(self, attrs):
+        # Each side is named for itself: a client that sent one bad number
+        # learns which.
+        refused = {}
+        for key in ("crop_x", "crop_y", "crop_w", "crop_h"):
+            positive = attrs[key] > 0 or key in ("crop_x", "crop_y")
+            if not math.isfinite(attrs[key]) or not positive:
+                refused[key] = [_("Invalid crop coordinates.")]
+        if refused:
+            raise serializers.ValidationError(refused)
         return attrs

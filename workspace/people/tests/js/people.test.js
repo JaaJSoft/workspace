@@ -55,19 +55,29 @@ test('listUrl only carries the filters that are set', () => {
 test('qrUrl asks for svg by default and names the kind otherwise', () => {
   const ctx = load();
   const url = ctx.peopleHelpers.qrUrl;
-  assert.equal(url('abc'), '/api/v1/people/qrcode?person=abc');
-  assert.equal(url('abc', 'svg'), '/api/v1/people/qrcode?person=abc');
-  assert.equal(url('abc', 'png'), '/api/v1/people/qrcode?person=abc&kind=png');
+  assert.equal(url('abc'), '/api/v1/people/abc/qrcode');
+  assert.equal(url('abc', 'svg'), '/api/v1/people/abc/qrcode');
+  assert.equal(url('abc', 'png'), '/api/v1/people/abc/qrcode?kind=png');
 });
 
-test('exportUrl maps every target onto the one export endpoint', () => {
+test('exportUrl sends a contact or a list to its own file, a book to the export', () => {
   const ctx = load();
   const url = ctx.peopleHelpers.exportUrl;
   assert.equal(url('all'), '/api/v1/people/export');
-  assert.equal(url('mine'), '/api/v1/people/export?scope=mine');
-  assert.equal(url('group:3'), '/api/v1/people/export?scope=group%3A3');
-  assert.equal(url('list:abc'), '/api/v1/people/export?list=abc');
-  assert.equal(url('person:a-b'), '/api/v1/people/export?person=a-b');
+  assert.equal(url('mine'), '/api/v1/people/export?group=none');
+  assert.equal(url('group:3'), '/api/v1/people/export?group=3');
+  assert.equal(url('list:abc'), '/api/v1/people/lists/abc/download');
+  assert.equal(url('person:a-b'), '/api/v1/people/a-b/download');
+});
+
+test('the page word for an address book maps to the group the API names', () => {
+  const ctx = load();
+  const { scopeOf, groupOf, withScope } = ctx.peopleHelpers;
+  assert.equal(groupOf('mine'), null);
+  assert.equal(groupOf('group:12'), 12);
+  assert.equal(scopeOf({ group: null }), 'mine');
+  assert.equal(scopeOf({ group: { id: 12, name: 'Team' } }), 'group:12');
+  assert.equal(withScope({ uuid: 'l1', group: { id: 3, name: 'Crew' } }).scope, 'group:3');
 });
 
 test('the export dialog opens on the sidebar selection and counts what it covers', () => {
@@ -128,13 +138,13 @@ test('menu rows open the export dialog on their target instead of downloading', 
   assert.equal(app.exportForm.target, 'person:p1');
   assert.equal(app.exportPerson.name, 'Jane');
   assert.deepEqual({ ...app.exportSummary() }, { contacts: 1, lists: 0 });
-  assert.equal(app.exportHref(), '/api/v1/people/export?person=p1');
+  assert.equal(app.exportHref(), '/api/v1/people/p1/download');
   app.ctxMenu = { open: true, type: 'list', data: { uuid: 'l1', name: 'Friends' } };
   app.ctxListAction('export');
   assert.equal(opened, 2);
   assert.equal(app.exportForm.target, 'list:l1');
   assert.equal(app.exportPerson, null);
-  assert.equal(app.exportHref(), '/api/v1/people/export?list=l1');
+  assert.equal(app.exportHref(), '/api/v1/people/lists/l1/download');
   assert.equal(typeof ctx.window.location, 'undefined');
 });
 
@@ -288,7 +298,7 @@ test('the person context menu opens on the row and fills from the actions endpoi
   assert.equal(app.ctxMenu.type, 'person');
   assert.equal(app.ctxMenu.actions, null);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, '/api/v1/people/actions');
+  assert.equal(calls[0].url, '/api/v1/people/available-actions');
   calls[0].resolve({ ok: true, json: async () => ({ p1: [{ id: 'edit' }, { id: 'delete' }] }) });
   await new Promise((r) => setTimeout(r, 0));
   assert.deepStrictEqual(Array.from(app.ctxMenu.actions).map((a) => a.id), ['edit', 'delete']);
@@ -328,9 +338,9 @@ test('a list context menu needs no request and routes rename and delete', () => 
   assert.deepStrictEqual(calls, [['rename', 'l1'], ['delete', 'l1']]);
 });
 
-test('a QR image failure says too large only when the server answered 413', async () => {
+test('a QR image failure says too large only when the server answered 409', async () => {
   const cases = [
-    [() => Promise.resolve({ status: 413 }), 'too_large'],
+    [() => Promise.resolve({ status: 409 }), 'too_large'],
     [() => Promise.resolve({ status: 500 }), 'failed'],
     [() => Promise.resolve({ status: 403 }), 'failed'],
     [() => Promise.reject(new Error('offline')), 'failed'],
@@ -347,7 +357,7 @@ test('a QR image failure says too large only when the server answered 413', asyn
     assert.equal(app.qrError, '');
     await app.qrLoadFailed();
     assert.equal(app.qrError, expected);
-    assert.deepEqual(requested, ['/api/v1/people/qrcode?person=abc']);
+    assert.deepEqual(requested, ['/api/v1/people/abc/qrcode']);
   }
 });
 

@@ -47,6 +47,9 @@ MODULE_SEGMENTS = {
 }
 # Parameters that are not the identifier of a resource.
 PLAIN_PARAMETERS = {"token", "module", "key"}
+# A link identified by the pair keeps both: a row of its own has no uuid to
+# be addressed by, so its path names the two rows it ties.
+PAIR_LINKS = {"/api/v1/people/lists/{list_uuid}/members/{uuid}"}
 BANNED_SEGMENTS = {
     "delete",
     "remove",
@@ -95,7 +98,10 @@ def _path_gaps(path, operations, gaps):
             break
 
     addressed_through_a_parent = (
-        len(identifiers) == 2 and ends_on_identifier and identifiers[-1] != "user_id"
+        len(identifiers) == 2
+        and ends_on_identifier
+        and identifiers[-1] != "user_id"
+        and path not in PAIR_LINKS
     )
     if len(identifiers) >= 3 or addressed_through_a_parent:
         gaps["nesting"].add(path)
@@ -108,7 +114,13 @@ def _path_gaps(path, operations, gaps):
         ):
             gaps["path vocabulary"].add(path)
 
-    if "put" in operations and "patch" not in operations and ends_on_identifier:
+    # On a pair link PUT sets the link: there is no row to update in part.
+    if (
+        "put" in operations
+        and "patch" not in operations
+        and ends_on_identifier
+        and path not in PAIR_LINKS
+    ):
         gaps["update without PATCH"].add(path)
 
     for method in METHODS:

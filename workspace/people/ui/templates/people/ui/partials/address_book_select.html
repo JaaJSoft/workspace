@@ -3,7 +3,7 @@ Address book picker
 ===================
 A <select> over the books a contact can live in: "mine" for the caller's
 personal book, "group:<id>" for each of the `groups` in the enclosing Alpine
-scope (SCOPE_GROUP_PREFIX in people/serializers.py reads that format back).
+scope (SCOPE_GROUP_PREFIX in people/scopes.py reads that format back).
 
 Params (Alpine expression fragments written by the including template):
   - model_expr:    the x-model target (e.g. "personForm.scope")

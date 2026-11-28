@@ -66,7 +66,9 @@ class PeopleApiLanguageTests(APITestCase):
 
     def _labels(self):
         response = self.client.post(
-            "/api/v1/people/actions", {"uuids": [str(self.person.uuid)]}, format="json"
+            "/api/v1/people/available-actions",
+            {"uuids": [str(self.person.uuid)]},
+            format="json",
         )
         self.assertEqual(response.status_code, 200)
         return {a["id"]: a["label"] for a in response.json()[str(self.person.uuid)]}

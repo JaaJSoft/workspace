@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework.test import APITestCase
@@ -59,7 +61,9 @@ class PersonActionsEndpointTests(APITestCase):
 
     def test_returns_map(self):
         response = self.client.post(
-            "/api/v1/people/actions", {"uuids": [str(self.mine.uuid)]}, format="json"
+            "/api/v1/people/available-actions",
+            {"uuids": [str(self.mine.uuid)]},
+            format="json",
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -70,22 +74,33 @@ class PersonActionsEndpointTests(APITestCase):
     def test_group_member_gets_move(self):
         self.alice.groups.add(self.team)
         response = self.client.post(
-            "/api/v1/people/actions", {"uuids": [str(self.mine.uuid)]}, format="json"
+            "/api/v1/people/available-actions",
+            {"uuids": [str(self.mine.uuid)]},
+            format="json",
         )
         self.assertIn("move", ids(response.data[str(self.mine.uuid)]))
 
-    def test_unreachable_is_404(self):
+    def test_a_contact_out_of_reach_has_no_action_like_one_that_does_not_exist(self):
+        """One stale uuid does not cost the rest of the list its answer."""
+        absent = uuid.uuid4()
+        asked = [self.mine.uuid, self.bobs.uuid, absent]
         response = self.client.post(
-            "/api/v1/people/actions", {"uuids": [str(self.bobs.uuid)]}, format="json"
+            "/api/v1/people/available-actions",
+            {"uuids": [str(person) for person in asked]},
+            format="json",
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.data), [str(person) for person in asked])
+        self.assertTrue(response.data[str(self.mine.uuid)])
+        self.assertEqual(response.data[str(self.bobs.uuid)], [])
+        self.assertEqual(response.data[str(absent)], [])
 
     def test_malformed_is_400(self):
         response = self.client.post(
-            "/api/v1/people/actions", {"uuids": ["x"]}, format="json"
+            "/api/v1/people/available-actions", {"uuids": ["x"]}, format="json"
         )
         self.assertEqual(response.status_code, 400)
         response = self.client.post(
-            "/api/v1/people/actions", {"uuids": []}, format="json"
+            "/api/v1/people/available-actions", {"uuids": []}, format="json"
         )
         self.assertEqual(response.status_code, 400)

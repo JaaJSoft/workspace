@@ -15,3 +15,11 @@ class UserSummarySerializer(serializers.Serializer):
 
     def get_avatar_url(self, user) -> str:
         return reverse("user-avatar-retrieve", args=[user.pk])
+
+
+class GroupSummarySerializer(serializers.Serializer):
+    """A group as every API answer shows one: the group of a project, of an
+    address book, of a share."""
+
+    id = serializers.IntegerField()
+    name = serializers.CharField()

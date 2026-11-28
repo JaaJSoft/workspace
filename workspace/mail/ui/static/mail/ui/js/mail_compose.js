@@ -282,7 +282,7 @@ window.mailComposeMixin = function mailComposeMixin() {
       if (row.person_uuid || row.promoting) return;
       row.promoting = true;
       const body = row.kind === 'account'
-        ? { user_id: row.user_id }
+        ? { user: row.user_id }
         : { email: row.email, name: row.name };
       try {
         const res = await this._fetch('/api/v1/people/promote', { method: 'POST', body });

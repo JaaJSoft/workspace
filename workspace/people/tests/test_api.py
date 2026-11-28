@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -33,7 +34,10 @@ class PersonApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["scope"], "mine")
+        self.assertIsNone(response.data["group"])
+        # The answer of a create is the object a read answers.
+        read = self.client.get(f"/api/v1/people/{response.data['uuid']}")
+        self.assertEqual(read.data, response.data)
         self.assertEqual(response.data["addresses"][0]["type"], "home")
         self.assertEqual(response.data["addresses"][0]["postal_code"], "")
         person = Person.objects.get(uuid=response.data["uuid"])
@@ -42,20 +46,27 @@ class PersonApiTests(APITestCase):
     def test_create_group_person(self):
         response = self.client.post(
             "/api/v1/people",
-            {"display_name": "Team contact", "scope": f"group:{self.team.id}"},
+            {"display_name": "Team contact", "group": self.team.id},
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["scope"], f"group:{self.team.id}")
+        self.assertEqual(response.data["group"], {"id": self.team.id, "name": "team"})
 
-    def test_create_in_foreign_group_is_400(self):
-        response = self.client.post(
-            "/api/v1/people",
-            {"display_name": "Nope", "scope": f"group:{self.other_team.id}"},
-            format="json",
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("scope", response.data)
+    def test_a_group_one_is_not_in_is_refused_like_one_that_does_not_exist(self):
+        def refusal(group_id):
+            response = self.client.post(
+                "/api/v1/people",
+                {"display_name": "Nope", "group": group_id},
+                format="json",
+            )
+            return response.status_code, response.content.replace(
+                str(group_id).encode(), b"<id>"
+            )
+
+        absent = refusal(987654)
+        self.assertEqual(absent[0], 400)
+        self.assertEqual(refusal(self.other_team.id), absent)
+        self.assertFalse(Person.objects.filter(display_name="Nope").exists())
 
     def test_invalid_email_is_400(self):
         response = self.client.post(
@@ -161,7 +172,7 @@ class PersonApiTests(APITestCase):
         create_person(group=self.other_team, display_name="Others")
         response = self.client.get("/api/v1/people")
         self.assertEqual(response.status_code, 200)
-        names = [p["display_name"] for p in response.data["results"]]
+        names = [p["display_name"] for p in response.data]
         self.assertEqual(names, ["Mine", "Teams"])
 
     def test_search_matches_email(self):
@@ -172,103 +183,155 @@ class PersonApiTests(APITestCase):
         )
         create_person(owner=self.alice, display_name="Carol")
         response = self.client.get("/api/v1/people", {"q": "ACME"})
-        names = [p["display_name"] for p in response.data["results"]]
+        names = [p["display_name"] for p in response.data]
         self.assertEqual(names, ["Bob"])
 
     def test_search_ignores_accents(self):
         create_person(owner=self.alice, display_name="Éloïse")
         create_person(owner=self.alice, display_name="Carol")
         response = self.client.get("/api/v1/people", {"q": "eloise"})
-        names = [p["display_name"] for p in response.data["results"]]
+        names = [p["display_name"] for p in response.data]
         self.assertEqual(names, ["Éloïse"])
 
-    def test_scope_filter(self):
+    def _names(self, **params):
+        response = self.client.get("/api/v1/people", params)
+        self.assertEqual(response.status_code, 200, response.data)
+        return [p["display_name"] for p in response.data]
+
+    def test_group_filter(self):
         create_person(owner=self.alice, display_name="Mine")
         create_person(group=self.team, display_name="Teams")
-        response = self.client.get("/api/v1/people", {"scope": f"group:{self.team.id}"})
-        names = [p["display_name"] for p in response.data["results"]]
-        self.assertEqual(names, ["Teams"])
-        response = self.client.get("/api/v1/people", {"scope": "mine"})
-        names = [p["display_name"] for p in response.data["results"]]
-        self.assertEqual(names, ["Mine"])
+        self.assertEqual(self._names(group=self.team.id), ["Teams"])
+        self.assertEqual(self._names(group_name="TEAM"), ["Teams"])
+        # `none` is the caller's own address book.
+        self.assertEqual(self._names(group="none"), ["Mine"])
+        self.assertEqual(self._names(group=f"none,{self.team.id}"), ["Mine", "Teams"])
 
-    def test_scope_filter_unknown_group_is_400(self):
-        response = self.client.get("/api/v1/people", {"scope": "group:999"})
+    def test_a_group_one_is_not_in_holds_nothing(self):
+        create_person(group=self.other_team, display_name="Others")
+        self.assertEqual(self._names(group=self.other_team.id), [])
+        self.assertEqual(self._names(group=987654), [])
+        self.assertEqual(self._names(group_name="other"), [])
+
+    def test_group_filter_malformed_is_400(self):
+        response = self.client.get("/api/v1/people", {"group": "team"})
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(list(response.data), ["group"])
+
+    def test_the_list_is_paged(self):
+        for name in ("Ada", "Bob", "Carol"):
+            create_person(owner=self.alice, display_name=name)
+        first = self.client.get("/api/v1/people", {"limit": 2, "count": "true"})
+        self.assertEqual([p["display_name"] for p in first.data], ["Ada", "Bob"])
+        self.assertEqual(first["X-Has-More"], "true")
+        self.assertEqual(first["X-Total-Count"], "3")
+        rest = self.client.get("/api/v1/people", {"limit": 2, "offset": 2})
+        self.assertEqual([p["display_name"] for p in rest.data], ["Carol"])
+        self.assertEqual(rest["X-Has-More"], "false")
+
+    def test_ordering(self):
+        create_person(owner=self.alice, display_name="Ada")
+        create_person(owner=self.alice, display_name="Bob")
+        self.assertEqual(self._names(ordering="-display_name"), ["Bob", "Ada"])
+        self.assertEqual(self._names(ordering="-created_at"), ["Bob", "Ada"])
 
     def test_list_filter(self):
         bob = create_person(owner=self.alice, display_name="Bob")
         create_person(owner=self.alice, display_name="Carol")
         family = create_list(owner=self.alice, name="Family")
         add_members(family, [bob])
-        response = self.client.get("/api/v1/people", {"list": str(family.uuid)})
-        names = [p["display_name"] for p in response.data["results"]]
-        self.assertEqual(names, ["Bob"])
+        self.assertEqual(self._names(list=str(family.uuid)), ["Bob"])
+        self.assertEqual(self._names(list_name="family"), ["Bob"])
 
     def test_list_filter_malformed_is_400(self):
         response = self.client.get("/api/v1/people", {"list": "nope"})
         self.assertEqual(response.status_code, 400)
 
-    def test_scope_and_list_filters_combine(self):
+    def test_group_and_list_filters_combine(self):
         bob = create_person(owner=self.alice, display_name="Bob")
         create_person(owner=self.alice, display_name="Carol")
         family = create_list(owner=self.alice, name="Family")
         add_members(family, [bob])
-        response = self.client.get(
-            "/api/v1/people", {"scope": "mine", "list": str(family.uuid)}
-        )
-        names = [p["display_name"] for p in response.data["results"]]
-        self.assertEqual(names, ["Bob"])
-        response = self.client.get(
-            "/api/v1/people",
-            {"scope": f"group:{self.team.id}", "list": str(family.uuid)},
-        )
-        self.assertEqual(response.data["results"], [])
+        self.assertEqual(self._names(group="none", list=str(family.uuid)), ["Bob"])
+        self.assertEqual(self._names(group=self.team.id, list=str(family.uuid)), [])
 
     def test_retrieve_unreachable_is_404(self):
         bobs = create_person(owner=self.bob, display_name="Bobs")
-        response = self.client.get(f"/api/v1/people/{bobs.uuid}")
-        self.assertEqual(response.status_code, 404)
+        hidden = self.client.get(f"/api/v1/people/{bobs.uuid}")
+        absent = self.client.get(f"/api/v1/people/{uuid.uuid4()}")
+        self.assertEqual(hidden.status_code, 404)
+        self.assertEqual(
+            (hidden.status_code, hidden.content), (absent.status_code, absent.content)
+        )
 
     def test_patch_moves_to_group(self):
         person = create_person(owner=self.alice, display_name="Bob")
         response = self.client.patch(
             f"/api/v1/people/{person.uuid}",
-            {"scope": f"group:{self.team.id}"},
+            {"group": self.team.id},
             format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["group"], {"id": self.team.id, "name": "team"})
+        person.refresh_from_db()
+        self.assertEqual(person.group, self.team)
+        self.assertIsNone(person.owner)
+
+    def test_patch_moves_back_to_ones_own_book(self):
+        person = create_person(group=self.team, display_name="Bob")
+        family = create_list(group=self.team, name="Family")
+        add_members(family, [person])
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}", {"group": None}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["group"])
+        person.refresh_from_db()
+        self.assertEqual(person.owner, self.alice)
+        self.assertIsNone(person.group)
+        # A list of the book it left no longer holds it.
+        self.assertFalse(family.members.exists())
+
+    def test_patch_that_names_no_group_leaves_the_contact_where_it_is(self):
+        person = create_person(group=self.team, display_name="Bob")
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}", {"title": "CTO"}, format="json"
         )
         self.assertEqual(response.status_code, 200, response.data)
         person.refresh_from_db()
         self.assertEqual(person.group, self.team)
-        self.assertIsNone(person.owner)
+        self.assertEqual(person.title, "CTO")
 
     def test_patch_to_foreign_group_is_400(self):
         person = create_person(owner=self.alice, display_name="Bob")
         response = self.client.patch(
             f"/api/v1/people/{person.uuid}",
-            {"scope": f"group:{self.other_team.id}"},
+            {"group": self.other_team.id},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(list(response.data), ["group"])
+        person.refresh_from_db()
+        self.assertEqual(person.owner, self.alice)
 
-    def test_patch_scope_move_into_linked_clash_is_400(self):
+    def test_patch_move_into_linked_clash_is_400(self):
         person = create_person(
             owner=self.alice, display_name="Bob", linked_user=self.bob
         )
         create_person(group=self.team, display_name="Bob team", linked_user=self.bob)
         response = self.client.patch(
             f"/api/v1/people/{person.uuid}",
-            {"scope": f"group:{self.team.id}"},
+            {"group": self.team.id},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("linked_user_id", response.data)
+        self.assertIn("linked_user", response.data)
 
     def test_patch_linked_user(self):
         person = create_person(owner=self.alice, display_name="Bob")
         response = self.client.patch(
             f"/api/v1/people/{person.uuid}",
-            {"linked_user_id": self.bob.id},
+            {"linked_user": self.bob.id},
             format="json",
         )
         self.assertEqual(response.status_code, 200, response.data)
@@ -283,11 +346,11 @@ class PersonApiTests(APITestCase):
         person = create_person(owner=self.alice, display_name="Bob")
         response = self.client.patch(
             f"/api/v1/people/{person.uuid}",
-            {"linked_user_id": self.bob.id},
+            {"linked_user": self.bob.id},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("linked_user_id", response.data)
+        self.assertIn("linked_user", response.data)
         person.refresh_from_db()
         self.assertIsNone(person.linked_user)
 
@@ -295,11 +358,11 @@ class PersonApiTests(APITestCase):
         BotProfile.objects.create(user=self.bob)
         response = self.client.post(
             "/api/v1/people",
-            {"display_name": "Bob", "linked_user_id": self.bob.id},
+            {"display_name": "Bob", "linked_user": self.bob.id},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("linked_user_id", response.data)
+        self.assertIn("linked_user", response.data)
         self.assertFalse(Person.objects.filter(linked_user=self.bob).exists())
 
     def test_patch_duplicate_linked_user_is_400(self):
@@ -307,11 +370,11 @@ class PersonApiTests(APITestCase):
         person = create_person(owner=self.alice, display_name="Bob again")
         response = self.client.patch(
             f"/api/v1/people/{person.uuid}",
-            {"linked_user_id": self.bob.id},
+            {"linked_user": self.bob.id},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("linked_user_id", response.data)
+        self.assertIn("linked_user", response.data)
 
     def test_patch_linked_user_racing_a_clash_is_400(self):
         # `validate` saw no clash, then another request created one before the
@@ -323,14 +386,14 @@ class PersonApiTests(APITestCase):
             create_person(owner=self.alice, display_name="Bob", linked_user=self.bob)
             return update_person(instance, **fields)
 
-        with patch("workspace.people.serializers.update_person", racing_update):
+        with patch("workspace.people.views.persons.update_person", racing_update):
             response = self.client.patch(
                 f"/api/v1/people/{person.uuid}",
-                {"linked_user_id": self.bob.id},
+                {"linked_user": self.bob.id},
                 format="json",
             )
         self.assertEqual(response.status_code, 400, response.data)
-        self.assertIn("linked_user_id", response.data)
+        self.assertIn("linked_user", response.data)
 
     def test_post_linked_user_race_is_400(self):
         def racing_create(**fields):
@@ -339,14 +402,14 @@ class PersonApiTests(APITestCase):
             )
             return create_person(**fields)
 
-        with patch("workspace.people.serializers.create_person", racing_create):
+        with patch("workspace.people.views.persons.create_person", racing_create):
             response = self.client.post(
                 "/api/v1/people",
-                {"display_name": "Loser", "linked_user_id": self.bob.id},
+                {"display_name": "Loser", "linked_user": self.bob.id},
                 format="json",
             )
         self.assertEqual(response.status_code, 400, response.data)
-        self.assertIn("linked_user_id", response.data)
+        self.assertIn("linked_user", response.data)
         self.assertEqual(Person.objects.filter(display_name="Loser").count(), 0)
 
     def test_patch_clear_linked_user(self):
@@ -355,7 +418,7 @@ class PersonApiTests(APITestCase):
         )
         response = self.client.patch(
             f"/api/v1/people/{person.uuid}",
-            {"linked_user_id": None},
+            {"linked_user": None},
             format="json",
         )
         self.assertEqual(response.status_code, 200, response.data)

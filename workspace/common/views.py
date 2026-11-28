@@ -6,7 +6,9 @@ request, the refusal of a row the caller cannot see, the transaction and the
 answer are written here once.
 """
 
-from django.db import transaction
+from contextlib import contextmanager
+
+from django.db import IntegrityError, transaction
 from drf_spectacular.utils import (
     PolymorphicProxySerializer,
     extend_schema,
@@ -18,6 +20,22 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 
 from .serializers import ActionSerializer, UuidListSerializer
+
+
+@contextmanager
+def taken_value_refused(field, message):
+    """Refuse the write under *field* when a unique constraint trips.
+
+    A serializer checks uniqueness first: this catches the writer that took
+    the value in between, so the answer stays a validation error on the
+    field and never a 500. The savepoint keeps the request's transaction
+    usable after the constraint fired.
+    """
+    try:
+        with transaction.atomic():
+            yield
+    except IntegrityError:
+        raise ValidationError({field: [message]}) from None
 
 
 def unknown_rows(uuids):

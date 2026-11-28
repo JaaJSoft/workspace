@@ -36,7 +36,7 @@ async function _mailCardAction(event, anchor) {
   } else if (action === 'add') {
     button.disabled = true;
     const body = card.dataset.userId
-      ? { user_id: Number(card.dataset.userId) }
+      ? { user: Number(card.dataset.userId) }
       : { email, name: card.dataset.name };
     try {
       const res = await fetch('/api/v1/people/promote', {

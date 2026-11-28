@@ -1,3 +1,4 @@
+import uuid
 from io import BytesIO
 
 from django.contrib.auth import get_user_model
@@ -28,10 +29,10 @@ class PersonAvatarApiTests(APITestCase):
         self.client.force_authenticate(self.alice)
 
     def test_upload_then_retrieve_with_etag(self):
-        response = self.client.post(
+        response = self.client.put(
             self.url,
             {
-                "image": png_upload(),
+                "file": png_upload(),
                 "crop_x": 0,
                 "crop_y": 0,
                 "crop_w": 64,
@@ -39,9 +40,12 @@ class PersonAvatarApiTests(APITestCase):
             },
             format="multipart",
         )
-        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.status_code, 204, response.content)
+        self.assertEqual(response.content, b"")
         self.person.refresh_from_db()
         self.assertTrue(self.person.has_avatar)
+        person = self.client.get(f"/api/v1/people/{self.person.uuid}").data
+        self.assertEqual(person["avatar_url"], self.url)
 
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
@@ -68,10 +72,10 @@ class PersonAvatarApiTests(APITestCase):
 
     def test_upload_unreachable_is_404(self):
         self.client.force_authenticate(self.bob)
-        response = self.client.post(
+        response = self.client.put(
             self.url,
             {
-                "image": png_upload(),
+                "file": png_upload(),
                 "crop_x": 0,
                 "crop_y": 0,
                 "crop_w": 64,
@@ -80,23 +84,60 @@ class PersonAvatarApiTests(APITestCase):
             format="multipart",
         )
         self.assertEqual(response.status_code, 404)
+        self.person.refresh_from_db()
+        self.assertFalse(self.person.has_avatar)
+
+    def test_a_contact_out_of_reach_answers_like_one_that_does_not_exist(self):
+        save_avatar(self.person, png_upload(), 0, 0, 64, 64)
+        self.client.force_authenticate(self.bob)
+        hidden = self.client.delete(self.url)
+        absent = self.client.delete(f"/api/v1/people/{uuid.uuid4()}/avatar")
+        self.assertEqual(hidden.status_code, 404)
+        self.assertEqual(
+            (hidden.status_code, hidden.content), (absent.status_code, absent.content)
+        )
+        self.assertTrue(default_storage.exists(avatar_path(self.person)))
+
+    def test_post_is_not_offered(self):
+        response = self.client.post(
+            self.url,
+            {
+                "file": png_upload(),
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 64,
+                "crop_h": 64,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 405)
 
     def test_upload_wrong_type_is_400(self):
         text = BytesIO(b"hello")
         text.name = "a.txt"
-        response = self.client.post(
+        response = self.client.put(
             self.url,
-            {"image": text, "crop_x": 0, "crop_y": 0, "crop_w": 1, "crop_h": 1},
+            {"file": text, "crop_x": 0, "crop_y": 0, "crop_w": 1, "crop_h": 1},
             format="multipart",
         )
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(list(response.data), ["file"])
+
+    def test_upload_without_a_file_is_400(self):
+        response = self.client.put(
+            self.url,
+            {"crop_x": 0, "crop_y": 0, "crop_w": 1, "crop_h": 1},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(list(response.data), ["file"])
 
     def test_upload_non_finite_crop_is_400(self):
         for value in ("inf", "nan", "-inf"):
-            response = self.client.post(
+            response = self.client.put(
                 self.url,
                 {
-                    "image": png_upload(),
+                    "file": png_upload(),
                     "crop_x": 0,
                     "crop_y": 0,
                     "crop_w": value,
@@ -105,7 +146,16 @@ class PersonAvatarApiTests(APITestCase):
                 format="multipart",
             )
             self.assertEqual(response.status_code, 400, value)
-            self.assertEqual(response.data["errors"], ["Invalid crop coordinates."])
+            self.assertEqual(list(response.data), ["crop_w"])
+
+    def test_upload_empty_crop_is_400(self):
+        response = self.client.put(
+            self.url,
+            {"file": png_upload(), "crop_x": 0, "crop_y": 0, "crop_w": 0, "crop_h": 64},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(list(response.data), ["crop_w"])
 
     def test_delete_avatar(self):
         save_avatar(self.person, png_upload(), 0, 0, 64, 64)

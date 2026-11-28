@@ -178,7 +178,7 @@ class PromoteApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["display_name"], "Bob")
-        self.assertEqual(response.data["scope"], "mine")
+        self.assertIsNone(response.data["group"])
         self.assertEqual(response.data["emails"][0]["value"], "bob@example.com")
 
     def test_existing_person_answers_200(self):
@@ -193,17 +193,17 @@ class PromoteApiTests(APITestCase):
         self.assertEqual(Person.objects.count(), 1)
 
     def test_account(self):
-        response = self.client.post(URL, {"user_id": self.carol.pk}, format="json")
+        response = self.client.post(URL, {"user": self.carol.pk}, format="json")
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["linked_user"]["id"], self.carol.pk)
 
-    def test_needs_email_or_user_id(self):
+    def test_needs_email_or_user(self):
         response = self.client.post(URL, {"name": "Bob"}, format="json")
         self.assertEqual(response.status_code, 400)
 
     def test_refuses_both(self):
         response = self.client.post(
-            URL, {"email": "bob@example.com", "user_id": self.carol.pk}, format="json"
+            URL, {"email": "bob@example.com", "user": self.carol.pk}, format="json"
         )
         self.assertEqual(response.status_code, 400)
 
@@ -214,14 +214,14 @@ class PromoteApiTests(APITestCase):
     def test_refuses_inactive_account(self):
         self.carol.is_active = False
         self.carol.save()
-        response = self.client.post(URL, {"user_id": self.carol.pk}, format="json")
+        response = self.client.post(URL, {"user": self.carol.pk}, format="json")
         self.assertEqual(response.status_code, 400)
 
     def test_refuses_bot_account(self):
         BotProfile.objects.create(user=self.carol)
-        response = self.client.post(URL, {"user_id": self.carol.pk}, format="json")
+        response = self.client.post(URL, {"user": self.carol.pk}, format="json")
         self.assertEqual(response.status_code, 400)
-        self.assertIn("user_id", response.data)
+        self.assertIn("user", response.data)
         self.assertFalse(Person.objects.filter(linked_user=self.carol).exists())
 
     def test_anonymous_refused(self):

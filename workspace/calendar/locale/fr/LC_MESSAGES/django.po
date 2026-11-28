@@ -68,18 +68,6 @@ msgstr "Impossible de créer des événements dans un calendrier externe."
 msgid "Name at least one person or one list."
 msgstr "Indiquez au moins une personne ou une liste."
 
-#: services/event_listing.py
-msgid "A list with no end cannot be counted: pass `end`."
-msgstr "Une liste sans fin ne peut pas être comptée : indiquez `end`."
-
-#: services/event_listing.py
-#, python-format
-msgid ""
-"A list with no end is read %(depth)s events deep at most: move `start` "
-"forward."
-msgstr ""
-"Une liste sans fin se lit sur %(depth)s événements au plus : avancez `start`."
-
 #: services/event_scope.py
 msgid "Only the owner can edit this event."
 msgstr "Seul le propriétaire peut modifier cet événement."
@@ -1154,6 +1142,18 @@ msgstr "Seul son propriétaire peut modifier un calendrier."
 #: views/calendars.py
 msgid "Only an external calendar has a feed to read."
 msgstr "Seul un calendrier externe a un flux à relire."
+
+#: views/events.py
+msgid "A list with no end cannot be counted: pass `end`."
+msgstr "Une liste sans fin ne peut pas être comptée : indiquez `end`."
+
+#: views/events.py
+#, python-format
+msgid ""
+"A list with no end is read %(depth)s events deep at most: move `start` "
+"forward."
+msgstr ""
+"Une liste sans fin se lit sur %(depth)s événements au plus : avancez `start`."
 
 #: views/events.py
 msgid "Event not found."

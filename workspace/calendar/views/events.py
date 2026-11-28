@@ -21,7 +21,10 @@ from ..serializers import (
 )
 from ..services.event_creation import create_event
 from ..services.event_listing import (
+    AGENDA_DEPTH,
+    Endless,
     EventListing,
+    TooDeep,
     find_occurrence,
     occurrence_answer,
     with_details,
@@ -86,7 +89,24 @@ class EventListView(ListCreateAPIView):
             narrow=asked.filter_queryset,
             context=self.get_serializer_context(),
         )
-        page = self.paginate_queryset(listing)
+        try:
+            page = self.paginate_queryset(listing)
+        except Endless:
+            raise ValidationError(
+                {"count": [_("A list with no end cannot be counted: pass `end`.")]}
+            ) from None
+        except TooDeep:
+            raise ValidationError(
+                {
+                    "offset": [
+                        _(
+                            "A list with no end is read %(depth)s events deep "
+                            "at most: move `start` forward."
+                        )
+                        % {"depth": AGENDA_DEPTH}
+                    ]
+                }
+            ) from None
         # Displayed events are demonstrably seen: settle their notifications.
         mark_sources_read(
             request.user, [Event(pk=pk) for pk in {row.row_id for row in page}]

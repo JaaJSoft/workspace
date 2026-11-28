@@ -572,8 +572,10 @@ class AgendaPagingStabilityTests(AgendaMixin, APITestCase):
             resp = self._get_agenda(start=start, limit=limit, offset=number * limit)
             titles += [e["title"] for e in resp.data]
             if resp["X-Has-More"] == "false":
-                return titles
-        self.fail(f"the pages never reached the end: {titles}")
+                break
+        else:
+            self.fail(f"the pages never reached the end: {titles}")
+        return titles
 
     def test_pages_cover_every_event_once_in_order(self):
         now = timezone.now()

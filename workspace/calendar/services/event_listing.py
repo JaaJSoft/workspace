@@ -14,8 +14,6 @@ from uuid import UUID
 from django.db.models import OuterRef, Prefetch, Q, Subquery
 from django.utils import timezone
 from django.utils.functional import cached_property
-from django.utils.translation import gettext as _
-from rest_framework.exceptions import ValidationError
 
 from workspace.common.serializers import InstantField
 
@@ -32,6 +30,15 @@ _instant = InstantField().to_representation
 # from the start again - so the depth is bounded, and a reader going further
 # moves `start` forward to the last event it holds.
 AGENDA_DEPTH = 10_000
+
+
+class Endless(Exception):
+    """The list has no end, so it has no number of rows: it was asked for
+    its count."""
+
+
+class TooDeep(IndexError):
+    """Rows of the list with no end were asked for past ``AGENDA_DEPTH``."""
 
 
 class Listed(NamedTuple):
@@ -107,9 +114,7 @@ class EventListing:
 
     def count(self):
         if self.end is None:
-            raise ValidationError(
-                {"count": [_("A list with no end cannot be counted: pass `end`.")]}
-            )
+            raise Endless
         return len(self._in_window())
 
     def __getitem__(self, piece):
@@ -118,17 +123,7 @@ class EventListing:
         # The paginator reads one row past the page to know whether one
         # follows.
         if piece.stop > AGENDA_DEPTH + 1:
-            raise ValidationError(
-                {
-                    "offset": [
-                        _(
-                            "A list with no end is read %(depth)s events deep "
-                            "at most: move `start` forward."
-                        )
-                        % {"depth": AGENDA_DEPTH}
-                    ]
-                }
-            )
+            raise TooDeep
         return self._from_start(piece.stop)[piece]
 
     # -- what both readings share --

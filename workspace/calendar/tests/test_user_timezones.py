@@ -146,8 +146,10 @@ class AgendaAllDayTests(_CalendarUser):
             page = self._page(start, tz, limit=limit, offset=number * limit)
             seen += [e["title"] for e in page]
             if len(page) < limit:
-                return seen
-        self.fail(f"the pages never reached the end: {seen}")
+                break
+        else:
+            self.fail(f"the pages never reached the end: {seen}")
+        return seen
 
     def test_todays_all_day_event_stays_listed_after_utc_midnight(self):
         self._all_day("Holiday", label(2026, 2, 1))

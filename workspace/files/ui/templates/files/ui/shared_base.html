@@ -2,9 +2,9 @@
 {% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
 {# A visitor has no preference to change the blur: sensitive previews are blurred as by default. #}
+{# No data-theme: a visitor has no theme setting either, so the page follows their system's light or dark mode. #}
 <html
   lang="{{ LANGUAGE_CODE }}"
-  data-theme="light"
   data-blur-sensitive="{% default_blur_from %}"
 >
   <head>
@@ -64,12 +64,14 @@
 
       {% if expired %}
         <!-- Expired link -->
-        <div class="card bg-base-100 shadow-xl max-w-sm w-full mx-auto my-auto">
+        <div
+          class="card bg-base-100 border border-base-300 shadow-sm max-w-sm w-full mx-auto my-auto"
+        >
           <div class="card-body items-center text-center pt-10 pb-8 px-8">
             <div
-              class="w-16 h-16 rounded-2xl bg-warning/15 flex items-center justify-center mb-4"
+              class="w-14 h-14 rounded-2xl bg-warning/15 flex items-center justify-center mb-4"
             >
-              <i data-lucide="clock" class="w-7 h-7 text-warning"></i>
+              <i data-lucide="clock" class="w-6 h-6 text-warning"></i>
             </div>
             <h2 class="text-lg font-bold">{% translate "Link expired" %}</h2>
             <p class="text-sm text-base-content/50">{% translate "This share link is no longer available." %}</p>
@@ -79,7 +81,7 @@
       {% elif needs_password %}
         <!-- Password form. verify_url and page_url let another module's link (an album) reuse it. -->
         <div
-          class="card bg-base-100 shadow-xl max-w-sm w-full mx-auto my-auto"
+          class="card bg-base-100 border border-base-300 shadow-sm max-w-sm w-full mx-auto my-auto"
           data-share-token="{{ share_token }}"
           data-verify-url="{% if verify_url %}{{ verify_url }}{% else %}/api/v1/files/shared/{{ share_token }}/verify{% endif %}"
           data-page-url="{% if page_url %}{{ page_url }}{% else %}/files/shared/{{ share_token }}{% endif %}"
@@ -88,16 +90,11 @@
           <div class="card-body items-center text-center pt-10 pb-8 px-8">
             <!-- Lock icon -->
             <div
-              class="w-16 h-16 rounded-2xl bg-linear-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg transition-transform duration-300 ease-out"
+              class="w-14 h-14 rounded-2xl bg-module/10 text-module flex items-center justify-center mb-4 transition-transform duration-300 ease-out"
               :class="unlocked && 'scale-110'"
             >
-              <i x-show="!unlocked" data-lucide="lock" class="w-7 h-7 text-white"></i>
-              <i
-                x-show="unlocked"
-                x-cloak
-                data-lucide="lock-open"
-                class="w-7 h-7 text-white"
-              ></i>
+              <i x-show="!unlocked" data-lucide="lock" class="w-6 h-6"></i>
+              <i x-show="unlocked" x-cloak data-lucide="lock-open" class="w-6 h-6"></i>
             </div>
 
             <h2 class="text-lg font-bold">{% translate "Protected link" %}</h2>
@@ -178,23 +175,8 @@
         {% block content %}{% endblock %}
       {% endif %}
 
-      <!-- Footer -->
-      <footer class="mt-6 mb-4 text-center">
-        <div
-          class="flex items-center justify-center gap-2 text-base-content/40 text-sm"
-        >
-          <div
-            class="w-6 h-6 rounded-md bg-linear-to-br from-primary to-secondary flex items-center justify-center"
-          >
-            <i data-lucide="share-2" class="w-3.5 h-3.5 text-white"></i>
-          </div>
-          <span>{% translate "Shared with" %}</span>
-          <a
-            href="/"
-            class="font-semibold bg-linear-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline"
-          >Workspace</a>
-        </div>
-      </footer>
+      {% translate "Shared with" as footer_label %}
+      {% include "ui/partials/public_footer.html" with label=footer_label %}
     </div>
 
     <script src="{% static 'ui/js/inline_alert.js' %}"></script>

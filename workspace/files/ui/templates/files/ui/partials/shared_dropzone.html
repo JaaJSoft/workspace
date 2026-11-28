@@ -15,7 +15,7 @@
   data-root-name="{{ link.file.name }}"
   x-data="sharedDrop($el.dataset.shareToken, Number($el.dataset.maxFileBytes), $el.dataset.rootName)"
   @nav-state-changed.window="syncTarget()"
-  class="card bg-base-100 shadow-lg"
+  class="card bg-base-100 border border-base-300 shadow-sm"
 >
   <div class="card-body">
     <h2 class="text-lg font-bold mb-2 flex items-center gap-2">

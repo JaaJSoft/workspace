@@ -54,7 +54,7 @@
     {% partialdef shared-content inline %}
       <div
         id="shared-content"
-        class="card bg-base-100 shadow-lg overflow-hidden"
+        class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden"
         data-view-url="{{ current_view_url }}"
         data-parent-url="{{ parent_url }}"
         data-drop-folder="{{ drop_folder.uuid }}"
@@ -62,19 +62,19 @@
         x-init="$nextTick(() => window.folderNav.onNavigate())"
       >
         <!-- Header -->
-        <div class="bg-linear-to-r from-primary to-secondary px-6 py-5">
+        <div class="px-6 py-5 not-last:border-b border-base-300">
           <div class="flex items-center gap-3">
             <div
-              class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-xs"
+              class="w-10 h-10 rounded-xl bg-module/10 text-module flex items-center justify-center shrink-0"
             >
               <i
                 data-lucide="{% if link.mode == 'drop' %}upload-cloud{% elif is_folder %}folder{% else %}file{% endif %}"
-                class="w-5 h-5 text-white"
+                class="w-5 h-5"
               ></i>
             </div>
             <div class="flex-1 min-w-0">
-              <h1 class="text-xl font-bold text-white truncate">{{ target.name }}</h1>
-              <p class="text-white/70 text-sm">
+              <h1 class="text-xl font-semibold truncate">{{ target.name }}</h1>
+              <p class="text-base-content/60 text-sm">
                 {% if link.mode == "drop" %}
                   {% blocktranslate trimmed with name=link.created_by.get_full_name|default:link.created_by.username %}
                     Send files to {{ name }}
@@ -94,14 +94,14 @@
                       file, where they would cover what it shows.
                     {% endcomment %}
                     <span
-                      class="inline-flex items-center gap-1 whitespace-nowrap text-white/50"
+                      class="inline-flex items-center gap-1 whitespace-nowrap text-base-content/40"
                     >
                       ·
                       {% if prev_url %}
                         <a
                           href="{{ prev_url }}"
                           x-target.push="shared-content"
-                          class="btn btn-xs btn-square bg-white/20 border-0 text-white hover:bg-white/30 md:hidden"
+                          class="btn btn-xs btn-square btn-ghost md:hidden"
                           title="{% translate 'Previous file' %}"
                           aria-label="{% translate 'Previous file' %}"
                           data-shared-pager-prev
@@ -114,7 +114,7 @@
                         <a
                           href="{{ next_url }}"
                           x-target.push="shared-content"
-                          class="btn btn-xs btn-square bg-white/20 border-0 text-white hover:bg-white/30 md:hidden"
+                          class="btn btn-xs btn-square btn-ghost md:hidden"
                           title="{% translate 'Next file' %}"
                           aria-label="{% translate 'Next file' %}"
                           data-shared-pager-next
@@ -132,7 +132,7 @@
                 href="{{ new_tab_url }}"
                 target="_blank"
                 rel="noopener"
-                class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
+                class="btn btn-sm btn-ghost gap-1"
                 title="{% translate 'Open in new tab' %}"
               >
                 <i data-lucide="external-link" class="w-4 h-4"></i>
@@ -142,7 +142,7 @@
             {% if download_url %}
               <a
                 href="{{ download_url }}"
-                class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
+                class="btn btn-sm btn-module gap-1"
                 title="{% translate 'Download' %}"
               >
                 <i data-lucide="download" class="w-4 h-4"></i>

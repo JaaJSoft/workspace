@@ -1,7 +1,8 @@
 {% load i18n static %}
 {% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
-<html lang="{{ LANGUAGE_CODE }}" data-theme="light">
+{# No data-theme: a guest has no theme setting, so the page follows their system's light or dark mode. #}
+<html lang="{{ LANGUAGE_CODE }}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -32,18 +33,20 @@
       <template x-if="!loading && poll">
         <div>
           <!-- Header card -->
-          <div class="card bg-base-100 shadow-lg overflow-hidden">
-            <div class="bg-linear-to-r from-primary to-secondary px-6 py-5">
+          <div
+            class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden"
+          >
+            <div class="px-6 py-5 not-last:border-b border-base-300">
               <div class="flex items-center gap-3">
                 <div
-                  class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-xs"
+                  class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"
                 >
-                  <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
+                  <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
                 </div>
                 <div>
-                  <h1 class="text-xl sm:text-2xl font-bold text-white" x-text="poll.title"></h1>
+                  <h1 class="text-xl sm:text-2xl font-semibold" x-text="poll.title"></h1>
                   <p
-                    class="text-white/70 text-sm"
+                    class="text-base-content/60 text-sm"
                     x-show="poll.description"
                     x-text="poll.description"
                   ></p>
@@ -63,13 +66,13 @@
                   <span x-text="pollUtils.participantCountLabel(participantCount())"></span>
                 </div>
                 <template x-if="poll.status === 'open'">
-                  <div class="badge badge-success gap-1.5">
+                  <div class="badge badge-soft badge-success gap-1.5">
                     <i data-lucide="circle-dot" class="w-3 h-3"></i>
                     {% translate "Open" context "poll status" %}
                   </div>
                 </template>
                 <template x-if="poll.status === 'closed'">
-                  <div class="badge badge-neutral gap-1.5">
+                  <div class="badge badge-soft badge-neutral gap-1.5">
                     <i data-lucide="lock" class="w-3 h-3"></i>
                     {% translate "Finalized" context "poll status" %}
                   </div>
@@ -308,23 +311,8 @@
             </div>
           </div>
 
-          <!-- Footer -->
-          <footer class="mt-6 mb-4 text-center">
-            <div
-              class="flex items-center justify-center gap-2 text-base-content/40 text-sm"
-            >
-              <div
-                class="w-6 h-6 rounded-md bg-linear-to-br from-primary to-secondary flex items-center justify-center"
-              >
-                <i data-lucide="users" class="w-3.5 h-3.5 text-white"></i>
-              </div>
-              <span>{% translate "Poll created with" %}</span>
-              <a
-                href="/"
-                class="font-semibold bg-linear-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline"
-              >Workspace</a>
-            </div>
-          </footer>
+          {% translate "Poll created with" as footer_label %}
+          {% include "ui/partials/public_footer.html" with label=footer_label %}
         </div>
       </template>
     </div>

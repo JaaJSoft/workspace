@@ -1,0 +1,22 @@
+{% comment %}
+  The footer of a page an anonymous visitor reaches through a link (a shared
+  file, an album, a poll): one muted line naming the app, nothing that
+  competes with what was shared.
+
+  Parameters:
+  - label: the translated words before the app name ("Shared with")
+{% endcomment %}
+<footer class="mt-6 mb-4 text-center">
+  <div
+    class="flex items-center justify-center gap-1.5 text-base-content/50 text-sm"
+  >
+    <span>{{ label }}</span>
+    <a
+      href="/"
+      class="inline-flex items-center gap-1 font-medium text-base-content/70 hover:text-base-content transition-colors"
+    >
+      <i data-lucide="users" class="w-3.5 h-3.5"></i>
+      Workspace
+    </a>
+  </div>
+</footer>

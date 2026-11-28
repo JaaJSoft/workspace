@@ -272,3 +272,44 @@ msgstr ""
 #, javascript-format
 msgid "Favorites and tags were not imported: %(reason)s"
 msgstr "Les favoris et les étiquettes n’ont pas été importés : %(reason)s"
+
+#: ui/static/imports/ui/js/imports.js
+msgid ""
+"A Nextcloud tab opens: sign in there and grant access. Workspace then "
+"appears in your devices, where you can revoke it."
+msgstr ""
+"Un onglet Nextcloud s’ouvre : connectez-vous et autorisez l’accès. Workspace "
+"apparaît ensuite dans vos appareils, d’où vous pouvez le révoquer."
+
+#: ui/static/imports/ui/js/imports.js
+#, javascript-format
+msgid "Sign in with %(provider)s"
+msgstr "Se connecter avec %(provider)s"
+
+#: ui/static/imports/ui/js/imports.js
+#, javascript-format
+msgid "Sign in with %(provider)s instead"
+msgstr "Se connecter plutôt avec %(provider)s"
+
+#: ui/static/imports/ui/js/imports.js
+#, javascript-format
+msgid "Waiting for you to grant access in the %(provider)s tab…"
+msgstr "En attente de votre autorisation dans l’onglet %(provider)s…"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "The sign-in could not be started."
+msgstr "La connexion n’a pas pu être lancée."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "The sign-in expired. Start it again."
+msgstr "La connexion a expiré. Recommencez."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "The sign-in could not be checked."
+msgstr "La connexion n’a pas pu être vérifiée."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Connected - you can revoke the access from your devices on the remote."
+msgstr ""
+"Connecté - vous pouvez révoquer l’accès depuis vos appareils sur le serveur "
+"distant."

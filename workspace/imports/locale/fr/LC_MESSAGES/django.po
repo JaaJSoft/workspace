@@ -642,3 +642,71 @@ msgstr "garder le mien"
 #: importers/files.py
 msgid "replace mine"
 msgstr "remplacer le mien"
+
+#: models.py
+msgctxt "sign-in status"
+msgid "pending"
+msgstr "en attente"
+
+#: models.py
+msgctxt "sign-in status"
+msgid "completed"
+msgstr "terminée"
+
+#: models.py
+msgctxt "sign-in status"
+msgid "failed"
+msgstr "échouée"
+
+#: providers/nextcloud.py
+#, python-format
+msgid "%(host)s answered the sign-in request with too much data."
+msgstr "%(host)s a répondu à la demande de connexion avec trop de données."
+
+#: providers/nextcloud.py
+#, python-format
+msgid ""
+"%(host)s did not answer as a Nextcloud server offering sign-in. Use an app "
+"password instead."
+msgstr ""
+"%(host)s n’a pas répondu comme un serveur Nextcloud qui propose la "
+"connexion. Utilisez plutôt un mot de passe d’application."
+
+#: providers/nextcloud.py
+#, python-format
+msgid ""
+"%(host)s pointed the sign-in to another server. Check the address, or use an "
+"app password instead."
+msgstr ""
+"%(host)s a renvoyé la connexion vers un autre serveur. Vérifiez l’adresse, "
+"ou utilisez plutôt un mot de passe d’application."
+
+#: providers/nextcloud.py
+#, python-format
+msgid "%(host)s answered with HTTP %(code)s."
+msgstr "%(host)s a répondu HTTP %(code)s."
+
+#: serializers.py
+msgid "This provider has no sign-in flow: connect it with a password."
+msgstr ""
+"Ce fournisseur ne propose pas de connexion par sa propre page : connectez-le "
+"avec un mot de passe."
+
+#: services/login_flows.py
+#, python-format
+msgid "%(provider)s has no sign-in flow: connect it with a password."
+msgstr ""
+"%(provider)s ne propose pas de connexion par sa propre page : connectez-le "
+"avec un mot de passe."
+
+#: services/login_flows.py
+msgid "The sign-in expired. Start it again."
+msgstr "La connexion a expiré. Recommencez."
+
+#: ui/templates/imports/ui/index.html
+msgid "Use an app password instead"
+msgstr "Utiliser plutôt un mot de passe d’application"
+
+#: ui/templates/imports/ui/index.html
+msgid "Open the sign-in page again"
+msgstr "Rouvrir la page de connexion"

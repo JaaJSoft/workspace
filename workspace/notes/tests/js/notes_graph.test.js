@@ -93,3 +93,10 @@ test('fitLatch: re-arming after a cancel restores the one-shot fit', () => {
   latch.arm();         // a fresh load (scope/kind/search/tag change) re-arms
   assert.equal(latch.consume(), true);
 });
+
+test('loading the graph leaves the browser window.open alone', () => {
+  const browserOpen = () => 'the browser one';
+  const page = loadScript('workspace/notes/ui/static/notes/ui/js/notes_graph.js', { open: browserOpen });
+  assert.equal(page.open, browserOpen);
+  assert.equal(page.notesGraph.open.name, 'openGraph');
+});

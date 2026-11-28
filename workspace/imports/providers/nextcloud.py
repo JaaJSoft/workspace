@@ -1,15 +1,29 @@
 """Nextcloud: WebDAV underneath, plus what only Nextcloud offers (URL layout,
 OCS discovery - and later its own data kinds: calendar, contacts, Deck...)."""
 
+import json
 import logging
 from urllib.parse import quote, urlparse
 
 import httpx2
+from django.conf import settings
+from django.utils.translation import gettext as _
+from django.views.decorators.debug import sensitive_variables
 
 from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
+from workspace.common.url_guard import ResponseTooLarge, guarded_transport, read_capped
 
-from .base import KIND_CONTACTS, KIND_FILES, ProviderError, RemoteTag
+from ..services.network_policy import imports_network_policy
+from .base import (
+    KIND_CONTACTS,
+    KIND_FILES,
+    ConnectionFailed,
+    LoginFlowGrant,
+    LoginFlowStart,
+    ProviderError,
+    RemoteTag,
+)
 from .carddav import CardDavSource
 from .webdav import (
     DAV,
@@ -29,6 +43,14 @@ _LEGACY_DAV_PREFIX = "/remote.php/webdav"
 _OCS_CAPABILITIES = "/ocs/v1.php/cloud/capabilities"
 _DAV_SYSTEMTAGS = "/remote.php/dav/systemtags/"
 _DAV_ADDRESSBOOKS = "/remote.php/dav/addressbooks/users/"
+_FRONT_CONTROLLER = "/index.php"
+_LOGIN_FLOW_START = "/index.php/login/v2"
+# Nextcloud names the app password it creates after the User-Agent of the
+# request that starts the flow: this is what the user reads, and revokes, in
+# their list of devices.
+_LOGIN_FLOW_CLIENT_NAME = "Workspace"
+# Both answers are a few hundred bytes of JSON.
+_LOGIN_FLOW_MAX_BYTES = 64 * 1024
 
 # Nextcloud-generated books that are not the user's own contacts: the instance
 # account directory (>= 27), and the contactsinteraction app's auto-collected
@@ -49,7 +71,7 @@ def _instance_root(base_url: str) -> str:
     """'https://cloud.example.org/remote.php/dav/files/alice' -> 'https://cloud.example.org'."""
     parsed = urlparse(base_url)
     path = parsed.path
-    for marker in (DAV_FILES_PREFIX, _LEGACY_DAV_PREFIX):
+    for marker in (DAV_FILES_PREFIX, _LEGACY_DAV_PREFIX, _FRONT_CONTROLLER):
         if marker in path:
             path = path[: path.index(marker)]
             break
@@ -90,6 +112,81 @@ def _member_failed(element) -> bool:
         if len(token) == 3 and token.isdigit():
             return not 200 <= int(token) < 300
     return False
+
+
+def _origin(url: str):
+    """``(scheme, host, port)`` of a URL, the port filled in from the scheme;
+    ``None`` for anything that is not an http(s) URL with a host.
+
+    Also ``None`` wherever Python and a browser could read a different host:
+    a browser takes ``\\`` for ``/`` in an http(s) URL, so for
+    ``https://evil.example.net\\@cloud.example.org/`` urlparse answers the
+    host after the ``@`` while the browser goes to the one before it."""
+    if any(char == "\\" or not "\x20" < char < "\x7f" for char in url):
+        return None
+    try:
+        parsed = urlparse(url)
+        port = parsed.port
+    except ValueError:
+        return None
+    scheme = parsed.scheme.lower()
+    if scheme not in ("http", "https") or not parsed.hostname or "@" in parsed.netloc:
+        return None
+    return scheme, parsed.hostname.lower(), port or (443 if scheme == "https" else 80)
+
+
+def _same_origin(url: str, base_url: str) -> bool:
+    origin = _origin(url)
+    return origin is not None and origin == _origin(base_url)
+
+
+def _login_flow_client() -> httpx2.Client:
+    """No credentials, no redirects, and only addresses the URL guard accepts."""
+    return httpx2.Client(
+        timeout=settings.IMPORTS_HTTP_TIMEOUT,
+        follow_redirects=False,
+        headers={"User-Agent": _LOGIN_FLOW_CLIENT_NAME, "Accept": "application/json"},
+        transport=guarded_transport(imports_network_policy()),
+    )
+
+
+@sensitive_variables()
+def _login_flow_post(url: str, host: str, data=None) -> tuple[int, dict | None]:
+    """POST to a sign-in flow endpoint: the status and, on a 200, the JSON
+    object it answered (``None`` when the body is not one)."""
+    try:
+        with (
+            _translate_transport_errors(host),
+            _login_flow_client() as client,
+            client.stream("POST", url, data=data) as response,
+        ):
+            if response.status_code != 200:
+                return response.status_code, None
+            body = read_capped(response, _LOGIN_FLOW_MAX_BYTES)
+    except ResponseTooLarge as exc:
+        raise ProviderError(
+            _("%(host)s answered the sign-in request with too much data.")
+            % {"host": host}
+        ) from exc
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return 200, None
+    return 200, payload if isinstance(payload, dict) else None
+
+
+def _not_a_login_flow(host):
+    return ProviderError(
+        _(
+            "%(host)s did not answer as a Nextcloud server offering sign-in. "
+            "Use an app password instead."
+        )
+        % {"host": host}
+    )
+
+
+def _text(value) -> str:
+    return value if isinstance(value, str) else ""
 
 
 class NextcloudMetadataSource:
@@ -179,6 +276,7 @@ class NextcloudMetadataSource:
 class NextcloudProvider(WebDavProvider):
     slug = "nextcloud"
     name = "Nextcloud"
+    login_flow = True
     kinds = frozenset({KIND_FILES, KIND_CONTACTS})
 
     def normalize_base_url(self, url: str, username: str) -> str:
@@ -215,6 +313,67 @@ class NextcloudProvider(WebDavProvider):
             addressbook_home(connection.base_url, connection.username),
             hidden_prefixes=_HIDDEN_ADDRESS_BOOK_PREFIXES,
         )
+
+    # -- Login Flow v2 ------------------------------------------------
+
+    def login_flow_base_url(self, url: str) -> str:
+        """The instance root, whatever page of it the user copied."""
+        return _instance_root(url.rstrip("/"))
+
+    @sensitive_variables()
+    def start_login_flow(self, base_url: str) -> LoginFlowStart:
+        """Both addresses the answer carries must be on the instance the user
+        entered: the poll is sent the token, and the sign-in page is where the
+        user types their Nextcloud password."""
+        host = urlparse(base_url).hostname or base_url
+        code, payload = _login_flow_post(f"{base_url}{_LOGIN_FLOW_START}", host)
+        if code != 200 or payload is None:
+            raise _not_a_login_flow(host)
+        poll = payload.get("poll")
+        poll = poll if isinstance(poll, dict) else {}
+        token = _text(poll.get("token"))
+        endpoint = _text(poll.get("endpoint"))
+        login_url = _text(payload.get("login"))
+        if not (token and endpoint and login_url):
+            raise _not_a_login_flow(host)
+        if not (_same_origin(endpoint, base_url) and _same_origin(login_url, base_url)):
+            raise ProviderError(
+                _(
+                    "%(host)s pointed the sign-in to another server. Check the "
+                    "address, or use an app password instead."
+                )
+                % {"host": host}
+            )
+        return LoginFlowStart(
+            login_url=login_url, poll_endpoint=endpoint, poll_token=token
+        )
+
+    @sensitive_variables()
+    def poll_login_flow(
+        self, base_url: str, poll_endpoint: str, poll_token: str
+    ) -> LoginFlowGrant | None:
+        host = urlparse(base_url).hostname or base_url
+        if not _same_origin(poll_endpoint, base_url):
+            raise _not_a_login_flow(host)
+        code, payload = _login_flow_post(poll_endpoint, host, {"token": poll_token})
+        # Nextcloud answers 404 until the user has approved the flow.
+        if code == 404:
+            return None
+        if code >= 500:
+            raise ConnectionFailed(
+                _("%(host)s answered with HTTP %(code)s.")
+                % {"host": host, "code": code}
+            )
+        if code != 200:
+            raise ProviderError(
+                _("The server answered with HTTP %(code)s.") % {"code": code}
+            )
+        payload = payload or {}
+        login_name = _text(payload.get("loginName"))
+        app_password = _text(payload.get("appPassword"))
+        if not (login_name and app_password):
+            raise _not_a_login_flow(host)
+        return LoginFlowGrant(username=login_name, secret=app_password)
 
     def _discover(self, connection) -> dict:
         """Best effort: OCS is not required for files, so any failure here

@@ -45,6 +45,7 @@ class ConnectionsApiTests(APITestCase):
                 "slug": "fake",
                 "name": "Fake cloud",
                 "auth": "credentials",
+                "login_flow": True,
                 "kinds": ["contacts", "files"],
             },
         )

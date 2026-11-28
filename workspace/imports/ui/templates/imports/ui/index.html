@@ -240,13 +240,22 @@
     </section>
 
     <!-- Connection dialog -->
-    <dialog x-ref="connectionDialog" class="modal">
+    <dialog
+      x-ref="connectionDialog"
+      class="modal"
+      @close="onConnectionDialogClosed()"
+    >
       <div class="modal-box max-w-lg">
         {% include "ui/partials/dialog_header.html" with icon="plug" title_expr="connectionDialogTitle()" subtitle=connection_subtitle only %}
         <form class="space-y-3" @submit.prevent="saveConnection()">
           <div class="fieldset" x-show="!connEditing">
             <label class="fieldset-legend"><span class="font-medium">{% translate "Provider" %}</span></label>
-            <select x-model="connForm.provider" class="select select-sm w-full">
+            <select
+              x-model="connForm.provider"
+              @change="onProviderChange()"
+              class="select select-sm w-full"
+              :disabled="!!loginFlow"
+            >
               <template x-for="p in credentialProviders()" :key="p.slug">
                 <option :value="p.slug" x-text="p.name"></option>
               </template>
@@ -259,6 +268,7 @@
               x-model="connForm.label"
               class="input input-sm w-full"
               placeholder="{% translate "e.g. My old Nextcloud" %}"
+              :disabled="!!loginFlow"
               required
             />
           </div>
@@ -269,11 +279,34 @@
               x-model="connForm.base_url"
               class="input input-sm w-full"
               placeholder="https://cloud.example.org"
+              :disabled="!!loginFlow"
               required
             />
             <span class="text-xs text-base-content/60 mt-1" x-text="hint('url')"></span>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <template x-if="signingIn() && !loginFlow">
+            <p class="text-xs text-base-content/60">
+              <span x-text="hint('signin')"></span>
+              <button type="button" class="link" @click="connMode = 'password'">
+                {% translate "Use an app password instead" %}
+              </button>
+            </p>
+          </template>
+          <template x-if="loginFlow">
+            <div class="rounded-box border border-base-300 p-3 flex items-start gap-3">
+              <span class="loading loading-spinner loading-sm text-module shrink-0"></span>
+              <div class="min-w-0 space-y-1">
+                <p class="text-sm" x-text="loginFlowWaitingLabel()"></p>
+                <a
+                  :href="loginFlow.login_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="link text-xs"
+                >{% translate "Open the sign-in page again" %}</a>
+              </div>
+            </div>
+          </template>
+          <div class="grid grid-cols-2 gap-3" x-show="!signingIn()">
             <div class="fieldset min-w-0">
               <label class="fieldset-legend"><span class="font-medium">{% translate "Username" context "remote account" %}</span></label>
               <input
@@ -281,7 +314,7 @@
                 x-model="connForm.username"
                 class="input input-sm w-full min-w-0"
                 autocomplete="off"
-                required
+                :required="!signingIn()"
               />
             </div>
             <div class="fieldset min-w-0">
@@ -293,11 +326,20 @@
                 x-model="connForm.secret"
                 class="input input-sm w-full min-w-0"
                 autocomplete="new-password"
-                :required="!connEditing"
+                :required="!connEditing && !signingIn()"
               />
             </div>
           </div>
-          <span class="text-xs text-base-content/60" x-text="hint('secret')"></span>
+          <p class="text-xs text-base-content/60" x-show="!signingIn()">
+            <span x-text="hint('secret')"></span>
+            <button
+              type="button"
+              class="link"
+              x-show="offersSignIn()"
+              @click="connMode = 'signin'"
+              x-text="signInInsteadLabel()"
+            ></button>
+          </p>
           <template x-if="connError">
             <inline-alert type="error"><span x-text="connError"></span></inline-alert>
           </template>
@@ -309,7 +351,12 @@
             >
               {% translate "Cancel" %}
             </button>
-            <button type="submit" class="btn btn-module btn-sm" :disabled="connSaving">
+            <button
+              type="submit"
+              class="btn btn-module btn-sm"
+              :disabled="connSaving"
+              x-show="!loginFlow"
+            >
               <span x-show="connSaving" class="loading loading-spinner loading-xs"></span>
               <span x-text="connectionSubmitLabel()"></span>
             </button>

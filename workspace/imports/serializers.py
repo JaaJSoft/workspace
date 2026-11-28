@@ -2,7 +2,9 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
-from .models import ImportConnection, ImportJob, ImportJobItem
+from workspace.common.serializers import ApiModelSerializer
+
+from .models import ImportConnection, ImportJob, ImportJobItem, ImportLoginFlow
 from .providers.base import KIND_CONTACTS, KIND_FILES
 from .providers.registry import provider_registry
 
@@ -28,11 +30,11 @@ class ConnectionSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def get_provider_name(self, obj):
+    def get_provider_name(self, obj) -> str:
         provider = provider_registry.get(obj.provider)
         return provider.name if provider else obj.provider
 
-    def get_has_secret(self, obj):
+    def get_has_secret(self, obj) -> bool:
         return bool(obj.secret_encrypted)
 
 
@@ -63,6 +65,48 @@ class ConnectionUpdateSerializer(serializers.Serializer):
     secret = serializers.CharField(
         max_length=1000, required=False, trim_whitespace=False
     )
+
+
+class LoginFlowCreateSerializer(serializers.Serializer):
+    provider = serializers.CharField(max_length=50)
+    label = serializers.CharField(max_length=255)
+    base_url = serializers.URLField(max_length=2000)
+
+    def validate_provider(self, value):
+        provider = provider_registry.get(value)
+        if provider is None or not provider.is_available():
+            raise serializers.ValidationError(_("Unknown provider."))
+        if not provider.login_flow:
+            raise serializers.ValidationError(
+                _("This provider has no sign-in flow: connect it with a password.")
+            )
+        return value
+
+
+class LoginFlowSerializer(ApiModelSerializer):
+    connection = ConnectionSerializer(
+        read_only=True,
+        allow_null=True,
+        help_text="The connection the flow saved, once completed.",
+    )
+
+    class Meta:
+        model = ImportLoginFlow
+        fields = [
+            "uuid",
+            "provider",
+            "label",
+            "base_url",
+            "login_url",
+            "status",
+            "error",
+            "connection",
+            "expires_at",
+            "created_at",
+        ]
+        extra_kwargs = {
+            "login_url": {"help_text": "The page where the user approves Workspace."}
+        }
 
 
 class RemotePathField(serializers.CharField):

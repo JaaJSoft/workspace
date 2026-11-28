@@ -530,6 +530,8 @@ window.importsApp = function importsApp() {
         this.connForm = emptyConnectionForm(first ? first.slug : '');
       }
       this._connDialogSession += 1;
+      // A request of the previous session may still be out; it is stale now.
+      this.connSaving = false;
       this.loginFlow = null;
       this.onProviderChange();
       this.$refs.connectionDialog.showModal();

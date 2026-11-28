@@ -465,3 +465,29 @@ test('polls that get no answer are retried, then the dialog gives up', async () 
   assert.equal(timers.length, 0);
   assert.equal(requests[requests.length - 1], 'DELETE /api/v1/imports/login-flows/f1');
 });
+
+test('a dialog closed while starting can be submitted again once reopened', async () => {
+  let release;
+  const late = new Promise((resolve) => { release = resolve; });
+  const { component, requests } = signInApp([late, [204, null], [202, { ...PENDING, uuid: 'f2' }]]);
+
+  const starting = component.saveConnection();
+  component.closeConnectionDialog();
+  component.openConnectionDialog();
+  assert.equal(component.connSaving, false);
+
+  release([202, PENDING]);
+  await starting;
+  assert.equal(component.connSaving, false);
+  assert.equal(component.loginFlow, null);
+
+  component.connForm.label = 'Old cloud';
+  component.connForm.base_url = 'https://cloud.example.org';
+  await component.saveConnection();
+  assert.equal(component.loginFlow.uuid, 'f2');
+  assert.deepStrictEqual(requests, [
+    'POST /api/v1/imports/login-flows',
+    'DELETE /api/v1/imports/login-flows/f1',
+    'POST /api/v1/imports/login-flows',
+  ]);
+});

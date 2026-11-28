@@ -13,7 +13,11 @@ class UnifiedSearchView(CacheControlMixin, APIView):
     @extend_schema(
         tags=["Search"],
         summary="Unified search across modules",
-        description="Searches all registered module providers and returns aggregated results.",
+        description=(
+            "Searches all registered module providers and returns aggregated "
+            "results. A provider that fails or runs past its time budget is "
+            "left out, and `is_partial` is then true."
+        ),
         parameters=[
             OpenApiParameter(
                 name="q",
@@ -60,14 +64,20 @@ class UnifiedSearchView(CacheControlMixin, APIView):
         scope = request.query_params.get("scope")
         if scope not in SearchScope.CHOICES:
             scope = SearchScope.ALL
-        results = search_service.search_modules(query, request.user, limit, scope=scope)
+        answer = search_service.search_modules(query, request.user, limit, scope=scope)
         commands = search_service.search_commands(query, request.user)
 
-        return Response(
+        response = Response(
             {
                 "query": query,
                 "commands": commands,
-                "results": results,
-                "count": len(commands) + len(results),
+                "results": answer.hits,
+                "count": len(commands) + len(answer.hits),
+                "is_partial": bool(answer.missing),
             }
         )
+        if answer.missing:
+            # Kept by neither @cached_response nor the browser: the next
+            # keystroke asks the providers again.
+            response["Cache-Control"] = "no-store"
+        return response

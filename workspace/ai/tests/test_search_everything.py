@@ -12,6 +12,7 @@ from workspace.ai.tools import (
     SearchEverythingParams,
     SearchToolProvider,
 )
+from workspace.core.module_registry import SearchAnswer
 from workspace.files.models import File
 from workspace.files.services.search_index import index_file
 
@@ -68,13 +69,13 @@ class SearchEverythingTests(TestCase):
             self._call("a")
         self.assertEqual(caught.exception.reason, "query must be at least 2 characters")
 
-    @patch("workspace.core.services.search.search_modules", return_value=[])
+    @patch("workspace.core.services.search.search_modules", return_value=SearchAnswer())
     def test_limit_is_capped_below_the_ui_default(self, mock_search):
         self._call("alpha", limit=50)
 
         self.assertEqual(mock_search.call_args.args[2], SEARCH_EVERYTHING_MAX_LIMIT)
 
-    @patch("workspace.core.services.search.search_modules", return_value=[])
+    @patch("workspace.core.services.search.search_modules", return_value=SearchAnswer())
     def test_non_positive_limit_still_asks_for_one_hit(self, mock_search):
         self._call("alpha", limit=0)
 
@@ -106,7 +107,10 @@ class SearchEverythingPayloadTests(TestCase):
         return hit
 
     def _call(self, hits):
-        with patch("workspace.core.services.search.search_modules", return_value=hits):
+        with patch(
+            "workspace.core.services.search.search_modules",
+            return_value=SearchAnswer(hits=hits),
+        ):
             return json.loads(
                 SearchToolProvider().search_everything(
                     tool_context(user=self.user), SearchEverythingParams(query="sync")

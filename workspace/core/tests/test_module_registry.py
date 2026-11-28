@@ -1,5 +1,9 @@
-from django.test import TestCase
+import time
 
+from django.test import TestCase
+from prometheus_client import REGISTRY
+
+from workspace.common.tests.slow_queries import run_endless_query
 from workspace.core.module_registry import (
     CommandInfo,
     ModuleInfo,
@@ -107,7 +111,7 @@ class SearchProviderTests(TestCase):
             search_fn=lambda q, u, limit: results,
         )
         reg.register_search_provider(provider)
-        hits = reg.search("test", user=None)
+        hits = reg.search("test", user=None).hits
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["name"], "Chat")
 
@@ -133,7 +137,7 @@ class SearchProviderTests(TestCase):
                 )
             )
 
-        hits = reg.search("test", user=None)
+        hits = reg.search("test", user=None).hits
 
         self.assertEqual({h["provider_slug"] for h in hits}, {"chat", "chat-messages"})
 
@@ -156,7 +160,7 @@ class SearchProviderTests(TestCase):
             ],
         )
         reg.register_search_provider(provider)
-        self.assertEqual(reg.search("test", user=None), [])
+        self.assertEqual(reg.search("test", user=None).hits, [])
 
     def test_search_handles_provider_error(self):
         reg = ModuleRegistry()
@@ -168,7 +172,7 @@ class SearchProviderTests(TestCase):
         )
         reg.register_search_provider(provider)
         # Should not raise
-        hits = reg.search("test", user=None)
+        hits = reg.search("test", user=None).hits
         self.assertEqual(hits, [])
 
     def test_search_hits_carry_the_module_color(self):
@@ -191,7 +195,110 @@ class SearchProviderTests(TestCase):
                 ],
             )
         )
-        self.assertEqual(reg.search("test", user=None)[0]["module_color"], "sky")
+        self.assertEqual(reg.search("test", user=None).hits[0]["module_color"], "sky")
+
+
+def _result(name):
+    return SearchResult(
+        uuid=name,
+        name=name,
+        url="/",
+        matched_value=name,
+        match_type="title",
+        type_icon="i",
+        module_slug="chat",
+    )
+
+
+def _sample(name, labels):
+    return REGISTRY.get_sample_value(name, labels) or 0.0
+
+
+class SearchProviderBudgetTests(TestCase):
+    BUDGET = 0.2
+    # Far past the budget, far short of the endless query.
+    ON_TIME = 3.0
+
+    def setUp(self):
+        self.reg = ModuleRegistry()
+        self.reg.register(_make_module("chat"))
+        self.slow = SearchProviderInfo(
+            slug="test-slow",
+            module_slug="chat",
+            search_fn=lambda q, u, limit: run_endless_query() and [_result("late")],
+        )
+        self.fast = SearchProviderInfo(
+            slug="test-fast",
+            module_slug="chat",
+            search_fn=lambda q, u, limit: [_result("on time")],
+        )
+        self.reg.register_search_provider(self.slow)
+        self.reg.register_search_provider(self.fast)
+
+    def test_a_provider_past_its_budget_is_left_out(self):
+        started = time.monotonic()
+
+        answer = self.reg.search("test", user=None, budget=self.BUDGET)
+
+        self.assertLess(time.monotonic() - started, self.ON_TIME)
+        self.assertEqual([h["name"] for h in answer.hits], ["on time"])
+        self.assertEqual(answer.missing, (self.slow,))
+
+    def test_a_provider_past_its_budget_is_counted(self):
+        labels = {"provider": "test-slow", "reason": "timeout"}
+        before = _sample("search_provider_failures_total", labels)
+
+        self.reg.search("test", user=None, budget=self.BUDGET)
+
+        self.assertEqual(_sample("search_provider_failures_total", labels) - before, 1)
+
+    def test_a_failing_provider_is_left_out_and_counted(self):
+        reg = ModuleRegistry()
+        reg.register(_make_module("chat"))
+        failing = SearchProviderInfo(
+            slug="test-failing",
+            module_slug="chat",
+            search_fn=lambda q, u, limit: 1 / 0,
+        )
+        reg.register_search_provider(failing)
+        labels = {"provider": "test-failing", "reason": "error"}
+        before = _sample("search_provider_failures_total", labels)
+
+        answer = reg.search("test", user=None)
+
+        self.assertEqual(answer.missing, (failing,))
+        self.assertEqual(_sample("search_provider_failures_total", labels) - before, 1)
+
+    def test_each_provider_records_how_long_it_took(self):
+        counts = {
+            slug: _sample("search_provider_duration_seconds_count", {"provider": slug})
+            for slug in ("test-slow", "test-fast")
+        }
+        slow_sum = _sample(
+            "search_provider_duration_seconds_sum", {"provider": "test-slow"}
+        )
+
+        self.reg.search("test", user=None, budget=self.BUDGET)
+
+        for slug, before in counts.items():
+            after = _sample(
+                "search_provider_duration_seconds_count", {"provider": slug}
+            )
+            self.assertEqual(after - before, 1, slug)
+        self.assertGreaterEqual(
+            _sample("search_provider_duration_seconds_sum", {"provider": "test-slow"})
+            - slow_sum,
+            self.BUDGET,
+        )
+
+    def test_an_answer_from_every_provider_misses_none(self):
+        reg = ModuleRegistry()
+        reg.register(_make_module("chat"))
+        reg.register_search_provider(self.fast)
+
+        answer = reg.search("test", user=None, budget=self.BUDGET)
+
+        self.assertEqual(answer.missing, ())
 
 
 class CommandTests(TestCase):

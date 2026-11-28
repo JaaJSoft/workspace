@@ -1,9 +1,26 @@
 import logging
 import threading
+import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from contextlib import nullcontext
+from dataclasses import asdict, dataclass, field
+
+from workspace.common.metrics import safe_counter, safe_histogram
+from workspace.common.query_deadline import QueryDeadlineExceeded, query_deadline
 
 logger = logging.getLogger(__name__)
+
+SEARCH_PROVIDER_DURATION = safe_histogram(
+    "search_provider_duration_seconds",
+    "Time one search provider took to answer a unified search, failures included",
+    ["provider"],
+)
+
+SEARCH_PROVIDER_FAILURES = safe_counter(
+    "search_provider_failures_total",
+    "Search providers left out of a unified search answer, by reason (error/timeout)",
+    ["provider", "reason"],
+)
 
 # Tailwind hue names a module may claim as its identity color. The same list
 # drives the `.module-<hue>` rules in scripts/frontend/module-hues.js
@@ -107,6 +124,13 @@ class SearchProviderInfo:
 
 
 @dataclass(frozen=True)
+class SearchAnswer:
+    hits: list[dict] = field(default_factory=list)
+    # Providers that failed or ran out of time: their hits are not in there.
+    missing: tuple[SearchProviderInfo, ...] = ()
+
+
+@dataclass(frozen=True)
 class CommandInfo:
     name: str
     keywords: list[str]
@@ -157,29 +181,68 @@ class ModuleRegistry:
         }
 
     def search(
-        self, query: str, user, limit: int = 10, scope: str = SearchScope.ALL
-    ) -> list[dict]:
-        results = []
+        self,
+        query: str,
+        user,
+        limit: int = 10,
+        scope: str = SearchScope.ALL,
+        budget: float | None = None,
+    ) -> SearchAnswer:
+        """Every active provider's hits for *query*.
+
+        With a *budget* (seconds), a provider whose queries run past it is
+        interrupted and left out, rather than delaying the whole answer.
+        """
+        hits = []
+        missing = []
         for provider in self._search_providers.values():
             module = self._modules.get(provider.module_slug)
             if not module or not module.active:
                 continue
+            started = time.monotonic()
             try:
-                if provider.scoped:
-                    hits = provider.search_fn(query, user, limit, scope=scope)
-                else:
-                    hits = provider.search_fn(query, user, limit)
-                # provider_slug names the kind of entity ("mail-contacts",
-                # "project-tasks"); module_slug alone cannot tell two
-                # providers of the same module apart.
-                results.extend(
-                    asdict(h)
-                    | {"provider_slug": provider.slug, "module_color": module.color}
-                    for h in hits
+                with query_deadline(budget) if budget else nullcontext():
+                    found = self._provider_hits(
+                        provider, module, query, user, limit, scope
+                    )
+            except QueryDeadlineExceeded:
+                logger.warning(
+                    "Search provider '%s' ran past its %gs budget",
+                    provider.slug,
+                    budget,
                 )
+                SEARCH_PROVIDER_FAILURES.labels(
+                    provider=provider.slug, reason="timeout"
+                ).inc()
+                missing.append(provider)
             except Exception:
                 logger.exception("Search provider '%s' failed", provider.slug)
-        return results
+                SEARCH_PROVIDER_FAILURES.labels(
+                    provider=provider.slug, reason="error"
+                ).inc()
+                missing.append(provider)
+            else:
+                hits.extend(found)
+            finally:
+                SEARCH_PROVIDER_DURATION.labels(provider=provider.slug).observe(
+                    time.monotonic() - started
+                )
+        return SearchAnswer(hits=hits, missing=tuple(missing))
+
+    @staticmethod
+    def _provider_hits(provider, module, query, user, limit, scope) -> list[dict]:
+        if provider.scoped:
+            found = provider.search_fn(query, user, limit, scope=scope)
+        else:
+            found = provider.search_fn(query, user, limit)
+        # provider_slug names the kind of entity ("mail-contacts",
+        # "project-tasks"); module_slug alone cannot tell two providers of
+        # the same module apart. Built here, inside the budget: a provider
+        # may hand back a lazy iterable.
+        return [
+            asdict(hit) | {"provider_slug": provider.slug, "module_color": module.color}
+            for hit in found
+        ]
 
     def register_commands(self, commands: list[CommandInfo]):
         with self._lock:

@@ -7,9 +7,29 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from workspace.core.module_registry import ModuleInfo
+from workspace.common.tests.slow_queries import run_endless_query
+from workspace.core.module_registry import (
+    CommandInfo,
+    ModuleInfo,
+    ModuleRegistry,
+    SearchAnswer,
+    SearchProviderInfo,
+    SearchResult,
+)
 
 User = get_user_model()
+
+
+def _result(name, module_slug):
+    return SearchResult(
+        uuid=name,
+        name=name,
+        url="/",
+        matched_value=name,
+        match_type="title",
+        type_icon="i",
+        module_slug=module_slug,
+    )
 
 
 def _module(slug, preview=False, active=True):
@@ -386,22 +406,22 @@ class UnifiedSearchVisibilityTests(TestCase):
         self, mock_registry, mock_visibility_registry
     ):
         mock_registry.refinements.return_value = {}
-        mock_registry.search.return_value = [
-            {
-                "uuid": "u1",
-                "provider_slug": "files",
-                "module_slug": "files",
-                "name": "doc",
-            },
-            {
-                "uuid": "u2",
-                "provider_slug": "lab",
-                "module_slug": "lab",
-                "name": "secret",
-            },
-        ]
-        from workspace.core.module_registry import CommandInfo
-
+        mock_registry.search.return_value = SearchAnswer(
+            hits=[
+                {
+                    "uuid": "u1",
+                    "provider_slug": "files",
+                    "module_slug": "files",
+                    "name": "doc",
+                },
+                {
+                    "uuid": "u2",
+                    "provider_slug": "lab",
+                    "module_slug": "lab",
+                    "name": "secret",
+                },
+            ]
+        )
         mock_registry.search_commands.return_value = [
             CommandInfo(
                 name="Lab",
@@ -454,7 +474,8 @@ class MarkdownNoteDeduplicationTests(TestCase):
     def _hits_for(self, uuid):
         from workspace.core.services.search import search_modules
 
-        return [h for h in search_modules("meeting", self.alice) if h["uuid"] == uuid]
+        hits = search_modules("meeting", self.alice).hits
+        return [h for h in hits if h["uuid"] == uuid]
 
     def test_a_note_is_returned_once_pointing_at_the_editor(self):
         hits = self._hits_for(str(self.note.uuid))
@@ -476,3 +497,76 @@ class MarkdownNoteDeduplicationTests(TestCase):
 
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["module_slug"], "files")
+
+
+# ── Providers past their budget ─────────────────────────────────
+
+
+class UnifiedSearchPartialAnswerTests(TestCase):
+    """A provider past its budget leaves the answer partial, and no cache
+    keeps a partial answer: the next request asks the providers again."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pass")
+        self.client.force_login(self.user)
+        self.files_is_slow = True
+
+        def search_files(query, user, limit):
+            if self.files_is_slow:
+                run_endless_query()
+            return [_result("late", "files")]
+
+        reg = ModuleRegistry()
+        reg.register(_module("files"))
+        reg.register(_module("chat"))
+        reg.register_search_provider(
+            SearchProviderInfo(
+                slug="files", module_slug="files", search_fn=search_files
+            )
+        )
+        reg.register_search_provider(
+            SearchProviderInfo(
+                slug="chat",
+                module_slug="chat",
+                search_fn=lambda q, u, limit: [_result("on time", "chat")],
+            )
+        )
+        for patcher in (
+            patch("workspace.core.services.search.registry", reg),
+            patch("workspace.core.services.search.PROVIDER_BUDGET_SECONDS", 0.2),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _names(self, response):
+        return [r["name"] for r in response.json()["results"]]
+
+    def test_the_answer_leaves_the_slow_provider_out(self):
+        resp = self.client.get("/api/v1/search?q=report")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self._names(resp), ["on time"])
+        self.assertTrue(resp.json()["is_partial"])
+        self.assertEqual(resp["Cache-Control"], "no-store")
+
+    def test_a_partial_answer_is_not_cached(self):
+        self.client.get("/api/v1/search?q=report")
+        self.files_is_slow = False
+
+        resp = self.client.get("/api/v1/search?q=report")
+
+        self.assertEqual(self._names(resp), ["late", "on time"])
+        self.assertFalse(resp.json()["is_partial"])
+
+    def test_a_complete_answer_is_cached(self):
+        self.files_is_slow = False
+        self.client.get("/api/v1/search?q=report")
+        self.files_is_slow = True
+
+        resp = self.client.get("/api/v1/search?q=report")
+
+        self.assertEqual(self._names(resp), ["late", "on time"])
+        self.assertNotIn("no-store", resp["Cache-Control"])

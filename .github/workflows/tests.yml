@@ -136,7 +136,7 @@ jobs:
             # whose PostgreSQL SQL calls f_unaccent, the array form of a long
             # __in, which only PostgreSQL compiles, and bulk_update, whose
             # table of values is cast per column there. Both are bound in
-            # common/apps.py.
+            # common/apps.py. The query deadline sets statement_timeout there.
             vectors:
               - 'workspace/common/vectors/**'
               - 'workspace/common/management/commands/*vector*'
@@ -148,6 +148,9 @@ jobs:
               - 'workspace/common/tests/test_in_lists.py'
               - 'workspace/common/bulk_update.py'
               - 'workspace/common/tests/test_bulk_update.py'
+              - 'workspace/common/query_deadline.py'
+              - 'workspace/common/tests/test_query_deadline.py'
+              - 'workspace/common/tests/slow_queries.py'
               - 'workspace/common/apps.py'
               - 'workspace/vault/views/account.py'
               - 'workspace/vault/tests/test_account_api.py'
@@ -742,6 +745,8 @@ jobs:
       #   by the driver.
       # - test_bulk_update: UPDATE ... FROM (VALUES ...), each column of the
       #   table cast to its type.
+      # - test_query_deadline: a block's queries are cut by statement_timeout,
+      #   set per statement and put back afterwards.
       # - test_search, test_search_scope: the tsvector columns, the query and
       #   how PostgreSQL's parser cuts a file name into words, where the matrix
       #   only ever runs FTS5.
@@ -765,6 +770,7 @@ jobs:
           workspace.common.tests.test_folding
           workspace.common.tests.test_in_lists
           workspace.common.tests.test_bulk_update
+          workspace.common.tests.test_query_deadline
           workspace.common.tests.test_search
           workspace.files.tests.test_search_scope
           workspace.projects.tests.test_file_links

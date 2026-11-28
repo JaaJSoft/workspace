@@ -8,12 +8,15 @@ assistant's `search_everything` tool) must go through the helpers here.
 
 from collections import defaultdict
 
-from ..module_registry import SearchScope, registry
+from ..module_registry import SearchAnswer, SearchScope, registry
 from .module_visibility import filter_visible_commands, is_module_slug_visible
 
 MIN_QUERY_LENGTH = 2
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 50
+# Seconds of queries one provider may spend on a search, which runs on every
+# keystroke of the palette. A provider past it is left out of the answer.
+PROVIDER_BUDGET_SECONDS = 1.0
 
 
 def _drop_refined(hits: list[dict]) -> list[dict]:
@@ -44,7 +47,7 @@ def _drop_refined(hits: list[dict]) -> list[dict]:
 
 def search_modules(
     query, user, limit=DEFAULT_LIMIT, scope=SearchScope.ALL
-) -> list[dict]:
+) -> SearchAnswer:
     """Provider hits for *query*, restricted to modules *user* can see.
 
     *scope* narrows the providers that support it (``SearchScope.MINE``
@@ -58,16 +61,27 @@ def search_modules(
     cannot see the notes module must still get the files row for a note,
     which collapsing first would have dropped in favour of a notes row that
     is then filtered out.
+
+    The answer's ``missing`` lists the visible providers that failed or ran
+    past their budget: the hits are then not everything the query matches.
     """
     query = (query or "").strip()
     if len(query) < MIN_QUERY_LENGTH:
-        return []
+        return SearchAnswer()
+    answer = registry.search(
+        query, user, limit, scope=scope, budget=PROVIDER_BUDGET_SECONDS
+    )
     visible = [
-        hit
-        for hit in registry.search(query, user, limit, scope=scope)
-        if is_module_slug_visible(user, hit["module_slug"])
+        hit for hit in answer.hits if is_module_slug_visible(user, hit["module_slug"])
     ]
-    return _drop_refined(visible)
+    return SearchAnswer(
+        hits=_drop_refined(visible),
+        missing=tuple(
+            provider
+            for provider in answer.missing
+            if is_module_slug_visible(user, provider.module_slug)
+        ),
+    )
 
 
 def search_commands(query, user) -> list[dict]:

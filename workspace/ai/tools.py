@@ -549,7 +549,7 @@ they alone support filters like unread-only, attachments or date ranges."""
             default=SEARCH_EVERYTHING_DEFAULT_LIMIT,
             maximum=SEARCH_EVERYTHING_MAX_LIMIT,
         )
-        hits = search_modules(query, user, limit)
+        hits = search_modules(query, user, limit).hits
         if not hits:
             return f'Nothing found for "{query}".'
 

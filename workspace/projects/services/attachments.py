@@ -37,24 +37,26 @@ def create_attachments(user, task, uploads, workspace_files):
     blobs with them. Storage does not roll back, so they are dropped by hand
     once the rows are gone.
     """
-    created = []
+    # Every attachment a save was attempted for: the bytes are stored before
+    # the row is written, so one whose save failed may already hold a blob.
+    attempted = []
     try:
         with transaction.atomic():
             for f in uploads:
                 detection = detect_from_stream(f, f.name)
-                created.append(
-                    TaskAttachment.objects.create(
-                        task=task,
-                        file=f,
-                        original_name=f.name,
-                        mime_type=detection.mime_type,
-                        type=detection.label,
-                        category=detection.group or "unknown",
-                        viewer=pin_viewer_for_upload(detection.label, f.content_type),
-                        size=f.size,
-                        added_by=user,
-                    )
+                attachment = TaskAttachment(
+                    task=task,
+                    file=f,
+                    original_name=f.name,
+                    mime_type=detection.mime_type,
+                    type=detection.label,
+                    category=detection.group or "unknown",
+                    viewer=pin_viewer_for_upload(detection.label, f.content_type),
+                    size=f.size,
+                    added_by=user,
                 )
+                attempted.append(attachment)
+                attachment.save()
             for ws_file in workspace_files:
                 attachment = TaskAttachment(
                     task=task,
@@ -66,17 +68,20 @@ def create_attachments(user, task, uploads, workspace_files):
                     size=ws_file.size or 0,
                     added_by=user,
                 )
+                attempted.append(attachment)
                 with ws_file.content.open("rb") as fh:
                     attachment.file = DjangoFile(fh, name=ws_file.name)
                     attachment.save()
-                created.append(attachment)
-            if created:
+            if attempted:
                 record_task_event(task, type=TaskEvent.Type.ATTACHED, actor=user)
     except BaseException:
-        for attachment in created:
-            _delete_blob(attachment.file.name)
+        for attachment in attempted:
+            # Until its bytes are stored, the field holds the name the file
+            # came with, which is no blob of ours to delete.
+            if attachment.file and attachment.file._committed:
+                _delete_blob(attachment.file.name)
         raise
-    return created
+    return attempted
 
 
 def remove_attachment(attachment, actor):

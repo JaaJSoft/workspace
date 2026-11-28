@@ -10,11 +10,13 @@ import uuid
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
+from django.db.models.signals import post_save
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.services import tree
 from workspace.projects.models import TaskAttachment, TaskEvent
+from workspace.projects.services.attachments import create_attachments
 from workspace.projects.services.tasks import create_task, delete_task
 from workspace.projects.tests.base import ProjectTestMixin
 
@@ -130,6 +132,29 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
             format="multipart",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(TaskAttachment.objects.count(), 0)
+        self.assertEqual(
+            list(default_storage.iter_blobs(f"projects/tasks/{self.task.uuid}")), []
+        )
+
+    def test_a_blob_whose_row_never_landed_is_dropped_too(self):
+        """The bytes are stored before the row is written: a failure between
+        the two leaves a blob no row ever pointed at."""
+
+        def fail_once_stored(sender, **kwargs):
+            raise RuntimeError("after the blob, before the save returns")
+
+        post_save.connect(fail_once_stored, sender=TaskAttachment)
+        self.addCleanup(post_save.disconnect, fail_once_stored, sender=TaskAttachment)
+
+        with self.assertRaises(RuntimeError):
+            create_attachments(
+                self.member,
+                self.task,
+                [SimpleUploadedFile("notes.txt", b"minutes")],
+                [],
+            )
+
         self.assertEqual(TaskAttachment.objects.count(), 0)
         self.assertEqual(
             list(default_storage.iter_blobs(f"projects/tasks/{self.task.uuid}")), []

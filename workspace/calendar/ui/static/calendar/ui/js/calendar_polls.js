@@ -329,37 +329,47 @@ window.calendarPollsMixin = function calendarPollsMixin() {
     formatPollSlotDate(slot) { return pollUtils.formatSlotDate(slot); },
     formatPollSlotTime(slot) { return pollUtils.formatSlotTime(slot); },
 
-    // The invitees of a poll are one field of it: the whole list is sent.
-    async _setPollInvitees(userIds) {
-      const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}`, {
+    // The invitees of a poll are one field of it, sent whole. The list is
+    // read again first: sent from the one this tab holds, it would drop an
+    // invitee added from another tab since, and the votes they cast with it.
+    async _changePollInvitees(change) {
+      const uuid = this.currentPoll.uuid;
+      const url = `/api/v1/calendar/polls/${uuid}`;
+      const fresh = await fetch(url, { credentials: 'same-origin' });
+      if (!fresh.ok) return false;
+      const invited = (await fresh.json()).invitees.map(i => i.id);
+      const resp = await fetch(url, {
         method: 'PATCH',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ invitees: userIds }),
+        body: JSON.stringify({ invitees: change(invited) }),
       });
       if (!resp.ok) return false;
-      this.currentPoll = await resp.json();
+      const poll = await resp.json();
+      if (this._isPollShown(uuid)) this.currentPoll = poll;
       return true;
     },
 
     async addPollInvitee(event) {
       const user = event.detail.user;
       if (!this.currentPoll) return;
-      const invited = (this.currentPoll.invitees || []).map(i => i.id);
-      if (invited.includes(user.id)) return;
+      if ((this.currentPoll.invitees || []).some(i => i.id === user.id)) return;
       try {
-        if (await this._setPollInvitees([...invited, user.id])) {
-          if (window.AppAlert) window.AppAlert.success(interpolate(gettext('%(name)s invited!'), { name: user.username }, true), { duration: 2000 });
+        const added = await this._changePollInvitees(
+          ids => (ids.includes(user.id) ? ids : [...ids, user.id]),
+        );
+        if (added && window.AppAlert) {
+          window.AppAlert.success(interpolate(gettext('%(name)s invited!'), { name: user.username }, true), { duration: 2000 });
         }
       } catch (e) {}
     },
 
     async removePollInvitee(userId) {
       if (!this.currentPoll) return;
-      const kept = (this.currentPoll.invitees || []).map(i => i.id).filter(id => id !== userId);
       try {
-        if (await this._setPollInvitees(kept)) {
-          if (window.AppAlert) window.AppAlert.success(gettext('Invitation removed'), { duration: 2000 });
+        const removed = await this._changePollInvitees(ids => ids.filter(id => id !== userId));
+        if (removed && window.AppAlert) {
+          window.AppAlert.success(gettext('Invitation removed'), { duration: 2000 });
         }
       } catch (e) {}
     },

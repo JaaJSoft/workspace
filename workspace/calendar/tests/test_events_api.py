@@ -738,6 +738,49 @@ class ChangedOccurrenceVisibilityTests(CalendarTestMixin, APITestCase):
         self.assertEqual(read.status_code, status.HTTP_200_OK)
         self.assertEqual(read.data["title"], "Salary review")
 
+    def test_someone_invited_to_the_occurrence_alone_sees_it_in_both_readings(self):
+        """They do not see its series: the occurrence is theirs through its
+        own invitees, between two instants like from one on."""
+        EventMember.objects.create(event=self.changed, user=self.outsider)
+        self.client.force_authenticate(self.outsider)
+        for params in (self._window(), {"start": self.start.isoformat()}):
+            with self.subTest(params=params):
+                resp = self.client.get("/api/v1/events", {**params, "limit": 5})
+                self.assertEqual(
+                    [e["title"] for e in resp.data], ["Salary review"], resp.data
+                )
+
+    def test_an_occurrence_of_a_cancelled_series_is_listed_in_neither_reading(self):
+        Event.objects.filter(pk=self.series.pk).update(is_cancelled=True)
+        self.client.force_authenticate(self.owner)
+        for params in (self._window(), {"start": self.start.isoformat()}):
+            with self.subTest(params=params):
+                resp = self.client.get("/api/v1/events", {**params, "limit": 5})
+                titles = [e["title"] for e in resp.data]
+                self.assertNotIn("Salary review", titles)
+                self.assertNotIn("Weekly", titles)
+
+    def test_the_hover_card_names_the_slot_its_actions_are_about(self):
+        """Editing, deleting or answering from the card of one occurrence is
+        about that occurrence, so the card hands its slot to the page."""
+        self.client.force_login(self.owner)
+        other_slot = self.start + timedelta(weeks=2)
+        occurrence = self.client.get(
+            f"/calendar/events/{self.series.uuid}/card",
+            {"start": other_slot.isoformat()},
+        )
+        self.assertEqual(
+            datetime.fromisoformat(occurrence.context["occ_slot"]), other_slot
+        )
+        # The series opened as a whole, and an occurrence that is a row of
+        # its own (named by its uuid), need none.
+        for path in (
+            f"/calendar/events/{self.series.uuid}/card",
+            f"/calendar/events/{self.changed.uuid}/card",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).context["occ_slot"], "")
+
     def test_the_owner_and_a_subscriber_of_the_calendar_see_it(self):
         CalendarSubscription.objects.create(user=self.outsider, calendar=self.calendar)
         for user in (self.owner, self.outsider):

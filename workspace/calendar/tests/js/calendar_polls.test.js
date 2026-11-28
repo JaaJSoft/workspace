@@ -32,6 +32,7 @@ function makeApp() {
       requests.push({
         url,
         method: opts.method || 'GET',
+        body: opts.body ? JSON.parse(opts.body) : null,
         answer: (body, status = 200) => resolve({
           ok: status >= 200 && status < 300,
           status,
@@ -200,6 +201,57 @@ test('saving an edit does not clear a create still in flight', async () => {
   requests[0].answer({}, 400);
   await creating;
   assert.equal(app.pollCreating, false);
+});
+
+// One turn of the event loop: the request that follows an answer is sent.
+const settled = () => new Promise((resolve) => setImmediate(resolve));
+
+const invitee = (id) => ({ id, username: `user${id}` });
+
+test('an invitee added from a stale tab keeps the one another tab added', async () => {
+  const { app, requests } = makeApp();
+  // This tab loaded the poll when 17 alone was invited; 23 was added since.
+  app.currentPoll = poll(POLL_A, { invitees: [invitee(17)] });
+
+  const adding = app.addPollInvitee({ detail: { user: invitee(42) } });
+  await settled();
+  assert.equal(requests[0].method, 'GET', 'the list is read again before it is sent');
+  requests[0].answer(poll(POLL_A, { invitees: [invitee(17), invitee(23)] }));
+  await settled();
+  assert.equal(requests[1].method, 'PATCH');
+  assert.deepEqual(requests[1].body, { invitees: [17, 23, 42] });
+  requests[1].answer(poll(POLL_A, { invitees: [invitee(17), invitee(23), invitee(42)] }));
+  await adding;
+
+  assert.deepEqual(app.currentPoll.invitees.map((i) => i.id), [17, 23, 42]);
+});
+
+test('removing an invitee takes them off the list as it stands now', async () => {
+  const { app, requests } = makeApp();
+  app.currentPoll = poll(POLL_A, { invitees: [invitee(17), invitee(23)] });
+
+  const removing = app.removePollInvitee(17);
+  await settled();
+  requests[0].answer(poll(POLL_A, { invitees: [invitee(17), invitee(23), invitee(42)] }));
+  await settled();
+  assert.deepEqual(requests[1].body, { invitees: [23, 42] });
+  requests[1].answer(poll(POLL_A, { invitees: [invitee(23), invitee(42)] }));
+  await removing;
+
+  assert.deepEqual(app.currentPoll.invitees.map((i) => i.id), [23, 42]);
+});
+
+test('a list that cannot be read again is not replaced', async () => {
+  const { app, requests } = makeApp();
+  app.currentPoll = poll(POLL_A, { invitees: [invitee(17)] });
+
+  const adding = app.addPollInvitee({ detail: { user: invitee(42) } });
+  await settled();
+  requests[0].answer({}, 500);
+  await adding;
+
+  assert.equal(requests.length, 1, 'nothing was sent from the stale list');
+  assert.deepEqual(app.currentPoll.invitees.map((i) => i.id), [17]);
 });
 
 // A slot the API refuses is reported per slot and per field, and a list too

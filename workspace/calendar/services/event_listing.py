@@ -170,64 +170,61 @@ class EventListing:
     def _series(self):
         return self._events().filter(is_recurring=True, recurrence_parent__isnull=True)
 
+    def _alone(self):
+        """The rows listed as they are: events that do not repeat, and the
+        occurrences changed on their own.
+
+        A changed occurrence carries its own invitees, so it is listed for
+        whoever can see it - someone invited to it alone, who does not see
+        its series, included - and not for someone taken off it. One of a
+        series cancelled as a whole went with it.
+        """
+        return (
+            self._events()
+            .filter(is_recurring=False)
+            .exclude(recurrence_parent__is_cancelled=True)
+        )
+
+    def _replaced(self, series):
+        """The slots of *series* an occurrence changed on its own took: the
+        rule gives nothing there anymore, whether the reader sees what took
+        the slot or not, and whether it was moved, renamed or cancelled."""
+        if not series:
+            return set()
+        return set(
+            Event.objects.filter(
+                recurrence_parent_id__in=[row.uuid for row in series],
+                original_start__isnull=False,
+            ).values_list("recurrence_parent_id", "original_start")
+        )
+
     # -- between two instants --
 
     def _in_window(self):
         if self._window is not None:
             return self._window
         in_window = overlap_q(self.start, self.end)
-        listed = self._rows(
+        # A changed occurrence is drawn at its own time: one moved into the
+        # window is in, one moved out is not.
+        listed = self._rows(with_details(self._alone().filter(in_window)))
+
+        series = list(
             with_details(
-                self._events().filter(
-                    in_window, is_recurring=False, recurrence_parent__isnull=True
+                self._series().filter(
+                    Q(recurrence_until__isnull=True)
+                    | Q(recurrence_until__gte=self.start),
+                    start__lt=self.end,
                 )
             )
         )
-
-        # Series with an occurrence in the window, or with one moved into it
-        # from a slot outside it (past the end of the rule included).
-        moved_in = Event.objects.filter(
-            in_window, recurrence_parent__isnull=False, is_cancelled=False
-        ).values("recurrence_parent_id")
-        series = {
-            row.uuid: row
-            for row in with_details(
-                self._series().filter(
-                    Q(start__lt=self.end)
-                    & (
-                        Q(recurrence_until__isnull=True)
-                        | Q(recurrence_until__gte=self.start)
-                    )
-                    | Q(uuid__in=moved_in)
-                )
+        replaced = self._replaced(series)
+        for row in series:
+            data = self._series_data(row)
+            listed.extend(
+                self._occurrence(row, data, occurrence_start)
+                for occurrence_start in occurrences_in_range(row, self.start, self.end)
+                if (row.uuid, occurrence_start) not in replaced
             )
-        }
-        if series:
-            # An occurrence changed on its own replaces its slot wherever it
-            # now sits, and is drawn at its own time: one moved into the
-            # window is in, one moved out is not, a cancelled one never is.
-            replaced = set(
-                Event.objects.filter(
-                    recurrence_parent_id__in=list(series),
-                    original_start__isnull=False,
-                ).values_list("recurrence_parent_id", "original_start")
-            )
-            for row in series.values():
-                data = self._series_data(row)
-                listed.extend(
-                    self._occurrence(row, data, occurrence_start)
-                    for occurrence_start in occurrences_in_range(
-                        row, self.start, self.end
-                    )
-                    if (row.uuid, occurrence_start) not in replaced
-                )
-            # Through what the reader can see: an occurrence changed on its
-            # own carries its own invitees, and someone taken off it finds
-            # its slot empty.
-            changed = self._events().filter(
-                in_window, recurrence_parent_id__in=list(series)
-            )
-            listed.extend(self._rows(with_details(changed)))
 
         listed.sort(key=lambda row: row.position)
         self._window = listed
@@ -243,12 +240,11 @@ class EventListing:
         """
         first_day = all_day_label(self.start.astimezone(self.tz).date())
 
-        # Occurrences changed on their own are rows of this stream too.
         # Timed and all-day rows are read as two streams, each in agenda
         # order: a single ORDER BY start would rank them by storage instant,
         # and its LIMIT could cut an all-day row the merge places before a
         # timed one it kept.
-        events = with_details(self._events().filter(is_recurring=False))
+        events = with_details(self._alone())
         listed = self._rows(
             [
                 *events.filter(start__gte=self.start, all_day=False).order_by(
@@ -268,14 +264,7 @@ class EventListing:
                 )
             )
         )
-        replaced = set()
-        if series:
-            replaced = set(
-                Event.objects.filter(
-                    recurrence_parent_id__in=[row.uuid for row in series],
-                    original_start__isnull=False,
-                ).values_list("recurrence_parent_id", "original_start")
-            )
+        replaced = self._replaced(series)
         for row in series:
             data = self._series_data(row)
             kept = 0

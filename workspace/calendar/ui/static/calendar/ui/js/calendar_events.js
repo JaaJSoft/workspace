@@ -753,8 +753,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     },
 
     // `restoring`: the URL already names this event and its date, so neither
-    // the history nor the calendar's date moves.
-    async openEventById(eventId, restoring = false) {
+    // the history nor the calendar's date moves. `originalStart`: the slot of
+    // one occurrence of a recurring event.
+    async openEventById(eventId, restoring = false, originalStart = null) {
       if (!isValidUuid(eventId)) return;
       const load = this._eventLoad = (this._eventLoad || 0) + 1;
       // Clear stale panel state up-front so a 404 / network failure can't
@@ -769,7 +770,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.showPanel = true;
       let event = null;
       try {
-        const resp = await fetch(`/api/v1/events/${eventId}`, { credentials: 'same-origin' });
+        const query = originalStart ? `?${new URLSearchParams({ original_start: originalStart })}` : '';
+        const resp = await fetch(`/api/v1/events/${eventId}${query}`, { credentials: 'same-origin' });
         if (resp.ok) event = await resp.json();
       } catch (e) {}
       if (load !== this._eventLoad) return;
@@ -1210,12 +1212,14 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     // --- Event card actions ---
     async handleEventCardAction(evt) {
-      const { action, eventId } = evt.detail;
+      // `start` is the slot of the occurrence the card showed, when it showed
+      // one: the action is about it, not about its whole series.
+      const { action, eventId, start } = evt.detail;
       if (!eventId) return;
       // Hide any open popover
       document.querySelectorAll('.event-card-popover').forEach(p => { p.style.display = 'none'; });
 
-      await this.openEventById(eventId);
+      await this.openEventById(eventId, false, start || null);
       if (!this._panelRaw) return;
 
       this.$nextTick(() => {

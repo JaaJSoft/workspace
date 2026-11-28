@@ -77,7 +77,7 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs flex-1 gap-1"
-        onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'edit', eventId: '{{ event.uuid }}'}}))"
+        onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'edit', eventId: '{{ event.uuid }}', start: '{{ occ_slot|escapejs }}'}}))"
       >
         <i data-lucide="pencil" class="w-3 h-3"></i>
         {% translate "Edit" %}
@@ -85,7 +85,7 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square text-error"
-        onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'delete', eventId: '{{ event.uuid }}'}}))"
+        onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'delete', eventId: '{{ event.uuid }}', start: '{{ occ_slot|escapejs }}'}}))"
       >
         <i data-lucide="trash-2" class="w-3 h-3"></i>
       </button>
@@ -94,14 +94,14 @@
       <button
         type="button"
         class="btn btn-xs flex-1 gap-1 {% if invite_status == 'accepted' %}btn-success{% else %}btn-ghost{% endif %}"
-        onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'accept', eventId: '{{ event.uuid }}'}}))"
+        onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'accept', eventId: '{{ event.uuid }}', start: '{{ occ_slot|escapejs }}'}}))"
       >
         <i data-lucide="check" class="w-3 h-3"></i>
       </button>
       <button
         type="button"
         class="btn btn-xs flex-1 gap-1 {% if invite_status == 'declined' %}btn-error{% else %}btn-ghost{% endif %}"
-        onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'decline', eventId: '{{ event.uuid }}'}}))"
+        onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'decline', eventId: '{{ event.uuid }}', start: '{{ occ_slot|escapejs }}'}}))"
       >
         <i data-lucide="x" class="w-3 h-3"></i>
       </button>

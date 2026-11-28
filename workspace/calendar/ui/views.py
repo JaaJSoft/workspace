@@ -132,6 +132,8 @@ def event_card(request, event_id):
             "invite_status": invite_status,
             "occ_start": occ_start,
             "occ_end": occ_end,
+            # What the card's actions name the occurrence by.
+            "occ_slot": occ_start.isoformat() if occ_start else "",
         },
     )
 

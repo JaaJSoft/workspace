@@ -4,27 +4,82 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScript } = require('./loader');
 
-const LIST_URL = '/api/v1/projects/p-uuid/tasks/t-uuid/comments';
+const LIST_URL = '/api/v1/things/t-uuid/comments';
+const ITEM_URL = '/api/v1/things/comments';
+const MENTIONS_URL = '/api/v1/things/t-uuid/users';
+const FIRST_PAGE = `${LIST_URL}?limit=200&offset=0`;
 
-function make({ canComment = true, fetchImpl } = {}) {
+// A list answer: a bare array, with the header that says whether more follows.
+function page(rows, hasMore = false) {
+  return {
+    ok: true,
+    headers: { get: (name) => (name === 'X-Has-More' ? String(hasMore) : null) },
+    json: async () => rows,
+  };
+}
+
+function make({ canComment = true, fetchImpl, mentions = MENTIONS_URL } = {}) {
   const calls = [];
   const defaultFetch = async (url, opts = {}) => {
     calls.push({ url, method: opts.method || 'GET' });
-    return { ok: true, json: async () => ({ comments: [], mention_users: [] }) };
+    return page([]);
   };
   const ctx = loadScript('workspace/common/static/ui/js/comments.js', {
     fetch: fetchImpl || defaultFetch,
     getCSRFToken: () => 'tok',
   });
-  const comp = ctx.commentsComponent(LIST_URL, 7, canComment);
+  const comp = ctx.commentsComponent(
+    { list: LIST_URL, item: ITEM_URL, mentions },
+    7,
+    canComment,
+  );
   comp.$refs = {};
   return { comp, calls };
 }
 
-test('builds list and detail URLs from the base', () => {
+test('a comment is addressed under the item URL, the thread under the list', () => {
   const { comp } = make();
   assert.equal(comp._url(), LIST_URL);
-  assert.equal(comp._url('c1'), `${LIST_URL}/c1`);
+  assert.equal(comp._url('c1'), `${ITEM_URL}/c1`);
+});
+
+test('init asks who can be mentioned once, then loads the thread', async () => {
+  const { comp, calls } = make();
+  await comp.init();
+  await comp.loadComments();
+  assert.deepEqual(
+    calls.map((c) => c.url),
+    [MENTIONS_URL, FIRST_PAGE, FIRST_PAGE],
+  );
+});
+
+test('a thread with nobody to mention asks for no list of them', async () => {
+  const { comp, calls } = make({ mentions: '' });
+  await comp.init();
+  assert.deepEqual(calls.map((c) => c.url), [FIRST_PAGE]);
+});
+
+test('loadComments reads every page of a paged thread', async () => {
+  const pages = [page([{ uuid: 'c1' }, { uuid: 'c2' }], true), page([{ uuid: 'c3' }])];
+  const urls = [];
+  const { comp } = make({
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return pages.shift();
+    },
+  });
+  await comp.loadComments();
+  assert.deepEqual(urls, [FIRST_PAGE, `${LIST_URL}?limit=200&offset=200`]);
+  assert.deepEqual(Array.from(comp.comments, (c) => c.uuid), ['c1', 'c2', 'c3']);
+});
+
+test('a page that fails keeps the thread already shown', async () => {
+  const pages = [page([{ uuid: 'new' }], true), { ok: false }];
+  const { comp } = make({ fetchImpl: async () => pages.shift() });
+  comp.comments = [{ uuid: 'shown' }];
+  await comp.loadComments();
+  assert.deepEqual(Array.from(comp.comments, (c) => c.uuid), ['shown']);
+  assert.equal(comp.loading, false);
 });
 
 test('addComment posts the trimmed body then reloads the list', async () => {
@@ -80,8 +135,8 @@ test('saveEdit patches then clears the editing state', async () => {
   assert.deepEqual(
     calls.map((c) => [c.method, c.url]),
     [
-      ['PATCH', `${LIST_URL}/c1`],
-      ['GET', LIST_URL],
+      ['PATCH', `${ITEM_URL}/c1`],
+      ['GET', FIRST_PAGE],
     ],
   );
   assert.equal(comp.editingId, null);
@@ -115,18 +170,19 @@ const USERS = [
 
 function makeWithUsers() {
   const made = make({
-    fetchImpl: async () => ({
-      ok: true,
-      json: async () => ({
-        comments: [{ uuid: 'c1', body: 'hi', body_html: 'hi' }],
-        mention_users: USERS,
-      }),
-    }),
+    fetchImpl: async (url) =>
+      page(url === MENTIONS_URL ? USERS : [{ uuid: 'c1', body: 'hi', body_html: 'hi' }]),
   });
+  // The tests below read the thread themselves; the mentions come with init.
+  const loadComments = made.comp.loadComments.bind(made.comp);
+  made.comp.loadComments = async () => {
+    await made.comp.loadMentionUsers();
+    await loadComments();
+  };
   return made;
 }
 
-test('loadComments parses comments and mention users', async () => {
+test('the thread and the users to mention are read apart', async () => {
   const { comp } = makeWithUsers();
   await comp.loadComments();
   assert.equal(comp.comments.length, 1);

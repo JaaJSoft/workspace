@@ -300,7 +300,7 @@ class AutoWatchApiTests(ProjectTestMixin, APITestCase):
 
     def _comment(self, user, body="progress?"):
         self.client.force_authenticate(user)
-        url = f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/comments"
+        url = f"/api/v1/projects/tasks/{self.task.uuid}/comments"
         return self.client.post(url, {"body": body}, format="json")
 
     def test_commenting_auto_watches(self):

@@ -672,7 +672,7 @@ role = get_project_role(user, project)
 users = project_users(project)
 ```
 
-Task-level queries filter with `project_id__in=user_project_ids(user)` - see `tasks_due_between` / `assigned_open_tasks` in the same module for the canonical pattern (they also exclude archived projects and done statuses).
+Task-level queries filter with `project_id__in=user_project_ids(user)` - see `assigned_open_tasks` in the same module for the canonical pattern (it also excludes archived projects and done statuses).
 
 #### Photos - `workspace.photos.queries`
 
@@ -1548,7 +1548,7 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 
 - `app_logo.html` - Application logo
 - `breadcrumbs.html` - Breadcrumb navigation
-- `comments.html` - comment thread (list + collapsed-until-focused composer + inline edit) backed by `commentsComponent()` from `common/static/ui/js/comments.js`. Params: `list_url` (collection endpoint; item endpoints are `<list_url>/<uuid>`), `current_user_id`, `can_comment`. Used by the files properties panel and the task panel - reuse it for any new commentable entity instead of copying the markup.
+- `comments.html` - comment thread (list + collapsed-until-focused composer + inline edit) backed by `commentsComponent()` from `common/static/ui/js/comments.js`. Params: `list_url` (collection endpoint, a bare array that may be paged), `item_url` (one comment is at `<item_url>/<uuid>`), `mentions_url` (the users who can be mentioned), `current_user_id`, `can_comment`. Used by the files properties panel and the task panel - reuse it for any new commentable entity instead of copying the markup.
 - `empty_state.html` - a box with nothing to show: muted icon, title, optional message. Params: `icon`, `title`, optional `message` and `class` (`h-full` to fill its box). A state with Alpine-driven text or action buttons writes the `.empty-state`, `.empty-state-icon` and `.empty-state-title` classes itself (`mail/ui/index.html`); never a size or an opacity of its own.
 - `size_slider.html` - the 1-5 tile size range of a grid view (Files mosaic, Photos timeline). Params: `model` (Alpine expression bound with `x-model.number`), `change` (run on release, to save), optional `initial_value`. What a step measures is the caller's business.
 - `refresh_button.html` - Alpine-AJAX refresh button (spins while `loading` is truthy). Params: `url_expr`, `target`, optional `loading_expr` / `title` / `size`.

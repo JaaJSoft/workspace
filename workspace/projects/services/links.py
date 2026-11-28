@@ -137,8 +137,34 @@ def _record_link_events(link, event_type, actor):
         )
 
 
+# The RELATIONS name of a link read from its source (False) or its target.
+_RELATION_NAMES = {pair: name for name, pair in RELATIONS.items()}
+
+
+def link_seen_from(link, task):
+    """*link* as *task*, one of its ends, sees it: the relation and its
+    label read from *task* to the other end.
+
+    Both ends carry their project and their status in cache.
+    """
+    outward = link.source_id == task.pk
+    canonical = TaskLink.Type(link.type)
+    forward, backward = LINK_LABELS[canonical]
+    # A relation that reads the same both ways has one name.
+    relation = (
+        _RELATION_NAMES.get((canonical, not outward))
+        or _RELATION_NAMES[(canonical, False)]
+    )
+    return {
+        "uuid": link.uuid,
+        "relation": relation,
+        "label": link_direction_label(forward if outward else backward),
+        "task": link.target if outward else link.source,
+    }
+
+
 def links_for_task(user, task):
-    """Serialize *task*'s links for one viewer, anchored on *task*.
+    """*task*'s links for one viewer, each as *task* sees it.
 
     Both directions fold into one list; a link whose other end sits in a
     project the viewer cannot access is dropped entirely - its existence
@@ -154,30 +180,13 @@ def links_for_task(user, task):
         .order_by("created_at")
     )
     for link in links:
-        outward = link.source_id == task.pk
-        other = link.target if outward else link.source
-        if other.project_id != task.project_id:
+        seen = link_seen_from(link, task)
+        if seen["task"].project_id != task.project_id:
             if accessible is None:
                 accessible = set(user_project_ids(user))
-            if other.project_id not in accessible:
+            if seen["task"].project_id not in accessible:
                 continue
-        forward, backward = LINK_LABELS[TaskLink.Type(link.type)]
-        items.append(
-            {
-                "uuid": str(link.uuid),
-                "type": link.type,
-                "label": link_direction_label(forward if outward else backward),
-                "task": {
-                    "uuid": str(other.uuid),
-                    # project is select_related above, so .reference is free.
-                    "reference": other.reference,
-                    "title": other.title,
-                    "project": str(other.project_id),
-                    "is_done": other.status.category == TaskStatus.Category.DONE,
-                    "url": other.get_absolute_url(),
-                },
-            }
-        )
+        items.append(seen)
     return items
 
 

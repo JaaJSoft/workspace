@@ -32,41 +32,56 @@ def create_attachments(user, task, uploads, workspace_files):
     Raises ``OSError`` (incl. ``FileNotFoundError``) when a workspace
     file's content is unavailable; callers map that to a 4xx. One
     activity event covers the whole batch.
+
+    All or nothing: a failure takes back the rows already written, and the
+    blobs with them. Storage does not roll back, so they are dropped by hand
+    once the rows are gone.
     """
-    created = []
-    for f in uploads:
-        detection = detect_from_stream(f, f.name)
-        created.append(
-            TaskAttachment.objects.create(
-                task=task,
-                file=f,
-                original_name=f.name,
-                mime_type=detection.mime_type,
-                type=detection.label,
-                category=detection.group or "unknown",
-                viewer=pin_viewer_for_upload(detection.label, f.content_type),
-                size=f.size,
-                added_by=user,
-            )
-        )
-    for ws_file in workspace_files:
-        attachment = TaskAttachment(
-            task=task,
-            original_name=ws_file.name,
-            mime_type=ws_file.mime_type or "application/octet-stream",
-            type=ws_file.type or "unknown",
-            category=ws_file.category or "unknown",
-            viewer=ws_file.viewer,
-            size=ws_file.size or 0,
-            added_by=user,
-        )
-        with ws_file.content.open("rb") as fh:
-            attachment.file = DjangoFile(fh, name=ws_file.name)
-            attachment.save()
-        created.append(attachment)
-    if created:
-        record_task_event(task, type=TaskEvent.Type.ATTACHED, actor=user)
-    return created
+    # Every attachment a save was attempted for: the bytes are stored before
+    # the row is written, so one whose save failed may already hold a blob.
+    attempted = []
+    try:
+        with transaction.atomic():
+            for f in uploads:
+                detection = detect_from_stream(f, f.name)
+                attachment = TaskAttachment(
+                    task=task,
+                    file=f,
+                    original_name=f.name,
+                    mime_type=detection.mime_type,
+                    type=detection.label,
+                    category=detection.group or "unknown",
+                    viewer=pin_viewer_for_upload(detection.label, f.content_type),
+                    size=f.size,
+                    added_by=user,
+                )
+                attempted.append(attachment)
+                attachment.save()
+            for ws_file in workspace_files:
+                attachment = TaskAttachment(
+                    task=task,
+                    original_name=ws_file.name,
+                    mime_type=ws_file.mime_type or "application/octet-stream",
+                    type=ws_file.type or "unknown",
+                    category=ws_file.category or "unknown",
+                    viewer=ws_file.viewer,
+                    size=ws_file.size or 0,
+                    added_by=user,
+                )
+                attempted.append(attachment)
+                with ws_file.content.open("rb") as fh:
+                    attachment.file = DjangoFile(fh, name=ws_file.name)
+                    attachment.save()
+            if attempted:
+                record_task_event(task, type=TaskEvent.Type.ATTACHED, actor=user)
+    except BaseException:
+        for attachment in attempted:
+            # Until its bytes are stored, the field holds the name the file
+            # came with, which is no blob of ours to delete.
+            if attachment.file and attachment.file._committed:
+                _delete_blob(attachment.file.name)
+        raise
+    return attempted
 
 
 def remove_attachment(attachment, actor):

@@ -14,7 +14,6 @@ from django.utils.translation import gettext, gettext_noop
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileShare
 from workspace.files.queries import get_permissions_bulk
-from workspace.files.services.filetype import get_color, get_icon
 from workspace.files.services.sharing import share_file, unshare_file
 
 from ..models import Task, TaskEvent, TaskFileLink
@@ -146,32 +145,12 @@ def unlink_file(link, *, actor=None):
 
 
 def file_links_for_task(task):
-    """Serialize *task*'s file links for the panel and the API.
+    """*task*'s file links, oldest first, with what describing them reads.
 
     No per-viewer filtering: the share behind each link addresses the
-    project, so every member can open the file. A trashed file stays
-    listed, flagged ``in_trash`` so the row can say why it no longer opens.
+    project, so every member can open the file. A trashed file stays listed,
+    so the row can say why it no longer opens.
     """
-    links = task.file_links.select_related("share__file", "created_by").order_by(
+    return task.file_links.select_related("share__file", "created_by").order_by(
         "created_at", "uuid"
     )
-    items = []
-    for link in links:
-        file_obj = link.share.file
-        items.append(
-            {
-                "uuid": str(link.uuid),
-                "file_uuid": str(file_obj.uuid),
-                "name": file_obj.name,
-                "type": file_obj.type,
-                "type_icon": get_icon(file_obj.type),
-                "type_color": get_color(file_obj.type),
-                "size": file_obj.size or 0,
-                "in_trash": file_obj.deleted_at is not None,
-                "permission": link.share.permission,
-                "download_url": f"/api/v1/files/{file_obj.uuid}/download",
-                "added_by": link.created_by.username if link.created_by else None,
-                "created_at": link.created_at.isoformat(),
-            }
-        )
-    return items

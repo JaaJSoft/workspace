@@ -8,12 +8,13 @@ from rest_framework.generics import (
 )
 from rest_framework.response import Response
 
+from workspace.users.serializers import UserSummarySerializer
+
 from ..models import ProjectMember
 from ..queries import project_users
 from ..serializers import (
     MemberSerializer,
     ProjectMemberRoleSerializer,
-    ProjectUserSerializer,
 )
 from ..services.members import add_member, change_member_role, remove_member
 from .context import ProjectContextMixin, ProjectRowMixin
@@ -99,7 +100,7 @@ class MemberDetailView(ProjectRowMixin, RetrieveUpdateDestroyAPIView):
 )
 class ProjectUserListView(ProjectContextMixin, ListAPIView):
     queryset = User.objects.none()
-    serializer_class = ProjectUserSerializer
+    serializer_class = UserSummarySerializer
     pagination_class = None
 
     def get_queryset(self):

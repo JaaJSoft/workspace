@@ -163,7 +163,7 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(
             resp.context["panel_task_data"]["assignee_users"],
-            [{"id": str(self.member.pk), "username": "member1"}],
+            [{"id": self.member.pk, "username": "member1"}],
         )
 
     def test_panel_task_data_embedded_as_json_script(self):
@@ -328,7 +328,7 @@ class TaskPanelLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         data = resp.context["panel_task_data"]
         self.assertEqual(
             data["links_url"],
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/links",
+            f"/api/v1/projects/tasks/{self.task.uuid}/links",
         )
         self.assertEqual(data["link_search_url"], "/api/v1/projects/tasks")
 
@@ -407,10 +407,10 @@ class TaskPanelFileLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="task-panel-file-links"')
         (item,) = resp.context["panel_file_links"]
-        self.assertEqual(item["file_uuid"], str(self.doc.uuid))
+        self.assertEqual(item["file"]["uuid"], str(self.doc.uuid))
         self.assertEqual(
             resp.context["panel_task_data"]["file_links_url"],
-            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/files",
+            f"/api/v1/projects/tasks/{self.task.uuid}/file-links",
         )
         labels = [e["label"] for e in resp.context["panel_events"]]
         self.assertIn("File linked: spec.md", labels)

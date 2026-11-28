@@ -64,8 +64,14 @@ class ProjectUserListTests(ProjectTestMixin, APITestCase):
             {u["username"] for u in response.data}, {"admin1", "member1", "outsider1"}
         )
         self.assertEqual(
-            next(u for u in response.data if u["username"] == "outsider1")["id"],
-            str(self.outsider.pk),
+            next(u for u in response.data if u["username"] == "outsider1"),
+            {
+                "id": self.outsider.pk,
+                "username": "outsider1",
+                "first_name": "",
+                "last_name": "",
+                "avatar_url": f"/api/v1/users/{self.outsider.pk}/avatar",
+            },
         )
 
     def test_outsider_gets_404(self):

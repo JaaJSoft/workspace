@@ -336,7 +336,8 @@ Context:
       <div class="divider my-0 text-xs text-base-content/40">{% translate "Comments" %}</div>
 
       {% url 'file-comments' uuid=file.uuid as comments_url %}
-      {% include "ui/partials/comments.html" with list_url=comments_url current_user_id=request.user.id can_comment=True %}
+      {% url 'file-mentionable-users' uuid=file.uuid as mentions_url %}
+      {% include "ui/partials/comments.html" with list_url=comments_url item_url=comments_url mentions_url=mentions_url current_user_id=request.user.id can_comment=True %}
     {% endif %}
 
     {% comment %}

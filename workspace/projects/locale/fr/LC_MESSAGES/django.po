@@ -2414,15 +2414,11 @@ msgstr "Les sprints nécessitent un projet Scrum."
 msgid "%(task)s starts after this due date."
 msgstr "%(task)s commence après cette échéance."
 
-#: views/viewsets.py
-msgid "Task not found."
-msgstr "Tâche introuvable."
-
-#: views/viewsets.py
+#: views/comments.py
 msgid "You can only modify your own comments."
 msgstr "Vous ne pouvez modifier que vos propres commentaires."
 
-#: views/viewsets.py
+#: serializers.py
 #, python-format
 msgid "Maximum %(count)s attachment per request."
 msgid_plural "Maximum %(count)s attachments per request."
@@ -2430,16 +2426,16 @@ msgstr[0] "%(count)s pièce jointe au maximum par requête."
 msgstr[1] "%(count)s de pièces jointes au maximum par requête."
 msgstr[2] "%(count)s pièces jointes au maximum par requête."
 
-#: views/viewsets.py
+#: serializers.py
 #, python-format
 msgid "File \"%(name)s\" exceeds the 50 MB limit."
 msgstr "Le fichier « %(name)s » dépasse la limite de 50 Mo."
 
-#: views/viewsets.py
+#: views/attachments.py views/links.py
 msgid "One or more files not found or not accessible."
 msgstr "Un ou plusieurs fichiers sont introuvables ou inaccessibles."
 
-#: views/viewsets.py
+#: views/attachments.py
 msgid "One or more workspace file contents are unavailable."
 msgstr "Le contenu d’un ou plusieurs fichiers de Workspace est indisponible."
 
@@ -2460,6 +2456,6 @@ msgstr "Une colonne cible est requise tant qu’il reste des tâches."
 msgid "Target column must be a different column of this project."
 msgstr "La colonne cible doit être une autre colonne de ce projet."
 
-#: views/viewsets.py
-msgid "Provide files or file_uuids."
-msgstr "Fournissez files ou file_uuids."
+#: serializers.py
+msgid "Attach an upload or a workspace file."
+msgstr "Joignez un fichier, envoyé ou pris dans Workspace."

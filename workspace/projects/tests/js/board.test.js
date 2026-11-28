@@ -778,12 +778,217 @@ test('the checklist writes each item at its own address', async () => {
   ]);
 });
 
+// A task panel whose requests are recorded, each answered by `answers` in turn.
+function panelWithRequests(answers) {
+  const panel = ctx.taskPanel();
+  const calls = [];
+  ctx.getCSRFToken = () => 'tok';
+  ctx.fetch = async (url, opts = {}) => {
+    const body = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
+    calls.push([opts.method || 'GET', url, body]);
+    return answers.shift();
+  };
+  panel.actions = ['link', 'link_file', 'attach'];
+  panel.headers = () => ({});
+  panel.refresh = () => {};
+  panel.data = {
+    uuid: 't1',
+    project: 'p1',
+    links_url: '/api/v1/projects/tasks/t1/links',
+    file_links_url: '/api/v1/projects/tasks/t1/file-links',
+  };
+  return { panel, calls };
+}
+
+const answer = (status, body) => ({
+  ok: status < 400,
+  status,
+  json: async () => body,
+});
+
+test('addLink names the other task and keeps the link it gets back', async () => {
+  const created = { uuid: 'l2', relation: 'blocks', task: { uuid: 't2' } };
+  const { panel, calls } = panelWithRequests([answer(201, created)]);
+  panel.links = [{ uuid: 'l1', task: { uuid: 't9' } }];
+  panel.linkRel = 'blocks';
+
+  await panel.addLink({ uuid: 't2' });
+
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(calls)), [
+    ['POST', '/api/v1/projects/tasks/t1/links', { task: 't2', relation: 'blocks' }],
+  ]);
+  assert.deepStrictEqual(Array.from(panel.links, (l) => l.uuid), ['l1', 'l2']);
+});
+
+test('addLink shows what refuses the link, a field error included', async () => {
+  const shown = [];
+  ctx.AppAlert = { error: (message) => shown.push(message) };
+  const { panel } = panelWithRequests([
+    answer(409, { detail: 'These tasks are already linked with this type.' }),
+    answer(400, { task: ['A task cannot be linked to itself.'] }),
+  ]);
+  panel.links = [];
+
+  await panel.addLink({ uuid: 't2' });
+  await panel.addLink({ uuid: 't1' });
+
+  assert.deepStrictEqual(shown, [
+    'These tasks are already linked with this type.',
+    'A task cannot be linked to itself.',
+  ]);
+  assert.equal(panel.links.length, 0);
+});
+
+test('removeLink addresses the link without its task', async () => {
+  const { panel, calls } = panelWithRequests([answer(204, null)]);
+  panel.links = [{ uuid: 'l1' }, { uuid: 'l2' }];
+
+  await panel.removeLink('l1');
+
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(calls)), [
+    ['DELETE', '/api/v1/projects/links/l1', null],
+  ]);
+  assert.deepStrictEqual(Array.from(panel.links, (l) => l.uuid), ['l2']);
+});
+
+test('openLinkedTask opens a task of this project here and another on its board', () => {
+  const { panel } = panelWithRequests([]);
+  const opened = [];
+  const visited = [];
+  panel.openTask = (uuid) => opened.push(uuid);
+  ctx.location = { assign: (url) => visited.push(url) };
+
+  panel.openLinkedTask({ uuid: 't2', project: { uuid: 'p1' }, url: '/projects/p1/board?task=t2' });
+  panel.openLinkedTask({ uuid: 't3', project: { uuid: 'p2' }, url: '/projects/p2/board?task=t3' });
+
+  assert.deepStrictEqual(opened, ['t2']);
+  assert.deepStrictEqual(visited, ['/projects/p2/board?task=t3']);
+});
+
+test('confirmLinkFiles names the files, then reads the list of the task again', async () => {
+  const created = [{ uuid: 'fl2', file: { uuid: 'd2', name: 'b.md' } }];
+  const listed = [{ uuid: 'fl1', file: { uuid: 'd1', name: 'a.md' } }, ...created];
+  const { panel, calls } = panelWithRequests([answer(201, created), answer(200, listed)]);
+  panel.$refs = { linkFileDialog: { close() {} } };
+  panel.fileLinks = [listed[0]];
+  panel.pendingFileLinks = [{ uuid: 'd2' }];
+  panel.fileLinkPermission = 'rw';
+
+  await panel.confirmLinkFiles();
+
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(calls)), [
+    ['POST', '/api/v1/projects/tasks/t1/file-links', { files: ['d2'], permission: 'rw' }],
+    ['GET', '/api/v1/projects/tasks/t1/file-links', null],
+  ]);
+  assert.deepStrictEqual(Array.from(panel.fileLinks, (l) => l.uuid), ['fl1', 'fl2']);
+});
+
+test('a link whose first answer was lost shows up when the request is sent again', async () => {
+  // The first request linked the file and its answer never arrived: sent
+  // again, it creates nothing, and the server answers no link.
+  const linked = [{ uuid: 'fl1', file: { uuid: 'd1', name: 'a.md' } }];
+  const { panel } = panelWithRequests([answer(201, []), answer(200, linked)]);
+  panel.$refs = { linkFileDialog: { close() {} } };
+  panel.fileLinks = [];
+  panel.pendingFileLinks = [{ uuid: 'd1' }];
+
+  await panel.confirmLinkFiles();
+
+  assert.deepStrictEqual(Array.from(panel.fileLinks, (l) => l.uuid), ['fl1']);
+});
+
+test('confirmLinkFiles keeps the links it was answered when the list cannot be read', async () => {
+  const created = [{ uuid: 'fl2', file: { uuid: 'd2', name: 'b.md' } }];
+  const { panel } = panelWithRequests([answer(201, created), answer(500, {})]);
+  panel.$refs = { linkFileDialog: { close() {} } };
+  panel.fileLinks = [{ uuid: 'fl1', file: { uuid: 'd1', name: 'a.md' } }];
+  panel.pendingFileLinks = [{ uuid: 'd2' }];
+
+  await panel.confirmLinkFiles();
+
+  assert.deepStrictEqual(Array.from(panel.fileLinks, (l) => l.uuid), ['fl1', 'fl2']);
+  assert.equal(panel.fileLinkError, '');
+});
+
+test('confirmLinkFiles shows a refusal on its files in the dialog', async () => {
+  const { panel } = panelWithRequests([
+    answer(400, { files: ['One or more files not found or not accessible.'] }),
+  ]);
+  panel.$refs = { linkFileDialog: { close() {} } };
+  panel.fileLinks = [];
+  panel.pendingFileLinks = [{ uuid: 'gone' }];
+
+  await panel.confirmLinkFiles();
+
+  assert.equal(panel.fileLinkError, 'One or more files not found or not accessible.');
+  assert.equal(panel.fileLinkSaving, false);
+});
+
+test('unlinkFile addresses the link without its task', async () => {
+  const { panel, calls } = panelWithRequests([answer(204, null)]);
+  ctx.AppDialog = { confirm: async () => true };
+  const link = { uuid: 'fl1', file: { uuid: 'd1', name: 'a.md' } };
+  panel.fileLinks = [link];
+
+  await panel.unlinkFile(link);
+
+  assert.deepStrictEqual(calls[0].slice(0, 2), ['DELETE', '/api/v1/projects/file-links/fl1']);
+  assert.equal(panel.fileLinks.length, 0);
+});
+
+test('openLinkedFile hands the file of the link to the viewer', () => {
+  const { panel } = panelWithRequests([]);
+  const events = [];
+  ctx.CustomEvent = function (type, init) {
+    return { type, detail: init.detail };
+  };
+  ctx.dispatchEvent = (event) => events.push(event);
+
+  panel.openLinkedFile({
+    uuid: 'fl1',
+    file: { uuid: 'd1', name: 'a.md', type: 'markdown', download_url: '/api/v1/files/d1/download' },
+  });
+
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(events[0].detail)), {
+    uuid: 'd1',
+    name: 'a.md',
+    type: 'markdown',
+    viewerUrl: '/files/view/d1',
+    downloadUrl: '/api/v1/files/d1/download',
+    isFile: true,
+  });
+});
+
+test('attachments are sent as file and files, and the created ones are added', async () => {
+  const created = [{ uuid: 'a2', name: 'new.txt' }];
+  const { panel, calls } = panelWithRequests([answer(201, created), answer(204, null)]);
+  const sent = [];
+  ctx.FormData = function () {
+    this.append = (key, value) => sent.push([key, value]);
+  };
+  panel._attachmentsUrl = '/api/v1/projects/tasks/t1/attachments';
+  panel.attachments = [{ uuid: 'a1', name: 'old.txt' }];
+  panel.pendingFiles = ['<upload>'];
+  panel.pendingPickedFiles = [{ uuid: 'd1' }];
+
+  await panel.flushAttachments();
+  assert.deepStrictEqual(sent, [
+    ['file', '<upload>'],
+    ['files', 'd1'],
+  ]);
+  assert.deepStrictEqual(Array.from(panel.attachments, (a) => a.uuid), ['a1', 'a2']);
+
+  await panel.unlinkAttachment(panel.attachments[0]);
+  assert.deepStrictEqual(calls[1].slice(0, 2), ['DELETE', '/api/v1/projects/attachments/a1']);
+  assert.deepStrictEqual(Array.from(panel.attachments, (a) => a.uuid), ['a2']);
+});
+
 test('sectionDefaults opens filled sections and collapses empty ones', () => {
   const panel = ctx.taskPanel();
   panel.data = { assignees: [], labels: ['l1'], description: '   ' };
   panel.subtasks = [{ uuid: 's1', title: 'a', is_done: false }];
   panel.links = [];
-  panel.fileLinks = [{ uuid: 'f1', name: 'spec.md' }];
+  panel.fileLinks = [{ uuid: 'f1', file: { uuid: 'd1', name: 'spec.md' } }];
   panel.attachments = [];
   panel._commentCount = 2;
   panel._activityCount = 0;

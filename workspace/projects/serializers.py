@@ -6,8 +6,7 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema_field
+from django.utils.translation import ngettext
 from rest_framework import serializers
 
 from workspace.common.serializers import (
@@ -16,6 +15,7 @@ from workspace.common.serializers import (
     UuidListSerializer,
 )
 from workspace.common.services.mentions import render_comment_body
+from workspace.files.services.filetype import get_color, get_icon
 from workspace.users.queries import nameable_groups
 from workspace.users.serializers import UserSummarySerializer
 
@@ -30,9 +30,11 @@ from .models import (
     Task,
     TaskAttachment,
     TaskComment,
+    TaskFileLink,
     TaskStatus,
 )
-from .queries import project_users_qs
+from .queries import project_users_qs, user_project_ids
+from .services.attachments import MAX_ATTACHMENTS_PER_REQUEST, MAX_UPLOAD_BYTES
 from .services.links import RELATIONS
 from .services.references import KEY_RE
 
@@ -214,16 +216,6 @@ class MemberSerializer(ApiModelSerializer):
         model = ProjectMember
         fields = ["uuid", "user", "role", "joined_at"]
         read_only_fields = ["joined_at"]
-
-
-class ProjectUserSerializer(serializers.Serializer):
-    """Someone a task can be assigned to: a member, or a user of a group the
-    project is attached to (``queries.project_users``)."""
-
-    id = serializers.CharField(source="pk", read_only=True)
-    username = serializers.CharField(read_only=True)
-    first_name = serializers.CharField(read_only=True)
-    last_name = serializers.CharField(read_only=True)
 
 
 class ProjectMemberRoleSerializer(serializers.Serializer):
@@ -438,6 +430,8 @@ class TaskSerializer(ApiModelSerializer):
     )
     created_by = UserSummarySerializer(read_only=True, allow_null=True)
     reference = serializers.CharField(read_only=True)
+    url = serializers.CharField(source="get_absolute_url", read_only=True)
+    card_url = serializers.SerializerMethodField()
     estimate = serializers.DecimalField(
         max_digits=6, decimal_places=1, required=False, allow_null=True, min_value=0
     )
@@ -461,6 +455,8 @@ class TaskSerializer(ApiModelSerializer):
             "position",
             "number",
             "reference",
+            "url",
+            "card_url",
             "completed_at",
             "created_by",
             "created_at",
@@ -473,6 +469,9 @@ class TaskSerializer(ApiModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_card_url(self, task) -> str:
+        return reverse("projects_ui:task_card", args=[task.project_id, task.uuid])
 
     def validate(self, attrs):
         start = attrs.get(
@@ -494,48 +493,6 @@ class TaskSerializer(ApiModelSerializer):
         if labels is not None:
             instance.labels.set(labels)
         return instance
-
-
-class TaskCalendarSerializer(serializers.ModelSerializer):
-    """Read-only projection of a task for the calendar overlay.
-
-    Deliberately thinner than ``TaskSerializer``: the calendar paints a
-    label and links out to the board, so assignees, labels and description
-    would only cost joins nobody renders.
-    """
-
-    reference = serializers.SerializerMethodField()
-    project_uuid = serializers.UUIDField(source="project.uuid", read_only=True)
-    project_name = serializers.CharField(source="project.name", read_only=True)
-    url = serializers.SerializerMethodField()
-    card_url = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Task
-        fields = [
-            "uuid",
-            "title",
-            "due_date",
-            "priority",
-            "reference",
-            "project_uuid",
-            "project_name",
-            "url",
-            "card_url",
-        ]
-        read_only_fields = fields
-
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_reference(self, obj):
-        return f"{obj.project.key}-{obj.number}"
-
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_url(self, obj):
-        return obj.get_absolute_url()
-
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_card_url(self, obj):
-        return reverse("projects_ui:task_card", args=[obj.project_id, obj.uuid])
 
 
 class _InProject(serializers.PrimaryKeyRelatedField):
@@ -674,25 +631,54 @@ class SubtaskSerializer(ApiModelSerializer):
         return value
 
 
-class TaskLinkCreateSerializer(serializers.Serializer):
-    target = serializers.UUIDField()
+class TaskSummarySerializer(serializers.Serializer):
+    """A task named from another row: what showing and opening it takes."""
+
+    uuid = serializers.UUIDField()
+    reference = serializers.CharField()
+    title = serializers.CharField()
+    url = serializers.CharField(source="get_absolute_url")
+
+
+class LinkedTaskSerializer(TaskSummarySerializer):
+    """The other end of a link, which may sit in another project."""
+
+    project = ProjectSummarySerializer()
+    is_done = serializers.SerializerMethodField()
+
+    def get_is_done(self, task) -> bool:
+        return task.status.category == TaskStatus.Category.DONE
+
+
+def _linkable(queryset, context):
+    """The tasks a link may name: the ones the caller can open, in a project
+    that still takes changes."""
+    return queryset.filter(
+        project_id__in=user_project_ids(context["request"].user),
+        project__archived_at__isnull=True,
+    ).select_related("project", "status")
+
+
+class TaskLinkSerializer(serializers.Serializer):
+    """A link as the task it is listed under sees it: ``relation`` reads
+    from that task to ``task``, the other end."""
+
+    uuid = serializers.UUIDField(read_only=True)
     relation = serializers.ChoiceField(choices=sorted(RELATIONS))
+    label = serializers.CharField(read_only=True)
+    task = SummaryField(
+        LinkedTaskSerializer, queryset=Task.objects.all(), narrow=_linkable
+    )
+
+    def validate_task(self, other):
+        if other.pk == self.context["task"].pk:
+            raise serializers.ValidationError(_("A task cannot be linked to itself."))
+        return other
 
 
-class TaskCommentAuthorSerializer(serializers.Serializer):
-    id = serializers.IntegerField(source="pk")
-    username = serializers.CharField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
-    avatar_url = serializers.SerializerMethodField()
-
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_avatar_url(self, obj):
-        return f"/api/v1/users/{obj.pk}/avatar"
-
-
-class TaskCommentSerializer(serializers.ModelSerializer):
-    author = TaskCommentAuthorSerializer(read_only=True)
+class TaskCommentSerializer(ApiModelSerializer):
+    task = TaskSummarySerializer(read_only=True)
+    author = UserSummarySerializer(read_only=True)
     body_html = serializers.SerializerMethodField()
 
     class Meta:
@@ -706,20 +692,16 @@ class TaskCommentSerializer(serializers.ModelSerializer):
             "edited_at",
             "created_at",
         ]
-        read_only_fields = fields
+        read_only_fields = ["edited_at", "created_at"]
 
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_body_html(self, obj):
+    def get_body_html(self, obj) -> str:
         return render_comment_body(obj.body, self.context.get("mention_map") or {})
 
 
-class TaskCommentBodySerializer(serializers.Serializer):
-    body = serializers.CharField()
-
-
-class TaskAttachmentSerializer(serializers.ModelSerializer):
+class TaskAttachmentSerializer(ApiModelSerializer):
     name = serializers.CharField(source="original_name", read_only=True)
-    added_by = serializers.SerializerMethodField()
+    added_by = UserSummarySerializer(read_only=True, allow_null=True)
+    content_url = serializers.SerializerMethodField()
     download_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -731,38 +713,103 @@ class TaskAttachmentSerializer(serializers.ModelSerializer):
             "mime_type",
             "type",
             "category",
+            "content_url",
             "download_url",
             "added_by",
             "created_at",
         ]
         read_only_fields = fields
 
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_added_by(self, obj):
-        return obj.added_by.username if obj.added_by else None
+    def get_content_url(self, obj) -> str:
+        return reverse("project-attachment-content", args=[obj.uuid])
 
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_download_url(self, obj):
-        return reverse(
-            "project-task-attachment-download",
-            kwargs={
-                "project_uuid": obj.task.project_id,
-                "task_uuid": obj.task_id,
-                "uuid": obj.uuid,
-            },
-        )
+    def get_download_url(self, obj) -> str:
+        return reverse("project-attachment-download", args=[obj.uuid])
 
 
 class TaskAttachmentCreateSerializer(serializers.Serializer):
-    file_uuids = serializers.ListField(
-        child=serializers.UUIDField(),
-        required=False,
-        default=list,
+    """What a request attaches: uploads under ``file``, repeated for several,
+    and workspace files under ``files``, each copied onto the task."""
+
+    file = serializers.ListField(
+        child=serializers.FileField(), required=False, default=list
     )
+    files = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list
+    )
+
+    def validate_file(self, uploads):
+        for upload in uploads:
+            if upload.size > MAX_UPLOAD_BYTES:
+                raise serializers.ValidationError(
+                    _('File "%(name)s" exceeds the 50 MB limit.')
+                    % {"name": upload.name}
+                )
+        return uploads
+
+    def validate(self, attrs):
+        count = len(attrs["file"]) + len(attrs["files"])
+        if not count:
+            raise serializers.ValidationError(
+                {"file": _("Attach an upload or a workspace file.")}
+            )
+        if count > MAX_ATTACHMENTS_PER_REQUEST:
+            raise serializers.ValidationError(
+                {
+                    "file": ngettext(
+                        "Maximum %(count)s attachment per request.",
+                        "Maximum %(count)s attachments per request.",
+                        MAX_ATTACHMENTS_PER_REQUEST,
+                    )
+                    % {"count": MAX_ATTACHMENTS_PER_REQUEST}
+                }
+            )
+        return attrs
+
+
+class LinkedFileSerializer(serializers.Serializer):
+    """The workspace file a task points at."""
+
+    uuid = serializers.UUIDField()
+    name = serializers.CharField()
+    type = serializers.CharField(allow_null=True)
+    type_icon = serializers.SerializerMethodField()
+    type_color = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
+    is_trashed = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+
+    def get_type_icon(self, file_obj) -> str:
+        return get_icon(file_obj.type)
+
+    def get_type_color(self, file_obj) -> str:
+        return get_color(file_obj.type)
+
+    def get_size(self, file_obj) -> int:
+        return file_obj.size or 0
+
+    def get_is_trashed(self, file_obj) -> bool:
+        return file_obj.deleted_at is not None
+
+    def get_download_url(self, file_obj) -> str:
+        return f"/api/v1/files/{file_obj.uuid}/download"
+
+
+class TaskFileLinkSerializer(ApiModelSerializer):
+    file = LinkedFileSerializer(source="share.file", read_only=True)
+    permission = serializers.CharField(source="share.permission", read_only=True)
+    added_by = UserSummarySerializer(
+        source="created_by", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = TaskFileLink
+        fields = ["uuid", "file", "permission", "added_by", "created_at"]
+        read_only_fields = fields
 
 
 class TaskFileLinkCreateSerializer(serializers.Serializer):
-    file_uuids = serializers.ListField(
+    files = serializers.ListField(
         child=serializers.UUIDField(), allow_empty=False, max_length=50
     )
     # Permission of the project share created for a file not yet shared

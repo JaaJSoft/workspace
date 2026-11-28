@@ -27,6 +27,13 @@ function projectRowUrl(collection, uuid) {
 }
 window.projectRowUrl = projectRowUrl;
 
+// What a refused request says: its `detail`, else the first error of one of
+// *fields* (the ones the request sent), else *fallback*.
+function refusalMessage(body, fields, fallback) {
+  const field = fields.find((name) => body[name] && body[name][0]);
+  return body.detail || (field && body[field][0]) || fallback;
+}
+
 const TASK_ANIMATION = 'task-drag';
 
 function prefersReducedMotion() {
@@ -2090,7 +2097,7 @@ function taskPanel() {
       if (this._attachmentsSaving || !this.hasPendingAttachments()) return;
       this._attachmentsSaving = true;
       const formData = new FormData();
-      this.appendAttachmentsTo(formData);
+      this.appendAttachmentsTo(formData, 'file', 'files');
       try {
         const resp = await fetch(this._attachmentsUrl, {
           method: 'POST',
@@ -2099,8 +2106,7 @@ function taskPanel() {
           body: formData,
         });
         if (!resp.ok) throw new Error('attach failed');
-        const data = await resp.json();
-        this.attachments = data.attachments;
+        this.attachments = this.attachments.concat(await resp.json());
       } catch (e) {
         if (window.AppAlert) AppAlert.error(gettext('Could not attach the files.'));
       } finally {
@@ -2114,7 +2120,7 @@ function taskPanel() {
     async unlinkAttachment(att) {
       if (!this.can('attach')) return;
       try {
-        const resp = await fetch(`${this._attachmentsUrl}/${att.uuid}`, {
+        const resp = await fetch(projectRowUrl('attachments', att.uuid), {
           method: 'DELETE',
           headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
@@ -2174,22 +2180,40 @@ function taskPanel() {
           method: 'POST',
           headers: this.headers(),
           body: JSON.stringify({
-            file_uuids: this.pendingFileLinks.map((f) => f.uuid),
+            files: this.pendingFileLinks.map((f) => f.uuid),
             permission: this.fileLinkPermission,
           }),
         });
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
-          this.fileLinkError = data.detail || gettext('Could not link the files.');
+          this.fileLinkError = refusalMessage(
+            data,
+            ['files'],
+            gettext('Could not link the files.')
+          );
           return;
         }
-        const data = await resp.json();
-        this.fileLinks = data.files;
+        // Read again rather than appended: the answer holds the links this
+        // request created, and a file linked by a request whose answer was
+        // lost, or from another tab, is in none.
+        const created = await resp.json();
+        this.fileLinks = (await this.fetchFileLinks()) || this.fileLinks.concat(created);
         this.$refs.linkFileDialog.close();
       } catch (e) {
         this.fileLinkError = gettext('Could not link the files.');
       } finally {
         this.fileLinkSaving = false;
+      }
+    },
+
+    // The task's linked files as the server holds them, null when they
+    // cannot be read.
+    async fetchFileLinks() {
+      try {
+        const resp = await fetch(this.data.file_links_url, { credentials: 'same-origin' });
+        return resp.ok ? await resp.json() : null;
+      } catch (e) {
+        return null;
       }
     },
 
@@ -2201,7 +2225,7 @@ function taskPanel() {
           gettext(
             'Remove "%(name)s" from this task? If no other task links it, the project stops seeing it.'
           ),
-          { name: link.name },
+          { name: link.file.name },
           true
         ),
         okLabel: gettext('Unlink'),
@@ -2211,7 +2235,7 @@ function taskPanel() {
       });
       if (!confirmed) return;
       try {
-        const resp = await fetch(`${this.data.file_links_url}/${link.uuid}`, {
+        const resp = await fetch(projectRowUrl('file-links', link.uuid), {
           method: 'DELETE',
           headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
@@ -2229,11 +2253,11 @@ function taskPanel() {
       window.dispatchEvent(
         new CustomEvent('open-task-attachment-viewer', {
           detail: {
-            uuid: link.file_uuid,
-            name: link.name,
-            type: link.type,
-            viewerUrl: '/files/view/' + link.file_uuid,
-            downloadUrl: link.download_url,
+            uuid: link.file.uuid,
+            name: link.file.name,
+            type: link.file.type,
+            viewerUrl: '/files/view/' + link.file.uuid,
+            downloadUrl: link.file.download_url,
             isFile: true,
           },
         })
@@ -2281,15 +2305,17 @@ function taskPanel() {
         const resp = await fetch(this.data.links_url, {
           method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify({ target: result.uuid, relation: this.linkRel }),
+          body: JSON.stringify({ task: result.uuid, relation: this.linkRel }),
         });
         if (!resp.ok) {
           // Rule violations (cycle, duplicate) come back as a curated
           // detail message worth surfacing verbatim.
           const body = await resp.json().catch(() => ({}));
-          throw new Error(body.detail || gettext('Could not link the tasks.'));
+          throw new Error(
+            refusalMessage(body, ['task'], gettext('Could not link the tasks.'))
+          );
         }
-        this.links = await resp.json();
+        this.links = this.links.concat([await resp.json()]);
         this.linkQuery = '';
         this.linkResults = [];
         this.linkDropdown = false;
@@ -2307,7 +2333,7 @@ function taskPanel() {
     async removeLink(uuid) {
       if (!this.can('link')) return;
       try {
-        const resp = await fetch(this.data.links_url + '/' + uuid, {
+        const resp = await fetch(projectRowUrl('links', uuid), {
           method: 'DELETE',
           headers: this.headers(),
         });
@@ -2321,7 +2347,7 @@ function taskPanel() {
     },
 
     openLinkedTask(task) {
-      if (task.project === this.data.project) {
+      if (task.project.uuid === this.data.project) {
         this.openTask(task.uuid);
       } else {
         // Cross-project: the other board owns the panel context.

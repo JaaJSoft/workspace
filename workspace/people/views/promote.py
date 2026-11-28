@@ -20,7 +20,7 @@ class PersonPromoteView(APIView):
         responses={
             200: PersonSerializer,
             201: PersonSerializer,
-            400: OpenApiResponse(description="Neither or both of email and user_id."),
+            400: OpenApiResponse(description="Neither or both of email and user."),
         },
     )
     def post(self, request):

@@ -2,7 +2,7 @@ from django.utils.translation import gettext_lazy
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 
-from workspace.common.views import ReorderView
+from workspace.common.views import ReorderView, taken_value_refused
 
 from ..models import TaskStatus
 from ..serializers import StatusDeleteQuerySerializer, TaskStatusSerializer
@@ -12,7 +12,6 @@ from .context import (
     NamedRowWritesMixin,
     ProjectContextMixin,
     ProjectRowMixin,
-    taken_value_refused,
 )
 
 

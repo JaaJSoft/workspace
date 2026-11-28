@@ -119,7 +119,7 @@ window.inviteeSelector = function inviteeSelector(eventName) {
       this.results = window.inviteeResults(
         q,
         users ? users.results : [],
-        persons ? persons.results : [],
+        persons || [],
         lists,
       );
       this.highlight = this.results.findIndex((item) => !item.disabled);

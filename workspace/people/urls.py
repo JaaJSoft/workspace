@@ -1,19 +1,22 @@
 from django.urls import include, path, re_path
 from rest_framework.routers import SimpleRouter
 
-from .views import actions, avatar, carddav, lists, persons, promote, vcard
+from .views import avatar, carddav, lists, persons, promote, vcard
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r"people", persons.PersonViewSet, basename="person")
 
 urlpatterns = [
-    # Explicit routes go before the router so `lists` and `actions` are
-    # never read as a person uuid.
-    path("api/v1/people/lists", lists.PersonListView.as_view(), name="person-lists"),
+    # Explicit routes go before the router so `lists`, `batch` and the like
+    # are never read as a person uuid.
     path(
-        "api/v1/people/actions",
-        actions.PersonActionsView.as_view(),
-        name="person-actions",
+        "api/v1/people/lists", lists.PersonListListView.as_view(), name="person-lists"
+    ),
+    path("api/v1/people/batch", persons.PersonBatchView.as_view(), name="person-batch"),
+    path(
+        "api/v1/people/available-actions",
+        persons.PersonAvailableActionsView.as_view(),
+        name="person-available-actions",
     ),
     path(
         "api/v1/people/promote",
@@ -31,24 +34,34 @@ urlpatterns = [
         name="person-export",
     ),
     path(
-        "api/v1/people/qrcode",
-        vcard.PersonQRCodeView.as_view(),
-        name="person-qrcode",
-    ),
-    path(
         "api/v1/people/lists/<uuid:uuid>",
         lists.PersonListDetailView.as_view(),
         name="person-list-detail",
     ),
     path(
-        "api/v1/people/lists/<uuid:uuid>/members",
-        lists.PersonListMembersView.as_view(),
-        name="person-list-members",
+        "api/v1/people/lists/<uuid:uuid>/download",
+        vcard.PersonListDownloadView.as_view(),
+        name="person-list-download",
+    ),
+    path(
+        "api/v1/people/lists/<uuid:list_uuid>/members/<uuid:uuid>",
+        lists.PersonListMemberView.as_view(),
+        name="person-list-member",
     ),
     path(
         "api/v1/people/<uuid:uuid>/avatar",
         avatar.PersonAvatarView.as_view(),
         name="person-avatar",
+    ),
+    path(
+        "api/v1/people/<uuid:uuid>/download",
+        vcard.PersonDownloadView.as_view(),
+        name="person-download",
+    ),
+    path(
+        "api/v1/people/<uuid:uuid>/qrcode",
+        vcard.PersonQRCodeView.as_view(),
+        name="person-qrcode",
     ),
     path("api/v1/", include(router.urls)),
     # CardDAV. Collections answer with or without their trailing slash: the

@@ -1,16 +1,15 @@
 """What every view of the module starts from: the project a request is about,
 the caller's role in it, and the gates on what they may do there."""
 
-from contextlib import contextmanager
 from operator import attrgetter
 
-from django.db import IntegrityError, transaction
 from django.http import Http404
 from django.utils.translation import gettext as _
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import SAFE_METHODS
 
 from workspace.common.exceptions import Conflict
+from workspace.common.views import taken_value_refused
 
 from ..actions import ProjectActionRegistry
 from ..models import Project, ProjectMember, Task
@@ -21,21 +20,6 @@ from ..sse_provider import broadcast_project_change
 
 def succeeded(response):
     return response.status_code < 400
-
-
-@contextmanager
-def taken_value_refused(field, message):
-    """Refuse the write under *field* when a unique constraint trips.
-
-    The serializers check uniqueness first: this catches the writer that took
-    the value in between. The savepoint keeps the request's transaction
-    usable after the constraint fired.
-    """
-    try:
-        with transaction.atomic():
-            yield
-    except IntegrityError:
-        raise ValidationError({field: [message]}) from None
 
 
 class RuleErrorsMixin:

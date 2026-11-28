@@ -1,13 +1,17 @@
-from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils.translation import gettext as _
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from django.utils.translation import gettext_lazy
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework.exceptions import NotFound
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 
-from ..queries import reachable_list, user_person_lists, user_persons
-from ..serializers import ListMembersSerializer, PersonListSerializer
+from workspace.common.exceptions import Conflict
+from workspace.common.views import LinkView, taken_value_refused
+
+from ..filters import PersonListFilter
+from ..models import PersonList
+from ..queries import reachable_list, reachable_person, user_person_lists
+from ..serializers import PersonListSerializer, book_of
 from ..services.lists import (
     ScopeMismatch,
     add_members,
@@ -17,132 +21,88 @@ from ..services.lists import (
 )
 
 
-def _with_counts(qs):
-    return qs.annotate(member_count=Count("members"))
+class PersonListRowsMixin:
+    """The contact lists the caller can see and change: the ones of their
+    own address book and of their groups'."""
 
+    queryset = PersonList.objects.none()
+    serializer_class = PersonListSerializer
+    lookup_field = "uuid"
+    name_taken = gettext_lazy("A list with this name already exists.")
 
-def _get_list_or_404(user, uuid):
-    person_list = reachable_list(user, uuid)
-    if person_list is None:
-        return None
-    return _with_counts(user_person_lists(user)).get(uuid=uuid)
+    def get_queryset(self):
+        return (
+            user_person_lists(self.request.user)
+            .select_related("group")
+            .annotate(member_count=Count("members"))
+            .order_by("name", "uuid")
+        )
 
 
 @extend_schema(tags=["People"])
-class PersonListView(APIView):
-    @extend_schema(
-        summary="List contact lists", responses=PersonListSerializer(many=True)
-    )
-    def get(self, request):
-        qs = _with_counts(user_person_lists(request.user))
-        return Response(PersonListSerializer(qs, many=True).data)
+@extend_schema_view(
+    get=extend_schema(summary="List contact lists"),
+    post=extend_schema(summary="Create a contact list"),
+)
+class PersonListListView(PersonListRowsMixin, ListCreateAPIView):
+    filterset_class = PersonListFilter
+    # A person's contact lists, listed whole.
+    pagination_class = None
 
-    @extend_schema(summary="Create a contact list", request=PersonListSerializer)
-    def post(self, request):
-        serializer = PersonListSerializer(
-            data=request.data, context={"request": request}
-        )
-        serializer.is_valid(raise_exception=True)
-        scope = serializer.validated_data.get("scope") or {"owner": request.user}
-        try:
-            with transaction.atomic():
-                person_list = create_list(
-                    **scope, name=serializer.validated_data["name"]
-                )
-        except IntegrityError:
-            return Response(
-                {"name": [_("A list with this name already exists.")]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+    def perform_create(self, serializer):
+        fields = serializer.validated_data
+        book = book_of(None, fields, self.request.user)
+        with taken_value_refused("name", self.name_taken):
+            person_list = create_list(**book, name=fields["name"])
         person_list.member_count = 0
-        return Response(
-            PersonListSerializer(person_list).data, status=status.HTTP_201_CREATED
-        )
+        serializer.instance = person_list
 
 
 @extend_schema(tags=["People"])
-class PersonListDetailView(APIView):
-    @extend_schema(summary="Get a contact list", responses=PersonListSerializer)
-    def get(self, request, uuid):
-        person_list = _get_list_or_404(request.user, uuid)
-        if person_list is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(PersonListSerializer(person_list).data)
+@extend_schema_view(
+    get=extend_schema(summary="Get a contact list"),
+    patch=extend_schema(summary="Rename a contact list"),
+    delete=extend_schema(
+        summary="Delete a contact list", description="Its members stay contacts."
+    ),
+)
+class PersonListDetailView(PersonListRowsMixin, RetrieveUpdateDestroyAPIView):
+    http_method_names = ["get", "patch", "delete", "head", "options"]
 
-    @extend_schema(summary="Rename a contact list", request=PersonListSerializer)
-    def patch(self, request, uuid):
-        person_list = _get_list_or_404(request.user, uuid)
-        if person_list is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        serializer = PersonListSerializer(
-            person_list, data=request.data, partial=True, context={"request": request}
-        )
-        serializer.is_valid(raise_exception=True)
+    def perform_update(self, serializer):
+        person_list = serializer.instance
         name = serializer.validated_data.get("name")
         if name is not None and name != person_list.name:
-            try:
-                with transaction.atomic():
-                    rename_list(person_list, name)
-            except IntegrityError:
-                return Response(
-                    {"name": [_("A list with this name already exists.")]},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        return Response(PersonListSerializer(person_list).data)
-
-    @extend_schema(summary="Delete a contact list")
-    def delete(self, request, uuid):
-        person_list = reachable_list(request.user, uuid)
-        if person_list is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        person_list.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+            with taken_value_refused("name", self.name_taken):
+                rename_list(person_list, name)
 
 
 @extend_schema(tags=["People"])
-class PersonListMembersView(APIView):
-    def _resolve(self, request, uuid):
-        person_list = reachable_list(request.user, uuid)
-        if person_list is None:
-            return None, None, Response(status=status.HTTP_404_NOT_FOUND)
-        serializer = ListMembersSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        wanted = set(serializer.validated_data["uuids"])
-        persons = list(user_persons(request.user).filter(uuid__in=wanted))
-        if len(persons) != len(wanted):
-            return (
-                None,
-                None,
-                Response(
-                    {"detail": "One or more persons not found."},
-                    status=status.HTTP_404_NOT_FOUND,
-                ),
-            )
-        return person_list, persons, None
+@extend_schema_view(
+    put=extend_schema(summary="Put a contact on a list"),
+    delete=extend_schema(summary="Take a contact off a list"),
+)
+class PersonListMemberView(LinkView):
+    """Whether one contact is on one list. Either of the two out of reach
+    answers like one that does not exist."""
 
-    def _respond(self, request, uuid):
-        return Response(PersonListSerializer(_get_list_or_404(request.user, uuid)).data)
+    def get_object(self):
+        user = self.request.user
+        person_list = reachable_list(user, self.kwargs["list_uuid"])
+        person = reachable_person(user, self.kwargs["uuid"])
+        if person_list is None or person is None:
+            raise NotFound
+        return person_list, person
 
-    @extend_schema(summary="Add persons to a list", request=ListMembersSerializer)
-    def post(self, request, uuid):
-        person_list, persons, error = self._resolve(request, uuid)
-        if error is not None:
-            return error
+    def perform_link(self, pair, data):
+        person_list, person = pair
         try:
-            add_members(person_list, persons)
+            add_members(person_list, [person])
         except ScopeMismatch:
-            return Response(
-                {
-                    "detail": "Every person must be in the same address book as the list."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return self._respond(request, uuid)
+            raise Conflict(
+                _("Every person must be in the same address book as the list.")
+            ) from None
 
-    @extend_schema(summary="Remove persons from a list", request=ListMembersSerializer)
-    def delete(self, request, uuid):
-        person_list, persons, error = self._resolve(request, uuid)
-        if error is not None:
-            return error
-        remove_members(person_list, persons)
-        return self._respond(request, uuid)
+    def perform_unlink(self, pair):
+        person_list, person = pair
+        remove_members(person_list, [person])

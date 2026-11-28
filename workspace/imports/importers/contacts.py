@@ -21,7 +21,7 @@ from vobject.vcard import stringToTextValues
 from workspace.common.logging import scrub
 from workspace.people.models import PersonList
 from workspace.people.queries import user_persons
-from workspace.people.serializers import SCOPE_MINE, parse_scope
+from workspace.people.scopes import SCOPE_MINE, parse_scope
 from workspace.people.services.lists import add_members, create_list
 from workspace.people.services.vcard import VCardError
 from workspace.people.services.vcard_import import import_vcards

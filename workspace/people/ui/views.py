@@ -21,8 +21,9 @@ from workspace.people.queries import (
     user_person_lists,
     user_persons,
 )
+from workspace.people.scopes import parse_scope, scope_label
 from workspace.people.sections import render_sections
-from workspace.people.serializers import PersonSerializer, parse_scope, scope_label
+from workspace.people.serializers import PersonSerializer
 
 ENTRY_TYPE_LABELS = {
     "home": pgettext_lazy("contact detail type", "Home"),

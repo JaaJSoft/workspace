@@ -1,31 +1,31 @@
-import math
-
 from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponse
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from django.utils.translation import gettext as _
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import MultiPartParser
-from rest_framework.permissions import SAFE_METHODS, AllowAny, IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, AllowAny
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
-from workspace.common.services.image import SOURCE_TYPES
 
 from ..models import Person
 from ..queries import reachable_person
+from ..serializers import AvatarUploadSerializer
 from ..services import avatar as avatar_service
-
-AVATAR_MAX_SIZE = 10 * 1024 * 1024
 
 
 @extend_schema(tags=["People"])
-class PersonAvatarView(CacheControlMixin, APIView):
+class PersonAvatarView(CacheControlMixin, GenericAPIView):
     """GET is public like user avatars: the image URL lands in <img> tags
     that carry no auth header. Knowing a uuid is the only key, and the
     avatar reveals nothing the contact card does not."""
 
-    permission_classes = [AllowAny]
+    queryset = Person.objects.none()
+    serializer_class = AvatarUploadSerializer
     parser_classes = [MultiPartParser]
     cache_max_age = 300
     cache_stale_while_revalidate = 86400
@@ -33,11 +33,17 @@ class PersonAvatarView(CacheControlMixin, APIView):
     def get_permissions(self):
         if self.request.method in SAFE_METHODS:
             return [AllowAny()]
-        return [IsAuthenticated()]
+        return super().get_permissions()
+
+    def _person(self):
+        person = reachable_person(self.request.user, self.kwargs["uuid"])
+        if person is None:
+            raise NotFound
+        return person
 
     @extend_schema(
-        summary="Get a person's avatar",
-        responses={200: OpenApiResponse(description="WebP image"), 404: None},
+        summary="Get the avatar of a contact",
+        responses={(200, "image/webp"): OpenApiTypes.BINARY},
     )
     def get(self, request, uuid):
         person = Person.objects.filter(uuid=uuid, has_avatar=True).first()
@@ -60,58 +66,35 @@ class PersonAvatarView(CacheControlMixin, APIView):
             response["ETag"] = f'"{etag}"'
         return response
 
-    @extend_schema(summary="Upload a person's avatar")
-    def post(self, request, uuid):
-        person = reachable_person(request.user, uuid)
-        if person is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        image = request.FILES.get("image")
-        if not image:
-            return Response(
-                {"errors": ["No image provided."]}, status=status.HTTP_400_BAD_REQUEST
-            )
-        if image.content_type not in SOURCE_TYPES:
-            return Response(
-                {"errors": ["Unsupported image type. Use JPEG, PNG, WebP, or GIF."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if image.size > AVATAR_MAX_SIZE:
-            return Response(
-                {"errors": ["Image too large. Maximum size is 10 MB."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+    @extend_schema(
+        summary="Set the avatar of a contact",
+        description="The square named by the crop fields is kept, as a WebP image.",
+        request={"multipart/form-data": AvatarUploadSerializer},
+        responses={204: None},
+    )
+    def put(self, request, uuid):
+        person = self._person()
+        body = self.get_serializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        image = body.validated_data
         try:
-            crop = [
-                float(request.data.get(key, 0))
-                for key in ("crop_x", "crop_y", "crop_w", "crop_h")
-            ]
-        except ValueError, TypeError:
-            return Response(
-                {"errors": ["Invalid crop coordinates."]},
-                status=status.HTTP_400_BAD_REQUEST,
+            avatar_service.save_avatar(
+                person,
+                image["file"],
+                image["crop_x"],
+                image["crop_y"],
+                image["crop_w"],
+                image["crop_h"],
             )
-        if (
-            not all(math.isfinite(value) for value in crop)
-            or crop[2] <= 0
-            or crop[3] <= 0
-        ):
-            return Response(
-                {"errors": ["Invalid crop coordinates."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            avatar_service.save_avatar(person, image, *crop)
         except OSError, ValueError:
-            return Response(
-                {"errors": ["Could not process the image."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return Response({"message": "Avatar updated."})
+            raise ValidationError(
+                {"file": [_("Could not process the image.")]}
+            ) from None
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @extend_schema(summary="Delete a person's avatar")
+    @extend_schema(
+        summary="Remove the avatar of a contact", request=None, responses={204: None}
+    )
     def delete(self, request, uuid):
-        person = reachable_person(request.user, uuid)
-        if person is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        avatar_service.delete_avatar(person)
+        avatar_service.delete_avatar(self._person())
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -23,9 +23,8 @@ class QRCodeApiTests(APITestCase):
         )
         self.bobs = create_person(owner=self.bob, display_name="Bobs")
 
-    def get(self, **params):
-        query = "&".join(f"{key}={value}" for key, value in params.items())
-        return self.client.get(f"/api/v1/people/qrcode?{query}")
+    def get(self, person, **params):
+        return self.client.get(f"/api/v1/people/{person}/qrcode", params)
 
     def test_svg_by_default(self):
         response = self.get(person=self.person.uuid)
@@ -53,28 +52,20 @@ class QRCodeApiTests(APITestCase):
         response = self.get(person=self.person.uuid)
         self.assertEqual(response["Cache-Control"], "no-store")
 
-    def test_someone_elses_contact_is_404(self):
-        self.assertEqual(self.get(person=self.bobs.uuid).status_code, 404)
-
-    def test_unknown_contact_is_404(self):
-        self.assertEqual(self.get(person=uuid.uuid4()).status_code, 404)
-
-    def test_malformed_uuid_is_400(self):
-        response = self.get(person="not-a-uuid")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("person", response.data)
-
-    def test_no_contact_is_400(self):
-        response = self.client.get("/api/v1/people/qrcode")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("person", response.data)
+    def test_someone_elses_contact_answers_like_one_that_does_not_exist(self):
+        hidden = self.get(person=self.bobs.uuid)
+        absent = self.get(person=uuid.uuid4())
+        self.assertEqual(hidden.status_code, 404)
+        self.assertEqual(
+            (hidden.status_code, hidden.content), (absent.status_code, absent.content)
+        )
 
     def test_unknown_kind_is_400(self):
         response = self.get(person=self.person.uuid, kind="webp")
         self.assertEqual(response.status_code, 400)
         self.assertIn("kind", response.data)
 
-    def test_contact_past_what_a_qr_holds_is_413(self):
+    def test_contact_past_what_a_qr_holds_is_a_conflict(self):
         big = create_person(
             owner=self.alice,
             display_name="Big",
@@ -84,8 +75,8 @@ class QRCodeApiTests(APITestCase):
             ],
         )
         response = self.get(person=big.uuid)
-        self.assertEqual(response.status_code, 413)
-        self.assertIn("person", response.data)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("detail", response.data)
 
     def test_anonymous_is_refused(self):
         self.client.force_authenticate(None)

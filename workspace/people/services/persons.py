@@ -18,12 +18,20 @@ def update_person(person, **fields):
 
 
 @transaction.atomic
-def move_to_scope(person, *, owner=None, group=None):
-    """Re-home a person and drop it from lists that no longer share its scope."""
+def move_to_scope(person, *, owner=None, group=None, **fields):
+    """Re-home a person and drop it from lists that no longer share its scope.
+
+    *fields* are written in the same statement as the move. An account is
+    linked to one contact per address book, so a link changed on the way has
+    to land with the book it is judged in: written first, it would be
+    refused for a contact of the book being left.
+    """
     require_one_scope(owner, group)
     person.owner = owner
     person.group = group
-    person.save(update_fields=["owner", "group", "updated_at"])
+    for name, value in fields.items():
+        setattr(person, name, value)
+    person.save(update_fields=["owner", "group", *fields, "updated_at"])
     foreign_lists = person.lists.exclude(owner=owner, group=group)
     for person_list in foreign_lists:
         person_list.members.remove(person)

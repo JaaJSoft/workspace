@@ -25,23 +25,40 @@ window.peopleHelpers = {
     return qs ? `${base}?${qs}` : base;
   },
 
-  // The one export url, for an export target: 'all', 'mine', 'group:<id>',
+  // The API names an address book by its group, null for one's own. The
+  // page keeps one word for it in its address and its menus: 'mine' or
+  // 'group:<id>'.
+  scopeOf(row) {
+    return row.group ? `group:${row.group.id}` : 'mine';
+  },
+
+  groupOf(scope) {
+    if (typeof scope !== 'string' || !scope.startsWith('group:')) return null;
+    return Number.parseInt(scope.slice('group:'.length), 10);
+  },
+
+  // A contact or a list as the API answers it, with the page's word for
+  // its address book next to it.
+  withScope(row) {
+    return { ...row, scope: window.peopleHelpers.scopeOf(row) };
+  },
+
+  // Where an export target is downloaded from: 'all', 'mine', 'group:<id>',
   // 'list:<uuid>' or 'person:<uuid>'.
   exportUrl(target) {
-    const params = new URLSearchParams();
     const [kind, value] = target.includes(':') ? target.split(/:(.*)/s) : [target, ''];
-    if (kind === 'person' || kind === 'list') params.set(kind, value);
-    else if (target !== 'all') params.set('scope', target);
-    const qs = params.toString();
-    return qs ? `/api/v1/people/export?${qs}` : '/api/v1/people/export';
+    if (kind === 'person') return `/api/v1/people/${value}/download`;
+    if (kind === 'list') return `/api/v1/people/lists/${value}/download`;
+    if (target === 'all') return '/api/v1/people/export';
+    const group = window.peopleHelpers.groupOf(target);
+    return `/api/v1/people/export?group=${group === null ? 'none' : group}`;
   },
 
   // The QR image for one contact: svg on screen, png for a download that
   // lands in a photo gallery or a print job.
   qrUrl(uuid, kind = 'svg') {
-    const params = new URLSearchParams({ person: uuid });
-    if (kind !== 'svg') params.set('kind', kind);
-    return `/api/v1/people/qrcode?${params.toString()}`;
+    const base = `/api/v1/people/${uuid}/qrcode`;
+    return kind === 'svg' ? base : `${base}?kind=${kind}`;
   },
 };
 
@@ -194,7 +211,7 @@ window.peopleApp = function peopleApp(config) {
       const generation = this._menuGeneration;
       this.ctxMenu = { open: true, x, y, type, data, actions: type === 'person' ? null : [] };
       if (type !== 'person') return;
-      fetch('/api/v1/people/actions', {
+      fetch('/api/v1/people/available-actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ uuids: [data.uuid] }),
@@ -318,7 +335,7 @@ window.peopleApp = function peopleApp(config) {
     async createPerson() {
       const name = this.personForm.name.trim();
       if (!name || this.saving) return;
-      const body = { display_name: name, scope: this.personForm.scope };
+      const body = { display_name: name, group: window.peopleHelpers.groupOf(this.personForm.scope) };
       const email = this.personForm.email.trim();
       if (email) body.emails = [{ value: email, type: 'other' }];
       this.saving = true;
@@ -339,7 +356,7 @@ window.peopleApp = function peopleApp(config) {
         }
         const person = await res.json();
         this.$refs.personDialog.close();
-        this.onScopeChanged({ from: null, to: person.scope });
+        this.onScopeChanged({ from: null, to: window.peopleHelpers.scopeOf(person) });
         // A fresh contact belongs to no list, so a list filter would hide it.
         this.listUuid = '';
         await this.refreshList();
@@ -373,7 +390,7 @@ window.peopleApp = function peopleApp(config) {
         this.$refs.listDialog.close();
         return;
       }
-      const body = renaming ? { name } : { name, scope: this.listForm.scope };
+      const body = renaming ? { name } : { name, group: window.peopleHelpers.groupOf(this.listForm.scope) };
       this.saving = true;
       try {
         const res = await fetch(
@@ -393,7 +410,7 @@ window.peopleApp = function peopleApp(config) {
           });
           return;
         }
-        const saved = await res.json();
+        const saved = window.peopleHelpers.withScope(await res.json());
         if (renaming) {
           const list = this.lists.find((l) => l.uuid === saved.uuid);
           if (list) list.name = saved.name;
@@ -448,7 +465,8 @@ window.peopleApp = function peopleApp(config) {
       if (!file || this.saving) return;
       const body = new FormData();
       body.append('file', file);
-      body.append('scope', scope);
+      const group = window.peopleHelpers.groupOf(scope);
+      if (group !== null) body.append('group', group);
       this.saving = true;
       this.importError = '';
       try {
@@ -539,11 +557,11 @@ window.peopleApp = function peopleApp(config) {
     },
 
     // An <img> error says nothing about why. Asking again tells a contact
-    // too large for a QR (413, answered by the .vcf export) apart from an
+    // too large for a QR (409, answered by the .vcf export) apart from an
     // expired session or a server fault.
     async qrLoadFailed() {
       const res = await fetch(this.qrSrc()).catch(() => null);
-      this.qrError = res && res.status === 413 ? 'too_large' : 'failed';
+      this.qrError = res && res.status === 409 ? 'too_large' : 'failed';
     },
 
     // Membership is changed from the panel, which knows nothing of the
@@ -554,7 +572,7 @@ window.peopleApp = function peopleApp(config) {
         AppAlert.show({ type: 'error', message: gettext('Could not refresh the lists.') });
         return;
       }
-      this.lists = await res.json();
+      this.lists = (await res.json()).map(window.peopleHelpers.withScope);
     },
   };
 };
@@ -564,7 +582,7 @@ window.peopleApp = function peopleApp(config) {
 // json_script blocks the fragment carries.
 window.personPanel = function personPanel() {
   return {
-    person: window.peopleHelpers.readJson('person-panel-data', {}),
+    person: window.peopleHelpers.withScope(window.peopleHelpers.readJson('person-panel-data', {})),
     actions: window.peopleHelpers.readJson('person-panel-actions', []),
     lists: window.peopleHelpers.readJson('person-panel-lists', []),
     groups: window.peopleHelpers.readJson('person-panel-groups', []),
@@ -673,13 +691,13 @@ window.personPanel = function personPanel() {
     },
 
     linkUser(user) {
-      this.patch({ linked_user_id: user.id }).then((updated) => {
+      this.patch({ linked_user: user.id }).then((updated) => {
         if (updated) this.reloadPanel();
       });
     },
 
     unlinkUser() {
-      this.patch({ linked_user_id: null }).then((updated) => {
+      this.patch({ linked_user: null }).then((updated) => {
         if (updated) this.reloadPanel();
       });
     },
@@ -698,10 +716,10 @@ window.personPanel = function personPanel() {
       const choice = this.movePick;
       if (!choice || choice === this.person.scope) return;
       const from = this.person.scope;
-      const updated = await this.patch({ scope: choice });
+      const updated = await this.patch({ group: window.peopleHelpers.groupOf(choice) });
       this.$refs.moveDialog.close();
       if (updated) {
-        this.$dispatch('people-scope-changed', { from, to: updated.scope });
+        this.$dispatch('people-scope-changed', { from, to: window.peopleHelpers.scopeOf(updated) });
         this.reloadPanel();
       }
     },
@@ -715,10 +733,9 @@ window.personPanel = function personPanel() {
     async confirmAddToList() {
       const choice = this.listPick;
       if (!choice) return;
-      const res = await fetch(`/api/v1/people/lists/${choice}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ uuids: [this.person.uuid] }),
+      const res = await fetch(`/api/v1/people/lists/${choice}/members/${this.person.uuid}`, {
+        method: 'PUT',
+        headers: { 'X-CSRFToken': getCSRFToken() },
       });
       if (!res.ok) {
         AppAlert.show({ type: 'error', message: gettext('Could not add to the list.') });
@@ -731,10 +748,9 @@ window.personPanel = function personPanel() {
     },
 
     async removeFromList(uuid) {
-      const res = await fetch(`/api/v1/people/lists/${uuid}/members`, {
+      const res = await fetch(`/api/v1/people/lists/${uuid}/members/${this.person.uuid}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ uuids: [this.person.uuid] }),
+        headers: { 'X-CSRFToken': getCSRFToken() },
       });
       if (!res.ok) {
         AppAlert.show({ type: 'error', message: gettext('Could not remove from the list.') });
@@ -787,14 +803,14 @@ window.personPanel = function personPanel() {
       this.uploading = true;
       const data = this.cropper.getData(true);
       const formData = new FormData();
-      formData.append('image', this.selectedFile);
+      formData.append('file', this.selectedFile);
       formData.append('crop_x', data.x);
       formData.append('crop_y', data.y);
       formData.append('crop_w', data.width);
       formData.append('crop_h', data.height);
       try {
         const res = await fetch(`/api/v1/people/${this.person.uuid}/avatar`, {
-          method: 'POST',
+          method: 'PUT',
           headers: { 'X-CSRFToken': getCSRFToken() },
           body: formData,
         });

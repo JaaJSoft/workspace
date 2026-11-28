@@ -42,7 +42,7 @@ msgstr "Nouveau contact"
 msgid "Import contacts"
 msgstr "Importer des contacts"
 
-#: serializers.py
+#: scopes.py
 msgid "Unknown scope."
 msgstr "Carnet d’adresses inconnu."
 
@@ -57,6 +57,10 @@ msgstr "Une adresse doit comporter au moins une ligne."
 #: serializers.py
 msgid "Another contact is already linked to this account."
 msgstr "Un autre contact est déjà associé à ce compte."
+
+#: serializers.py
+msgid "Give either an email or a user."
+msgstr "Indiquez soit une adresse e-mail, soit un utilisateur."
 
 #: serializers.py
 msgid "A list cannot change scope; create one in the other address book."
@@ -527,11 +531,7 @@ msgstr "Téléphones"
 msgid "Addresses"
 msgstr "Adresses"
 
-#: views/vcard.py
-msgid "No file provided."
-msgstr "Aucun fichier fourni."
-
-#: views/vcard.py
+#: serializers.py
 msgid "File too large. Maximum size is 20 MB."
 msgstr "Fichier trop volumineux. La taille maximale est de 20 Mo."
 
@@ -542,3 +542,11 @@ msgstr "Ce n’est pas un fichier vCard."
 #: views/lists.py
 msgid "A list with this name already exists."
 msgstr "Une liste de ce nom existe déjà."
+
+#: views/lists.py views/persons.py
+msgid "Every person must be in the same address book as the list."
+msgstr "Chaque contact doit être dans le même carnet d’adresses que la liste."
+
+#: views/avatar.py
+msgid "Could not process the image."
+msgstr "Impossible de traiter l’image."

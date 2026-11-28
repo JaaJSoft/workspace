@@ -10,7 +10,7 @@ from rest_framework.generics import (
 )
 from rest_framework.response import Response
 
-from workspace.common.views import LinkView
+from workspace.common.views import LinkView, taken_value_refused
 
 from ..filters import ProjectFilter
 from ..models import Project, ProjectMember, ProjectNotificationLevel
@@ -27,7 +27,6 @@ from .context import (
     ProjectContextMixin,
     RuleErrorsMixin,
     require_action,
-    taken_value_refused,
 )
 
 

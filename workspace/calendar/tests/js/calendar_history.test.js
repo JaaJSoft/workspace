@@ -16,11 +16,11 @@ const EVENT_B = '0190a2b4-0000-7000-8000-00000000000b';
 function rawEvent(uuid) {
   return {
     uuid,
-    calendar_id: 'c1',
+    calendar: { uuid: 'c1', name: 'Work', color: 'error' },
     title: 'Standup',
     start: '2026-03-20T09:00:00Z',
     end: '2026-03-20T10:00:00Z',
-    all_day: false,
+    is_all_day: false,
     owner: { id: 1 },
     members: [],
   };
@@ -174,4 +174,28 @@ test('an event closed while it loads does not reopen the panel', async () => {
 
   assert.equal(app.showPanel, false);
   assert.ok(!writes.some(([kind]) => kind === 'push'));
+});
+
+
+test('an action of the hover card is about the occurrence the card showed', async () => {
+  const { app, ctx } = makeApp();
+  ctx.document.querySelectorAll = () => [];
+  const asked = [];
+  const slot = '2026-03-27T09:00:00+00:00';
+  ctx.fetch = async (url) => {
+    asked.push(url);
+    return { ok: true, json: async () => ({ ...rawEvent(EVENT_A), is_recurring: true, original_start: slot }) };
+  };
+  let opened = 0;
+  app.openEditModal = () => { opened += 1; };
+
+  await app.handleEventCardAction({ detail: { action: 'edit', eventId: EVENT_A, start: slot } });
+
+  assert.equal(new URL(asked[0], 'http://x').searchParams.get('original_start'), slot);
+  assert.equal(app._panelRaw.original_start, slot);
+  assert.equal(opened, 1);
+
+  // A card of an event that does not repeat names no slot.
+  await app.handleEventCardAction({ detail: { action: 'edit', eventId: EVENT_B, start: '' } });
+  assert.equal(asked[1], `/api/v1/events/${EVENT_B}`);
 });

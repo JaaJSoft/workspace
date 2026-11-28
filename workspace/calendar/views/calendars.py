@@ -1,77 +1,120 @@
-from django.utils.translation import gettext
-from drf_spectacular.utils import extend_schema
+from django.http import Http404
+from django.utils.translation import gettext as _
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.generics import (
+    GenericAPIView,
+    ListCreateAPIView,
+    RetrieveUpdateDestroyAPIView,
+)
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
-from workspace.common.cache import cached_response, invalidate
-from workspace.common.mixins import CacheControlMixin
-
+from ..filters import CalendarFilter
 from ..models import Calendar
-from ..queries import visible_calendars
-from ..serializers import CalendarCreateSerializer, CalendarSerializer
+from ..queries import reachable_calendars
+from ..serializers import CalendarSerializer
+from ..services.calendars import (
+    create_calendar,
+    external_source,
+    request_sync,
+    update_calendar,
+)
+
+
+class CalendarRowsMixin:
+    """The calendars the caller can see. Changing one takes owning it: a
+    calendar someone subscribed to is theirs to read only."""
+
+    queryset = Calendar.objects.none()
+    serializer_class = CalendarSerializer
+    lookup_field = "uuid"
+
+    def get_queryset(self):
+        return reachable_calendars(self.request.user)
+
+    def get_object(self):
+        try:
+            return super().get_object()
+        except Http404:
+            raise NotFound(_("Calendar not found.")) from None
+
+    def own_calendar(self):
+        calendar = self.get_object()
+        if calendar.owner_id != self.request.user.id:
+            raise PermissionDenied(_("Only its owner can change a calendar."))
+        return calendar
 
 
 @extend_schema(tags=["Calendar"])
-class CalendarListView(CacheControlMixin, APIView):
-    permission_classes = [IsAuthenticated]
-    cache_max_age = 300
+@extend_schema_view(
+    get=extend_schema(
+        summary="List the calendars the caller can see",
+        description=(
+            "Their own, the ones filled from an external ICS feed included, "
+            "and the ones they subscribed to."
+        ),
+    ),
+    post=extend_schema(
+        summary="Create a calendar",
+        description=(
+            "With `source_url`, an external calendar: its events are read "
+            "from that ICS feed, now and again from then on."
+        ),
+    ),
+)
+class CalendarListView(CalendarRowsMixin, ListCreateAPIView):
+    filterset_class = CalendarFilter
+    # A person's calendars, listed whole.
+    pagination_class = None
 
-    @extend_schema(summary="List user's calendars (owned + subscribed)")
-    @cached_response(300)
-    def get(self, request):
-        owned, subscribed = visible_calendars(request.user)
+    def get_queryset(self):
+        return super().get_queryset().order_by("name", "uuid")
 
-        return Response(
-            {
-                "owned": CalendarSerializer(owned, many=True).data,
-                "subscribed": CalendarSerializer(subscribed, many=True).data,
-            }
+    def perform_create(self, serializer):
+        serializer.instance = create_calendar(
+            self.request.user,
+            name=serializer.validated_data["name"],
+            color=serializer.validated_data.get("color", "primary"),
+            source_url=serializer.validated_data.get("source_url"),
         )
 
-    @extend_schema(summary="Create a calendar", request=CalendarCreateSerializer)
-    def post(self, request):
-        ser = CalendarCreateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        cal = Calendar.objects.create(owner=request.user, **ser.validated_data)
-        cal = Calendar.objects.select_related("owner").get(pk=cal.pk)
-        invalidate("CalendarListView", user=request.user)
-        return Response(CalendarSerializer(cal).data, status=status.HTTP_201_CREATED)
+
+@extend_schema(tags=["Calendar"])
+@extend_schema_view(
+    get=extend_schema(summary="Get a calendar"),
+    patch=extend_schema(summary="Rename or recolor a calendar"),
+    delete=extend_schema(summary="Delete a calendar and its events"),
+)
+class CalendarDetailView(CalendarRowsMixin, RetrieveUpdateDestroyAPIView):
+    http_method_names = ["get", "patch", "delete", "head", "options"]
+
+    def update(self, request, *args, **kwargs):
+        calendar = self.own_calendar()
+        serializer = self.get_serializer(calendar, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        update_calendar(calendar, serializer.validated_data)
+        return Response(self.get_serializer(calendar).data)
+
+    def destroy(self, request, *args, **kwargs):
+        self.own_calendar().delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(tags=["Calendar"])
-class CalendarDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(summary="Update a calendar", request=CalendarCreateSerializer)
-    def put(self, request, calendar_id):
-        try:
-            cal = Calendar.objects.get(pk=calendar_id, owner=request.user)
-        except Calendar.DoesNotExist:
-            return Response(
-                {"detail": gettext("Calendar not found.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        ser = CalendarCreateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        for k, v in ser.validated_data.items():
-            setattr(cal, k, v)
-        cal.save(update_fields=[*ser.validated_data, "updated_at"])
-        cal = Calendar.objects.select_related("owner").get(pk=cal.pk)
-        invalidate("CalendarListView", user=request.user)
-        return Response(CalendarSerializer(cal).data)
-
-    @extend_schema(summary="Delete a calendar")
-    def delete(self, request, calendar_id):
-        try:
-            cal = Calendar.objects.get(pk=calendar_id, owner=request.user)
-        except Calendar.DoesNotExist:
-            return Response(
-                {"detail": gettext("Calendar not found.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        cal.delete()
-        invalidate("CalendarListView", user=request.user)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+class CalendarSyncView(CalendarRowsMixin, GenericAPIView):
+    @extend_schema(
+        summary="Read the feed of an external calendar again now",
+        description=(
+            "Answers at once; `last_synced_at` and `sync_error` of the "
+            "calendar say how the reading went."
+        ),
+        request=None,
+        responses={202: None},
+    )
+    def post(self, request, *args, **kwargs):
+        calendar = self.own_calendar()
+        if external_source(calendar) is None:
+            raise PermissionDenied(_("Only an external calendar has a feed to read."))
+        request_sync(calendar)
+        return Response(status=status.HTTP_202_ACCEPTED)

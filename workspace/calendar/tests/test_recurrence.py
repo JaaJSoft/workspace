@@ -8,15 +8,16 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.calendar.models import Calendar, Event, EventMember
+from workspace.calendar.models import Calendar, Event
 from workspace.calendar.recurrence import (
-    expand_recurring_events,
-    make_virtual_occurrence,
     next_occurrences_after,
     occurrences_in_range,
 )
+from workspace.calendar.serializers import EventSerializer
+from workspace.calendar.services.event_listing import occurrence_data
 from workspace.calendar.services.recurrence_rule import MAX_ITERATIONS, apply_rule
 
+from .listing import listed
 from .test_calendar import CalendarTestMixin
 
 User = get_user_model()
@@ -228,7 +229,9 @@ class OccurrencesInRangeTests(TestCase):
             self.assertIn(occ.weekday(), (0, 2, 4))  # Mon, Wed, Fri
 
 
-class MakeVirtualOccurrenceTests(TestCase):
+class OccurrenceDataTests(TestCase):
+    """An occurrence the rule gives reads as its series, at its slot."""
+
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pass")
         self.cal = Calendar.objects.create(name="Test", owner=self.user)
@@ -239,27 +242,35 @@ class MakeVirtualOccurrenceTests(TestCase):
         event.save()
         return event
 
-    def test_returns_dict_with_expected_keys(self):
+    def _occurrence(self, master, start):
+        series = EventSerializer(master, context={"viewer": self.user}).data
+        return occurrence_data(series, master, start)
+
+    def test_names_its_series_and_its_slot(self):
         now = timezone.now()
         master = self._master(title="Meeting", start=now, end=now + timedelta(hours=1))
-        occ = make_virtual_occurrence(master, now)
+        occ = self._occurrence(master, now + timedelta(days=1))
         self.assertEqual(occ["title"], "Meeting")
         self.assertTrue(occ["is_recurring"])
         self.assertFalse(occ["is_exception"])
-        self.assertEqual(occ["master_event_id"], str(master.uuid))
+        self.assertEqual(occ["uuid"], str(master.uuid))
+        self.assertEqual(
+            datetime.fromisoformat(occ["original_start"]), now + timedelta(days=1)
+        )
 
     def test_computes_end_from_duration(self):
         now = timezone.now()
         master = self._master(title="Meeting", start=now, end=now + timedelta(hours=2))
         occ_start = now + timedelta(days=1)
-        occ = make_virtual_occurrence(master, occ_start)
-        expected_end = (occ_start + timedelta(hours=2)).isoformat()
-        self.assertEqual(occ["end"], expected_end)
+        occ = self._occurrence(master, occ_start)
+        self.assertEqual(
+            datetime.fromisoformat(occ["end"]), occ_start + timedelta(hours=2)
+        )
 
     def test_end_is_none_when_no_master_end(self):
         now = timezone.now()
         master = self._master(title="All day", start=now, end=None)
-        occ = make_virtual_occurrence(master, now)
+        occ = self._occurrence(master, now)
         self.assertIsNone(occ["end"])
 
 
@@ -374,7 +385,7 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
 
     def _event_data(self, **overrides):
         data = {
-            "calendar_id": str(self.calendar.uuid),
+            "calendar": str(self.calendar.uuid),
             "title": "Weekly Standup",
             "start": (timezone.now() + timedelta(days=1)).isoformat(),
             "end": (timezone.now() + timedelta(days=1, hours=1)).isoformat(),
@@ -419,7 +430,7 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
     def test_create_non_recurring_unchanged(self):
         self.client.force_authenticate(self.owner)
         data = {
-            "calendar_id": str(self.calendar.uuid),
+            "calendar": str(self.calendar.uuid),
             "title": "One-off Event",
             "start": (timezone.now() + timedelta(days=2)).isoformat(),
             "end": (timezone.now() + timedelta(days=2, hours=1)).isoformat(),
@@ -518,12 +529,12 @@ class RecurrenceExpansionTests(CalendarTestMixin, APITestCase):
         }
         resp = self.client.get(self.url, params)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        masters = {e.get("master_event_id") for e in resp.data}
-        self.assertNotIn(str(cancelled.uuid), masters)
-        self.assertIn(str(kept.uuid), masters)
+        series = {e["uuid"] for e in resp.data}
+        self.assertNotIn(str(cancelled.uuid), series)
+        self.assertIn(str(kept.uuid), series)
 
-    def test_virtual_occurrence_has_is_recurring(self):
-        self._create_recurring(freq="weekly", start_offset=0)
+    def test_an_occurrence_names_its_series_and_its_slot(self):
+        master = self._create_recurring(freq="weekly", start_offset=0)
         self.client.force_authenticate(self.owner)
         params = {
             "start": timezone.now().isoformat(),
@@ -533,9 +544,11 @@ class RecurrenceExpansionTests(CalendarTestMixin, APITestCase):
         recurring = [e for e in resp.data if e.get("is_recurring")]
         self.assertGreater(len(recurring), 0)
         for occ in recurring:
-            self.assertTrue(occ["is_recurring"])
-            self.assertIn("master_event_id", occ)
-            self.assertIn("original_start", occ)
+            self.assertEqual(occ["uuid"], str(master.uuid))
+            self.assertEqual(occ["original_start"], occ["start"])
+        self.assertEqual(
+            len({occ["original_start"] for occ in recurring}), len(recurring)
+        )
 
 
 class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
@@ -562,7 +575,8 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         occ_start = (master.start + timedelta(weeks=1)).isoformat()
         self.client.force_authenticate(self.owner)
         resp = self.client.delete(
-            f"{self.url(master.uuid)}?scope=this&original_start={occ_start}",
+            self.url(master.uuid),
+            query_params={"occurrences": "this", "original_start": occ_start},
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         exc = Event.objects.filter(recurrence_parent=master, is_cancelled=True)
@@ -573,7 +587,8 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         occ_start = (master.start + timedelta(weeks=2)).isoformat()
         self.client.force_authenticate(self.owner)
         resp = self.client.delete(
-            f"{self.url(master.uuid)}?scope=future&original_start={occ_start}",
+            self.url(master.uuid),
+            query_params={"occurrences": "future", "original_start": occ_start},
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         master.refresh_from_db()
@@ -592,12 +607,14 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
             original_start=master.start + timedelta(weeks=1),
         )
         self.client.force_authenticate(self.owner)
-        resp = self.client.delete(f"{self.url(master_id)}?scope=all")
+        resp = self.client.delete(
+            self.url(master_id), query_params={"occurrences": "all"}
+        )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Event.objects.filter(uuid=master_id).exists())
         self.assertFalse(Event.objects.filter(recurrence_parent_id=master_id).exists())
 
-    def test_delete_without_scope_keeps_the_series(self):
+    def test_delete_without_saying_which_occurrences_keeps_the_series(self):
         master = self._create_weekly()
         Event.objects.create(
             calendar=self.calendar,
@@ -610,31 +627,62 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         self.client.force_authenticate(self.owner)
         resp = self.client.delete(self.url(master.uuid))
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("occurrences", resp.data)
         self.assertTrue(Event.objects.filter(uuid=master.uuid).exists())
         self.assertEqual(Event.objects.filter(recurrence_parent=master).count(), 1)
+
+    def test_edit_without_saying_which_occurrences_changes_nothing(self):
+        master = self._create_weekly()
+        self.client.force_authenticate(self.owner)
+        resp = self.client.patch(
+            self.url(master.uuid), {"title": "Renamed"}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("occurrences", resp.data)
+        master.refresh_from_db()
+        self.assertEqual(master.title, "Weekly")
+
+    def test_one_occurrence_needs_its_slot(self):
+        master = self._create_weekly()
+        self.client.force_authenticate(self.owner)
+        resp = self.client.delete(
+            self.url(master.uuid), query_params={"occurrences": "this"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("original_start", resp.data)
+        self.assertFalse(Event.objects.filter(recurrence_parent=master).exists())
 
     def test_edit_this_creates_exception(self):
         master = self._create_weekly()
         occ_start = (master.start + timedelta(weeks=1)).isoformat()
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(master.uuid),
-            {"scope": "this", "original_start": occ_start, "title": "Modified"},
+            {"title": "Modified"},
             format="json",
+            query_params={"occurrences": "this", "original_start": occ_start},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         exc = Event.objects.filter(recurrence_parent=master)
         self.assertEqual(exc.count(), 1)
         self.assertEqual(exc.first().title, "Modified")
+        # The occurrence keeps the name it had before it was changed.
+        self.assertEqual(resp.data["uuid"], str(master.uuid))
+        self.assertEqual(
+            datetime.fromisoformat(resp.data["original_start"]),
+            master.start + timedelta(weeks=1),
+        )
+        self.assertTrue(resp.data["is_exception"])
 
     def test_edit_future_creates_new_master(self):
         master = self._create_weekly()
         occ_start = (master.start + timedelta(weeks=2)).isoformat()
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(master.uuid),
-            {"scope": "future", "original_start": occ_start, "title": "Future Series"},
+            {"title": "Future Series"},
             format="json",
+            query_params={"occurrences": "future", "original_start": occ_start},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         master.refresh_from_db()
@@ -645,10 +693,11 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
     def test_edit_all_updates_master(self):
         master = self._create_weekly()
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(master.uuid),
-            {"scope": "all", "title": "Updated Series"},
+            {"title": "Updated Series"},
             format="json",
+            query_params={"occurrences": "all"},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         master.refresh_from_db()
@@ -673,8 +722,9 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         }
         resp = self.client.get("/api/v1/events", params)
         recurring = [e for e in resp.data if e.get("is_recurring")]
-        starts = [e["original_start"] for e in recurring if e.get("original_start")]
-        self.assertNotIn(occ_start.isoformat(), starts)
+        starts = [datetime.fromisoformat(e["original_start"]) for e in recurring]
+        self.assertTrue(starts)
+        self.assertNotIn(occ_start, starts)
 
     def test_modified_occurrence_in_expansion(self):
         master = self._create_weekly()
@@ -795,18 +845,13 @@ class RecurrenceServiceTests(CalendarTestMixin, TestCase):
         )
         range_start = master.start
         range_end = master.start + timedelta(days=21)
-        from django.db.models import Prefetch
-
-        masters = (
-            Event.objects.filter(pk=master.pk)
-            .prefetch_related(
-                Prefetch("members", queryset=EventMember.objects.select_related("user"))
-            )
-            .select_related("owner", "calendar")
-        )
-        result = expand_recurring_events(masters, range_start, range_end)
-        starts = [r["original_start"] for r in result]
-        self.assertNotIn(occ_start.isoformat(), starts)
+        result = listed(self.owner, range_start, range_end)
+        starts = [
+            datetime.fromisoformat(r["original_start"])
+            for r in result
+            if r["uuid"] == str(master.uuid)
+        ]
+        self.assertEqual(starts, [master.start, master.start + timedelta(weeks=2)])
 
     def test_expand_with_modified_exception(self):
         master = self._create_weekly()
@@ -822,16 +867,7 @@ class RecurrenceServiceTests(CalendarTestMixin, TestCase):
         )
         range_start = master.start
         range_end = master.start + timedelta(days=21)
-        from django.db.models import Prefetch
-
-        masters = (
-            Event.objects.filter(pk=master.pk)
-            .prefetch_related(
-                Prefetch("members", queryset=EventMember.objects.select_related("user"))
-            )
-            .select_related("owner", "calendar")
-        )
-        result = expand_recurring_events(masters, range_start, range_end)
+        result = listed(self.owner, range_start, range_end)
         titles = [r["title"] for r in result]
         self.assertIn("Modified Meeting", titles)
 
@@ -1016,8 +1052,8 @@ class WallClockExpansionTests(TestCase):
             recurrence_parent=master,
             original_start=datetime(2026, 3, 29, 7, 0, tzinfo=UTC),
         )
-        occs = expand_recurring_events(
-            Event.objects.filter(pk=master.pk).select_related("owner"),
+        occs = listed(
+            self.user,
             datetime(2026, 3, 29, 0, 0, tzinfo=UTC),
             datetime(2026, 3, 30, 0, 0, tzinfo=UTC),
         )
@@ -1110,7 +1146,7 @@ class NextOccurrencesBudgetTests(TestCase):
     Delegating the skip to ``rule.xafter`` hides an unbounded walk inside
     dateutil: a budget that counts yielded items never fires, because a dense
     old series yields nothing for as long as it takes to reach the window.
-    ``get_upcoming_page`` calls this once per master with no limit, so one
+    The agenda calls this once per series with no limit, so one
     such row wedges an agenda request indefinitely.
     """
 

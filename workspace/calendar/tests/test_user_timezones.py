@@ -31,10 +31,12 @@ from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services import recurrence_rule as rr
 from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.calendar.tasks import notify_today_events
-from workspace.calendar.upcoming import get_upcoming_for_user, get_upcoming_page
+from workspace.calendar.upcoming import get_upcoming_for_user
 from workspace.mail.serializers import MailExtractionSerializer
 from workspace.notifications.models import Notification
 from workspace.users.services.settings import set_setting
+
+from .listing import listed
 
 User = get_user_model()
 
@@ -131,30 +133,27 @@ class UpcomingTodayAllDayTests(_CalendarUser):
         self.assertEqual(self._titles(now, TOKYO), ["Holiday", "Breakfast"])
 
 
-class AgendaCursorAllDayTests(_CalendarUser):
-    """``GET /api/v1/events?after=now`` - the agenda view."""
+class AgendaAllDayTests(_CalendarUser):
+    """``GET /api/v1/events?start=now`` - the agenda view."""
 
-    def _page(self, after, tz, limit=20, after_id=None):
-        return get_upcoming_page(
-            self.user, after=after, limit=limit, tz=tz, after_id=after_id
-        )
+    def _page(self, start, tz, limit=20, offset=0):
+        return listed(self.user, start, limit=limit, offset=offset, tz=tz)
 
-    def _walk(self, after, tz, limit):
+    def _walk(self, start, tz, limit):
         """Every title the agenda serves, page after page, as served."""
-        seen, after_id = [], None
-        for _ in range(20):
-            page, cursor = self._page(after, tz, limit=limit, after_id=after_id)
+        seen = []
+        for number in range(20):
+            page = self._page(start, tz, limit=limit, offset=number * limit)
             seen += [e["title"] for e in page]
-            if cursor is None:
+            if len(page) < limit:
                 break
-            after, after_id = cursor
         else:
-            self.fail(f"the cursor never reached the end: {seen}")
+            self.fail(f"the pages never reached the end: {seen}")
         return seen
 
     def test_todays_all_day_event_stays_listed_after_utc_midnight(self):
         self._all_day("Holiday", label(2026, 2, 1))
-        page, _ = self._page(datetime(2026, 2, 1, 10, 0, tzinfo=PARIS), PARIS)
+        page = self._page(datetime(2026, 2, 1, 10, 0, tzinfo=PARIS), PARIS)
 
         self.assertEqual([e["title"] for e in page], ["Holiday"])
 
@@ -163,11 +162,11 @@ class AgendaCursorAllDayTests(_CalendarUser):
         # instant, Feb 2's all-day event would sit among Feb 1's evening.
         self._all_day("Feb 2 holiday", label(2026, 2, 2))
         self._timed("Feb 1 dinner", datetime(2026, 2, 1, 20, 0, tzinfo=NEW_YORK))
-        page, _ = self._page(datetime(2026, 2, 1, 18, 0, tzinfo=NEW_YORK), NEW_YORK)
+        page = self._page(datetime(2026, 2, 1, 18, 0, tzinfo=NEW_YORK), NEW_YORK)
 
         self.assertEqual([e["title"] for e in page], ["Feb 1 dinner", "Feb 2 holiday"])
 
-    def test_cursor_walks_every_event_once_in_order(self):
+    def test_pages_walk_every_event_once_in_order(self):
         tz = NEW_YORK
         for day in range(2, 6):
             self._all_day(f"all-day {day}", label(2026, 2, day))
@@ -179,9 +178,10 @@ class AgendaCursorAllDayTests(_CalendarUser):
             [f"{kind} {day}" for day in range(2, 6) for kind in ("all-day", "evening")],
         )
 
-    def test_cursor_gets_past_a_day_with_more_all_day_events_than_a_page(self):
-        # Every all-day event of a day shares one position in the agenda,
-        # so only the event id can tell the cursor which of them it served.
+    def test_pages_get_past_a_day_with_more_all_day_events_than_a_page(self):
+        # Every all-day event of a day sits at one instant of the agenda:
+        # only the tie-break on the event keeps their order from one page
+        # to the next.
         tz = PARIS
         for name in ("A", "B", "C"):
             self._all_day(f"all-day {name}", label(2026, 2, 2))

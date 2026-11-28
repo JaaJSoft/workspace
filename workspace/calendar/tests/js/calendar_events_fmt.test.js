@@ -65,7 +65,7 @@ test('agendaByDay groups all-day events on their UTC calendar day', () => {
   const { mixin } = makeEventsMixin('America/Los_Angeles');
   mixin.agenda = {
     events: [
-      { uuid: 'a', title: 'All day', start: '2026-08-01T00:00:00Z', all_day: true },
+      { uuid: 'a', title: 'All day', start: '2026-08-01T00:00:00Z', is_all_day: true },
     ],
   };
   const groups = mixin.agendaByDay();
@@ -79,7 +79,7 @@ test('agendaByDay groups timed events on the user-timezone day', () => {
   const { mixin } = makeEventsMixin('Asia/Tokyo');
   mixin.agenda = {
     events: [
-      { uuid: 'b', title: 'Late call', start: '2026-01-31T20:00:00Z', all_day: false },
+      { uuid: 'b', title: 'Late call', start: '2026-01-31T20:00:00Z', is_all_day: false },
     ],
   };
   const groups = mixin.agendaByDay();
@@ -104,7 +104,7 @@ function countFormatters(ctx) {
 
 function timedEvents(count) {
   return Array.from({ length: count }, (_, i) => ({
-    uuid: String(i), title: 'Call', start: `2026-01-${String(i % 28 + 1).padStart(2, '0')}T20:00:00Z`, all_day: false,
+    uuid: String(i), title: 'Call', start: `2026-01-${String(i % 28 + 1).padStart(2, '0')}T20:00:00Z`, is_all_day: false,
   }));
 }
 
@@ -117,7 +117,7 @@ test('agendaByDay builds one day-key formatter per zone, not one per event', () 
   mixin.agendaByDay();
   assert.equal(counter.built, 1);
   // All-day events are keyed in UTC: another zone, another cached formatter.
-  mixin.agenda = { events: [{ uuid: 'x', title: 'Off', start: '2026-08-01T00:00:00Z', all_day: true }, ...timedEvents(10)] };
+  mixin.agenda = { events: [{ uuid: 'x', title: 'Off', start: '2026-08-01T00:00:00Z', is_all_day: true }, ...timedEvents(10)] };
   mixin.agendaByDay();
   assert.equal(counter.built, 2);
 });
@@ -128,7 +128,7 @@ test('panelDateDisplay keeps a single-day all-day event on its day', () => {
   // panelDateDisplay lives in the events mixin but formats through the
   // root app helpers, exactly like the spread composition at runtime.
   const merged = Object.assign({}, app, mixin, {
-    _panelRaw: { start: '2026-08-01', end: '2026-08-02', all_day: true },
+    _panelRaw: { start: '2026-08-01', end: '2026-08-02', is_all_day: true },
   });
   const label = merged.panelDateDisplay();
   assert.match(label, /August 1|1 août/);
@@ -143,7 +143,7 @@ test('panel labels read raw instants, not the wall-clock form values', () => {
     _panelRaw: {
       start: '2026-08-13T11:42:59+00:00',
       end: '2026-08-13T13:12:59+00:00',
-      all_day: false,
+      is_all_day: false,
     },
     // The form holds user-zone wall-clock strings for the inputs; feeding
     // them back through the instant formatters double-converts (the
@@ -264,11 +264,11 @@ test('editing an all-day event shows the last covered day in the end input', () 
   // Stored exclusive end: Aug 5 -> Aug 7 covers three days.
   merged.openViewPanel({
     uuid: 'e1',
-    calendar_id: 'c1',
+    calendar: { uuid: 'c1', name: 'Work', color: 'error' },
     title: 'Trip',
     start: '2026-08-05',
     end: '2026-08-08',
-    all_day: true,
+    is_all_day: true,
     owner: { id: 1 },
     members: [],
   });
@@ -281,11 +281,11 @@ test('a degenerate all-day end never renders a backwards range', () => {
   // An import with DTEND == DTSTART would otherwise show Aug 4 -> Aug 5.
   merged.openViewPanel({
     uuid: 'e2',
-    calendar_id: 'c1',
+    calendar: { uuid: 'c1', name: 'Work', color: 'error' },
     title: 'Legacy',
     start: '2026-08-05',
     end: '2026-08-05',
-    all_day: true,
+    is_all_day: true,
     owner: { id: 1 },
     members: [],
   });
@@ -319,9 +319,9 @@ test('agendaByDay prints a month banner on the first day of each month only', ()
   const mixin = makeAgenda('UTC');
   mixin.agenda = {
     events: [
-      { uuid: 'a', start: '2026-11-29T09:00:00Z', all_day: false },
-      { uuid: 'b', start: '2026-11-30T09:00:00Z', all_day: false },
-      { uuid: 'c', start: '2026-12-01T09:00:00Z', all_day: false },
+      { uuid: 'a', start: '2026-11-29T09:00:00Z', is_all_day: false },
+      { uuid: 'b', start: '2026-11-30T09:00:00Z', is_all_day: false },
+      { uuid: 'c', start: '2026-12-01T09:00:00Z', is_all_day: false },
     ],
   };
   const banners = Array.from(mixin.agendaByDay(), g => g.monthLabel);
@@ -332,11 +332,11 @@ test('agendaByDay prints a month banner on the first day of each month only', ()
 
 test('agendaEventTimes keeps the end line for a same-day event only', () => {
   const mixin = makeAgenda('Asia/Tokyo');
-  const sameDay = mixin.agendaEventTimes({ start: '2026-08-05T01:00:00Z', end: '2026-08-05T02:30:00Z', all_day: false });
+  const sameDay = mixin.agendaEventTimes({ start: '2026-08-05T01:00:00Z', end: '2026-08-05T02:30:00Z', is_all_day: false });
   assert.equal(sameDay.start, '10:00');
   assert.equal(sameDay.end, '11:30');
   // 14:00Z is 23:00 in Tokyo and 16:00Z is 01:00 the next day there.
-  const overnight = mixin.agendaEventTimes({ start: '2026-08-05T14:00:00Z', end: '2026-08-05T16:00:00Z', all_day: false });
+  const overnight = mixin.agendaEventTimes({ start: '2026-08-05T14:00:00Z', end: '2026-08-05T16:00:00Z', is_all_day: false });
   assert.equal(overnight.start, '23:00');
   assert.equal(overnight.end, '');
 });
@@ -346,14 +346,14 @@ test('agendaEventDetails names the last covered day of a multi-day all-day event
   const owner = { id: 1 };
   // Exclusive end Aug 8: the event runs through Aug 7.
   const details = mixin.agendaEventDetails({
-    start: '2026-08-05', end: '2026-08-08', all_day: true, calendar_id: 'c1', location: 'Lyon', owner,
+    start: '2026-08-05', end: '2026-08-08', is_all_day: true, calendar: { uuid: 'c1', name: 'Work', color: 'error' }, location: 'Lyon', owner,
   });
   assert.equal(details.length, 3);
   assert.match(details[0], /Aug 7|7 août/);
   assert.deepEqual(details.slice(1), ['Lyon', 'Work']);
   // A single-day all-day event has no end to spell out.
   const single = mixin.agendaEventDetails({
-    start: '2026-08-05', end: '2026-08-06', all_day: true, calendar_id: 'c1', location: '', owner,
+    start: '2026-08-05', end: '2026-08-06', is_all_day: true, calendar: { uuid: 'c1', name: 'Work', color: 'error' }, location: '', owner,
   });
   assert.deepEqual(Array.from(single), ['Work']);
 });
@@ -363,8 +363,8 @@ test('agendaEventDetails spells out the end of an overnight event and an unanswe
   const details = mixin.agendaEventDetails({
     start: '2026-08-05T14:00:00Z',
     end: '2026-08-05T16:00:00Z',
-    all_day: false,
-    calendar_id: 'c1',
+    is_all_day: false,
+    calendar: { uuid: 'c1', name: 'Work', color: 'error' },
     location: '',
     owner: { id: 2 },
     members: [{ user: { id: 1 }, status: 'pending' }],
@@ -372,5 +372,5 @@ test('agendaEventDetails spells out the end of an overnight event and an unanswe
   assert.match(details[0], /Aug 6.*01:00|6 août.*01:00/);
   assert.equal(details[1], 'Work');
   assert.equal(details[2], 'Awaiting your reply');
-  assert.match(mixin.agendaEventClasses({ calendar_id: 'c1', owner: { id: 2 }, members: [{ user: { id: 1 }, status: 'pending' }] }), /cal-error.*event-pending/);
+  assert.match(mixin.agendaEventClasses({ calendar: { uuid: 'c1', name: 'Work', color: 'error' }, owner: { id: 2 }, members: [{ user: { id: 1 }, status: 'pending' }] }), /cal-error.*event-pending/);
 });

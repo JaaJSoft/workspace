@@ -1,13 +1,12 @@
 from django.http import Http404, HttpResponse
-from django.utils.translation import gettext
 from django.views.decorators.http import condition, require_GET
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from ..models import Calendar
+from ..serializers import CalendarFeedSerializer
 from ..services.feeds import (
     disable_feed,
     enable_feed,
@@ -15,6 +14,7 @@ from ..services.feeds import (
     feed_path,
     render_feed,
 )
+from .calendars import CalendarRowsMixin
 
 
 def _calendar_for_token(token):
@@ -39,48 +39,33 @@ def calendar_feed(request, token):
 
 
 @extend_schema(tags=["Calendar"])
-class CalendarFeedView(APIView):
-    """The read-only ICS feed URL of a calendar the user owns."""
+@extend_schema_view(
+    get=extend_schema(summary="Get the address of a calendar's ICS feed"),
+    post=extend_schema(
+        summary="Turn the ICS feed on, or replace its address with a new one",
+        request=None,
+        responses={201: CalendarFeedSerializer},
+    ),
+    delete=extend_schema(summary="Turn the ICS feed off, revoking its address"),
+)
+class CalendarFeedView(CalendarRowsMixin, GenericAPIView):
+    """The read-only ICS feed of a calendar the caller owns."""
 
-    permission_classes = [IsAuthenticated]
+    serializer_class = CalendarFeedSerializer
 
-    def _calendar(self, request, calendar_id):
-        return Calendar.objects.filter(pk=calendar_id, owner=request.user).first()
-
-    def _payload(self, request, calendar):
+    def answer(self, calendar, status_code=status.HTTP_200_OK):
         path = feed_path(calendar)
-        return {"url": request.build_absolute_uri(path) if path else None}
+        url = self.request.build_absolute_uri(path) if path else None
+        return Response(self.get_serializer({"url": url}).data, status=status_code)
 
-    @extend_schema(summary="Get the calendar's ICS feed URL (null while off)")
-    def get(self, request, calendar_id):
-        calendar = self._calendar(request, calendar_id)
-        if calendar is None:
-            return Response(
-                {"detail": gettext("Calendar not found.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        return Response(self._payload(request, calendar))
+    def get(self, request, *args, **kwargs):
+        return self.answer(self.own_calendar())
 
-    @extend_schema(summary="Turn the ICS feed on, or replace its URL with a new one")
-    def post(self, request, calendar_id):
-        calendar = self._calendar(request, calendar_id)
-        if calendar is None:
-            return Response(
-                {"detail": gettext("Calendar not found.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+    def post(self, request, *args, **kwargs):
+        calendar = self.own_calendar()
         enable_feed(calendar)
-        return Response(
-            self._payload(request, calendar), status=status.HTTP_201_CREATED
-        )
+        return self.answer(calendar, status.HTTP_201_CREATED)
 
-    @extend_schema(summary="Turn the ICS feed off, revoking its URL")
-    def delete(self, request, calendar_id):
-        calendar = self._calendar(request, calendar_id)
-        if calendar is None:
-            return Response(
-                {"detail": gettext("Calendar not found.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        disable_feed(calendar)
+    def delete(self, request, *args, **kwargs):
+        disable_feed(self.own_calendar())
         return Response(status=status.HTTP_204_NO_CONTENT)

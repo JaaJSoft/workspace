@@ -113,10 +113,11 @@ class RecurrenceEditThroughApiTests(APITestCase):
 
     def test_editing_title_keeps_the_series_recurring(self):
         event = self._weekly()
-        resp = self.client.put(
+        resp = self.client.patch(
             f"{self.url}/{event.uuid}",
-            {"scope": "all", "title": "Standup (renamed)"},
+            {"title": "Standup (renamed)"},
             format="json",
+            query_params={"occurrences": "all"},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()
@@ -132,10 +133,11 @@ class RecurrenceEditThroughApiTests(APITestCase):
 
     def test_changing_cadence_takes_effect_in_the_list_endpoint(self):
         event = self._weekly()
-        resp = self.client.put(
+        resp = self.client.patch(
             f"{self.url}/{event.uuid}",
-            {"scope": "all", "recurrence_rule": "RRULE:FREQ=DAILY"},
+            {"recurrence_rule": "RRULE:FREQ=DAILY"},
             format="json",
+            query_params={"occurrences": "all"},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()
@@ -153,10 +155,11 @@ class RecurrenceEditThroughApiTests(APITestCase):
 
     def test_complex_rule_stays_recurring(self):
         event = self._weekly()
-        resp = self.client.put(
+        resp = self.client.patch(
             f"{self.url}/{event.uuid}",
-            {"scope": "all", "recurrence_rule": "RRULE:FREQ=MONTHLY;BYDAY=2TU"},
+            {"recurrence_rule": "RRULE:FREQ=MONTHLY;BYDAY=2TU"},
             format="json",
+            query_params={"occurrences": "all"},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()

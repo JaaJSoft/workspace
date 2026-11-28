@@ -1,5 +1,4 @@
 from drf_spectacular.utils import extend_schema
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -9,8 +8,6 @@ from ..services.address_book import resolve_invitees
 
 @extend_schema(tags=["Calendar"])
 class InviteeResolveView(APIView):
-    permission_classes = [IsAuthenticated]
-
     @extend_schema(
         summary="Resolve address-book persons and lists into event invitees",
         description=(
@@ -27,7 +24,7 @@ class InviteeResolveView(APIView):
         ser.is_valid(raise_exception=True)
         resolved = resolve_invitees(
             request.user,
-            person_ids=ser.validated_data["person_ids"],
-            list_ids=ser.validated_data["list_ids"],
+            person_ids=ser.validated_data["persons"],
+            list_ids=ser.validated_data["lists"],
         )
         return Response(ResolvedInviteesSerializer(resolved).data)

@@ -5,17 +5,13 @@ from workspace.common.logging import scrub
 
 from .services.recurrence_rule import (
     MAX_ITERATIONS,
-    describe,
     is_simple_stepping,
     parse,
     simple_stepping_frequency,
-    to_simple_json,
 )
 from .services.timezones import event_timezone
 
 logger = logging.getLogger(__name__)
-
-_UNCACHED = object()
 
 _FIXED_STEP = {
     "daily": timedelta(days=1),
@@ -228,122 +224,6 @@ def next_occurrences_after(master, after, limit=None):
         yield dt.astimezone(UTC) if tz else dt
 
 
-def _user_dict(user):
-    return {
-        "id": user.id,
-        "username": user.username,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-    }
-
-
-def _member_dict(member):
-    return {
-        "uuid": str(member.uuid),
-        "user": _user_dict(member.user) if member.user is not None else None,
-        "email": member.email,
-        "name": member.name,
-        "status": member.status,
-        "created_at": member.created_at.isoformat(),
-    }
-
-
-def _event_dt_str(dt, all_day):
-    """ISO instant for timed values, date-only day label for all-day ones."""
-    if dt is None:
-        return None
-    if all_day:
-        return dt.astimezone(UTC).date().isoformat()
-    return dt.isoformat()
-
-
-def _recurrence_fields(rule, cache_source=None):
-    """(recurrence_summary, recurrence_simple) for *rule*.
-
-    Reuses `cache_source._cached_recurrence_summary` /
-    `_cached_recurrence_simple` when present - the per-master cache
-    `expand_recurring_events` populates - instead of recomputing them from
-    `rule`. `_UNCACHED` (not `None`) is the "absent" sentinel because a
-    legitimate cached `recurrence_simple` value is `None` for any rule the
-    picker cannot express.
-    """
-    summary = getattr(cache_source, "_cached_recurrence_summary", _UNCACHED)
-    if summary is _UNCACHED:
-        summary = describe(rule)
-    simple = getattr(cache_source, "_cached_recurrence_simple", _UNCACHED)
-    if simple is _UNCACHED:
-        simple = to_simple_json(rule)
-    return summary, simple
-
-
-def make_virtual_occurrence(master, occ_start):
-    """Build a dict for a virtual (non-materialized) occurrence."""
-    duration = (master.end - master.start) if master.end else None
-    occ_end = (occ_start + duration) if duration else None
-    rule = master.recurrence_rule
-    summary, simple = _recurrence_fields(rule, master)
-
-    return {
-        "uuid": f"{master.uuid}:{occ_start.isoformat()}",
-        "calendar_id": str(master.calendar_id),
-        "title": master.title,
-        "description": master.description,
-        "start": _event_dt_str(occ_start, master.all_day),
-        "end": _event_dt_str(occ_end, master.all_day),
-        "all_day": master.all_day,
-        "location": master.location,
-        "owner": _user_dict(master.owner),
-        "members": getattr(master, "_cached_member_dicts", None)
-        or [_member_dict(m) for m in master.members.all()],
-        "created_at": master.created_at.isoformat(),
-        "updated_at": master.updated_at.isoformat(),
-        "is_recurring": True,
-        "is_exception": False,
-        "master_event_id": str(master.uuid),
-        "original_start": occ_start.isoformat(),
-        "recurrence_rule": rule,
-        "recurrence_summary": summary,
-        "recurrence_simple": simple,
-    }
-
-
-def make_exception_dict(exc, master=None):
-    """Convert a materialized exception Event to the occurrence dict format.
-
-    `master` is the row `expand_recurring_events` is already iterating for
-    this exception's series - pass it so the derived recurrence fields reuse
-    its per-master cache. `exc.recurrence_parent` is never that same Python
-    object (it comes back from a separate `select_related` query per
-    exception row), so reading the cache off it would silently miss every
-    time.
-    """
-    rule = exc.recurrence_parent.recurrence_rule if exc.recurrence_parent else ""
-    summary, simple = _recurrence_fields(rule, master)
-    return {
-        "uuid": str(exc.uuid),
-        "calendar_id": str(exc.calendar_id),
-        "title": exc.title,
-        "description": exc.description,
-        "start": _event_dt_str(exc.start, exc.all_day),
-        "end": _event_dt_str(exc.end, exc.all_day),
-        "all_day": exc.all_day,
-        "location": exc.location,
-        "owner": _user_dict(exc.owner),
-        "members": [_member_dict(m) for m in exc.members.all()],
-        "created_at": exc.created_at.isoformat(),
-        "updated_at": exc.updated_at.isoformat(),
-        "is_recurring": True,
-        "is_exception": True,
-        "master_event_id": str(exc.recurrence_parent_id),
-        "original_start": exc.original_start.isoformat()
-        if exc.original_start
-        else None,
-        "recurrence_rule": rule,
-        "recurrence_summary": summary,
-        "recurrence_simple": simple,
-    }
-
-
 def overlap_q(range_start, range_end):
     """Rows whose own time overlaps ``[range_start, range_end)``.
 
@@ -354,57 +234,3 @@ def overlap_q(range_start, range_end):
     return Q(start__lt=range_end) & (
         Q(end__gt=range_start) | Q(end__isnull=True, start__gte=range_start)
     )
-
-
-def expand_recurring_events(masters_qs, range_start, range_end):
-    """
-    Expand recurring master events into occurrence dicts.
-
-    A materialized exception is drawn at its own time, not at the slot it
-    replaces: an occurrence moved into the range from outside it is in, one
-    moved out of the range is not, and a cancelled one is never drawn.
-    """
-    from django.db.models import Prefetch
-
-    from .models import Event, EventMember
-
-    masters = {m.uuid: m for m in masters_qs}
-    if not masters:
-        return []
-
-    # Every exception replaces its original slot, wherever it now sits.
-    replaced = set(
-        Event.objects.filter(
-            recurrence_parent_id__in=list(masters), original_start__isnull=False
-        ).values_list("recurrence_parent_id", "original_start")
-    )
-    drawn_exceptions = (
-        Event.objects.filter(
-            overlap_q(range_start, range_end),
-            recurrence_parent_id__in=list(masters),
-            is_cancelled=False,
-        )
-        .select_related("owner", "calendar", "recurrence_parent")
-        .prefetch_related(
-            Prefetch("members", queryset=EventMember.objects.select_related("user"))
-        )
-    )
-
-    occurrences = []
-    for master in masters.values():
-        # Pre-compute members list once per master (reused across all virtual occurrences)
-        master._cached_member_dicts = [_member_dict(m) for m in master.members.all()]
-        # Same idea for the derived recurrence fields: describe()/to_simple()
-        # are pure functions of the rule text, so run them once per master
-        # rather than once per occurrence.
-        master._cached_recurrence_summary = describe(master.recurrence_rule)
-        master._cached_recurrence_simple = to_simple_json(master.recurrence_rule)
-        for occ_start in occurrences_in_range(master, range_start, range_end):
-            if (master.uuid, occ_start) not in replaced:
-                occurrences.append(make_virtual_occurrence(master, occ_start))
-
-    occurrences.extend(
-        make_exception_dict(exc, masters[exc.recurrence_parent_id])
-        for exc in drawn_exceptions
-    )
-    return occurrences

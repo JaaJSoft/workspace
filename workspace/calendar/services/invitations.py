@@ -27,6 +27,20 @@ def _response_title(status):
     return _('%(user)s answered "%(title)s"')
 
 
+def withdraw_response(event_id, user):
+    """Take back *user*'s answer to the invitation: it is pending again.
+
+    Nothing leaves the workspace: a reply already mailed to an outside
+    organiser stands until the next answer replaces it.
+    """
+    membership = EventMember.objects.filter(event_id=event_id, user=user).first()
+    if not membership:
+        raise NotInvitedError
+    membership.status = EventMember.Status.PENDING
+    membership.save(update_fields=["status"])
+    return membership
+
+
 def respond_to_invitation(event_id, user, status):
     """Record *user*'s answer to the invitation and fan out the consequences.
 

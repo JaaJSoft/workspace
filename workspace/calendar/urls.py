@@ -2,7 +2,7 @@ from django.urls import path, re_path
 
 from workspace.common.uuids import UUID_PATTERN
 
-from .views import caldav, calendars, events, external, feeds, invitees, polls
+from .views import caldav, calendars, events, feeds, invitees, polls
 
 urlpatterns = [
     path(
@@ -11,12 +11,17 @@ urlpatterns = [
         name="calendar-list",
     ),
     path(
-        "api/v1/calendars/<uuid:calendar_id>",
+        "api/v1/calendars/<uuid:uuid>",
         calendars.CalendarDetailView.as_view(),
         name="calendar-detail",
     ),
     path(
-        "api/v1/calendars/<uuid:calendar_id>/feed",
+        "api/v1/calendars/<uuid:uuid>/sync",
+        calendars.CalendarSyncView.as_view(),
+        name="calendar-sync",
+    ),
+    path(
+        "api/v1/calendars/<uuid:uuid>/feed",
         feeds.CalendarFeedView.as_view(),
         name="calendar-feed-settings",
     ),
@@ -28,62 +33,40 @@ urlpatterns = [
         name="calendar-invitees-resolve",
     ),
     path(
-        "api/v1/events/<uuid:event_id>",
+        "api/v1/events/<uuid:uuid>",
         events.EventDetailView.as_view(),
         name="calendar-event-detail",
     ),
     path(
-        "api/v1/events/<uuid:event_id>/respond",
-        events.EventRespondView.as_view(),
-        name="calendar-event-respond",
+        "api/v1/events/<uuid:uuid>/response",
+        events.EventResponseView.as_view(),
+        name="calendar-event-response",
     ),
-    # Polls
-    path("api/v1/polls", polls.PollListView.as_view(), name="poll-list"),
+    path("api/v1/calendar/polls", polls.PollListView.as_view(), name="poll-list"),
     path(
-        "api/v1/polls/shared/<str:token>",
+        "api/v1/calendar/polls/shared/<str:token>",
         polls.SharedPollView.as_view(),
         name="poll-shared",
     ),
     path(
-        "api/v1/polls/shared/<str:token>/vote",
+        "api/v1/calendar/polls/shared/<str:token>/vote",
         polls.SharedPollVoteView.as_view(),
         name="poll-shared-vote",
     ),
     path(
-        "api/v1/polls/<uuid:poll_id>",
+        "api/v1/calendar/polls/<uuid:uuid>",
         polls.PollDetailView.as_view(),
         name="poll-detail",
     ),
     path(
-        "api/v1/polls/<uuid:poll_id>/vote",
+        "api/v1/calendar/polls/<uuid:uuid>/vote",
         polls.PollVoteView.as_view(),
         name="poll-vote",
     ),
     path(
-        "api/v1/polls/<uuid:poll_id>/invite",
-        polls.PollInviteView.as_view(),
-        name="poll-invite",
-    ),
-    path(
-        "api/v1/polls/<uuid:poll_id>/finalize",
+        "api/v1/calendar/polls/<uuid:uuid>/finalize",
         polls.PollFinalizeView.as_view(),
         name="poll-finalize",
-    ),
-    # External calendars
-    path(
-        "api/v1/external-calendars",
-        external.ExternalCalendarListView.as_view(),
-        name="external-calendar-list",
-    ),
-    path(
-        "api/v1/external-calendars/<uuid:ext_id>",
-        external.ExternalCalendarDetailView.as_view(),
-        name="external-calendar-detail",
-    ),
-    path(
-        "api/v1/external-calendars/<uuid:ext_id>/sync",
-        external.ExternalCalendarSyncView.as_view(),
-        name="external-calendar-sync",
     ),
     # CalDAV. Collections answer with or without their trailing slash: the
     # hrefs we serve carry it, but clients are not consistent about keeping it.

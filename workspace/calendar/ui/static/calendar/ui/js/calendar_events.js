@@ -14,8 +14,10 @@ window.calendarEventsMixin = function calendarEventsMixin() {
   // module-level constant so the hot path in eventDidMount() doesn't
   // re-allocate the string on every render.
   const AGENDA_PAGE_SIZE = 20;
-  // The cap of GET /api/v1/events in cursor mode.
+  // The most rows one request of the agenda asks GET /api/v1/events for.
   const AGENDA_MAX_PAGE_SIZE = 100;
+  // A window of the grid is read whole, in pages of the API's maximum.
+  const WINDOW_PAGE_SIZE = 1000;
 
   const RECURRING_ICON_SVG ='<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>';
 
@@ -240,46 +242,69 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       }
     },
 
-    async fetchEvents(start, end) {
-      const calIds = Object.keys(this.visibleCalendars).filter(k => this.visibleCalendars[k]).join(',');
-      const url = `/api/v1/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` +
-        `&calendar_ids=${encodeURIComponent(calIds)}`;
+    // What the event list is asked for: the calendars ticked in the
+    // sidebar and, under `none`, the events the viewer is only invited to,
+    // which sit in no calendar of theirs.
+    _eventFilters() {
+      const calendars = Object.keys(this.visibleCalendars).filter(k => this.visibleCalendars[k]);
+      return {
+        calendar: [...calendars, 'none'].join(','),
+        include_declined: this.prefs.showDeclined ? 'true' : 'false',
+      };
+    },
 
-      const resp = await fetch(url, { credentials: 'same-origin' });
-      if (!resp.ok) return [];
-      const data = await resp.json();
+    // The occurrences of a series share its uuid: the slot tells them apart.
+    _occurrenceKey(event) {
+      return event.original_start ? `${event.uuid}:${event.original_start}` : event.uuid;
+    },
+
+    // Accounts and guests come as two lists; the panel shows them as one.
+    _inviteesOf(event) {
+      return [
+        ...(event.members || []).map(m => ({
+          key: `u${m.user.id}`, user: m.user, email: '', name: '', status: m.status,
+        })),
+        ...(event.guests || []).map(g => ({
+          key: `g${g.email}`, user: null, email: g.email, name: g.name, status: g.status,
+        })),
+      ];
+    },
+
+    async fetchEvents(start, end) {
+      const data = [];
+      for (let offset = 0; ; offset += WINDOW_PAGE_SIZE) {
+        const params = new URLSearchParams({
+          start,
+          end,
+          ...this._eventFilters(),
+          limit: String(WINDOW_PAGE_SIZE),
+          offset: String(offset),
+        });
+        const resp = await fetch(`/api/v1/events?${params}`, { credentials: 'same-origin' });
+        if (!resp.ok) return [];
+        data.push(...await resp.json());
+        if (resp.headers.get('X-Has-More') !== 'true') break;
+      }
       const currentUserId = document.body.dataset.userId;
 
-      return data.filter(event => {
-        // Hide declined events unless preference is enabled
+      return data.map(event => {
         const isOwner = String(event.owner.id) === String(currentUserId);
-        if (!isOwner) {
-          const membership = event.members.find(m => String(m.user?.id) === String(currentUserId));
-          if (membership?.status === 'declined' && !this.prefs.showDeclined) return false;
-        }
-        return true;
-      }).map(event => {
-        const isOwner = String(event.owner.id) === String(currentUserId);
-        const membership = event.members.find(m => String(m.user?.id) === String(currentUserId));
+        const membership = event.members.find(m => String(m.user.id) === String(currentUserId));
         const isInvited = !isOwner && !!membership;
         const isPending = isInvited && membership.status === 'pending';
         const isDeclined = isInvited && membership.status === 'declined';
 
-        // Find calendar color
-        const cal = [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars].find(c => c.uuid === event.calendar_id);
-        const color = cal?.color || 'primary';
-
-        const classNames = [`event-color-${color}`];
+        const classNames = [`event-color-${event.calendar?.color || 'primary'}`];
         if (isInvited) classNames.push('event-invited');
         if (isPending) classNames.push('event-pending');
         if (isDeclined) classNames.push('event-declined');
 
         return {
-          id: event.uuid,
+          id: this._occurrenceKey(event),
           title: event.title,
           start: event.start,
           end: event.end,
-          allDay: event.all_day,
+          allDay: event.is_all_day,
           classNames,
           extendedProps: { _raw: event },
         };
@@ -293,10 +318,10 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // in-flight loadMoreAgenda call from a prior session so its response
       // can't append stale events into the freshly-reset state.
       const requestId = this.agenda.requestId = (this.agenda.requestId || 0) + 1;
-      const now = new Date();
       this.agenda.events = [];
-      this.agenda.nextAfter = now.toISOString();
-      this.agenda.nextAfterId = null;
+      this.agenda.start = new Date().toISOString();
+      this.agenda.offset = 0;
+      this.agenda.hasMore = true;
       this.agenda.initialLoaded = false;
       this.agenda.seenIds = new Set();
       // Release the loading lock so a still-in-flight stale call can't keep
@@ -309,41 +334,43 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       }
     },
 
-    // One page of the cursor endpoint, or null when the request failed.
-    async _fetchAgendaPage(after, afterId, limit) {
-      const calIds = Object.keys(this.visibleCalendars)
-        .filter(k => this.visibleCalendars[k]).join(',');
+    // One page of the list of events starting from `start` on, or null when
+    // the request failed. Every page of one agenda names the same `start`:
+    // the offset counts from it.
+    async _fetchAgendaPage(start, offset, limit) {
       const params = new URLSearchParams({
-        after,
+        start,
+        ...this._eventFilters(),
         limit: String(limit),
-        calendar_ids: calIds,
-        show_declined: this.prefs.showDeclined ? 'true' : 'false',
+        offset: String(offset),
       });
-      if (afterId) params.set('after_id', afterId);
       const resp = await fetch(`/api/v1/events?${params}`, {
         credentials: 'same-origin',
       });
       if (!resp.ok) return null;
-      return resp.json();
+      return {
+        events: await resp.json(),
+        hasMore: resp.headers.get('X-Has-More') === 'true',
+      };
     },
 
     async loadMoreAgenda() {
-      if (this.agenda.loading || this.agenda.refreshing || this.agenda.nextAfter === null) return;
+      if (this.agenda.loading || this.agenda.refreshing || !this.agenda.hasMore) return;
       const requestId = this.agenda.requestId || 0;
       this.agenda.loading = true;
       try {
-        const data = await this._fetchAgendaPage(
-          this.agenda.nextAfter, this.agenda.nextAfterId, AGENDA_PAGE_SIZE,
+        const page = await this._fetchAgendaPage(
+          this.agenda.start, this.agenda.offset, AGENDA_PAGE_SIZE,
         );
-        if (requestId !== this.agenda.requestId || !data) return;
+        if (requestId !== this.agenda.requestId || !page) return;
 
-        // Dedup boundary events (events with start == cursor may appear on
-        // both pages - see backend cursor stability note).
-        const fresh = (data.events || []).filter(e => !this.agenda.seenIds.has(e.uuid));
-        fresh.forEach(e => this.agenda.seenIds.add(e.uuid));
+        // An event created since the agenda opened shifts the rows after
+        // it: one of them comes back at the top of the next page.
+        const fresh = page.events.filter(e => !this.agenda.seenIds.has(this._occurrenceKey(e)));
+        fresh.forEach(e => this.agenda.seenIds.add(this._occurrenceKey(e)));
         this.agenda.events = [...this.agenda.events, ...fresh];
-        this.agenda.nextAfter = data.next_after;
-        this.agenda.nextAfterId = data.next_after_id;
+        this.agenda.offset += page.events.length;
+        this.agenda.hasMore = page.hasMore;
       } finally {
         if (requestId === this.agenda.requestId) {
           this.agenda.loading = false;
@@ -367,27 +394,31 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.agenda.refreshing = true;
       const events = [];
       const seenIds = new Set();
-      let after = new Date().toISOString();
-      let afterId = null;
+      const start = new Date().toISOString();
+      let offset = 0;
+      let hasMore = true;
       try {
-        while (after !== null && events.length < wanted) {
+        while (hasMore && events.length < wanted) {
           const limit = Math.min(AGENDA_MAX_PAGE_SIZE, wanted - events.length);
-          const data = await this._fetchAgendaPage(after, afterId, limit);
-          if (requestId !== this.agenda.requestId || !data) return;
+          const page = await this._fetchAgendaPage(start, offset, limit);
+          if (requestId !== this.agenda.requestId || !page) return;
           const before = events.length;
-          for (const event of data.events || []) {
-            if (seenIds.has(event.uuid)) continue;
-            seenIds.add(event.uuid);
+          for (const event of page.events) {
+            const key = this._occurrenceKey(event);
+            if (seenIds.has(key)) continue;
+            seenIds.add(key);
             events.push(event);
           }
-          after = data.next_after;
-          afterId = data.next_after_id;
+          offset += page.events.length;
+          hasMore = page.hasMore;
+          // A page that brings nothing new would be asked for forever.
           if (events.length === before) break;
         }
         this.agenda.events = events;
         this.agenda.seenIds = seenIds;
-        this.agenda.nextAfter = after;
-        this.agenda.nextAfterId = afterId;
+        this.agenda.start = start;
+        this.agenda.offset = offset;
+        this.agenda.hasMore = hasMore;
       } finally {
         if (requestId === this.agenda.requestId) {
           this.agenda.refreshing = false;
@@ -450,7 +481,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       for (const event of this.agenda.events) {
         // All-day values are UTC-midnight anchored: group and label them in
         // UTC so the covered day never shifts with the user zone.
-        const evTz = event.all_day ? 'UTC' : tz;
+        const evTz = event.is_all_day ? 'UTC' : tz;
         const d = new Date(event.start);
         const key = keyIn(d, evTz);
         if (key !== currentKey) {
@@ -492,7 +523,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     // The two lines of the time column. An event that ends on another day
     // has no end line: agendaEventDetails() spells out the end date instead.
     agendaEventTimes(event) {
-      if (event.all_day) return { start: pgettext('agenda time column', 'All day'), end: '' };
+      if (event.is_all_day) return { start: pgettext('agenda time column', 'All day'), end: '' };
       const start = this._agendaTime(event.start);
       if (!event.end) return { start, end: '' };
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
@@ -506,7 +537,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     agendaEventDetails(event) {
       const details = [];
       const locale = userLocale();
-      if (event.all_day && event.end) {
+      if (event.is_all_day && event.end) {
         // The stored all-day end is exclusive: the last covered day is the one before.
         const lastDay = this._shiftDayLabel(event.end, -1);
         if (lastDay > event.start.slice(0, 10)) {
@@ -532,16 +563,16 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       return details;
     },
 
+    // Null for an event the viewer is only invited to.
     _agendaCalendar(event) {
-      return [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars]
-        .find(c => c.uuid === event.calendar_id);
+      return event.calendar;
     },
 
     // The viewer's answer to an invitation, or null on their own events.
     _agendaResponse(event) {
       const currentUserId = document.body.dataset.userId;
       if (String(event.owner.id) === String(currentUserId)) return null;
-      const membership = (event.members || []).find(m => String(m.user?.id) === String(currentUserId));
+      const membership = (event.members || []).find(m => String(m.user.id) === String(currentUserId));
       return membership ? membership.status : null;
     },
 
@@ -677,12 +708,12 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       const currentUserId = String(document.body.dataset.userId);
       const isOwner = String(event.owner.id) === currentUserId;
 
-      const allDay = !!event.all_day;
+      const allDay = !!event.is_all_day;
       const fmt = allDay ? (s => this.toLocalDate(s)) : (s => this.toLocalDatetime(s));
       const startVal = fmt(event.start);
       this.form = {
         uuid: event.uuid,
-        calendar_id: String(event.calendar_id),
+        calendar_id: event.calendar?.uuid || null,
         title: event.title,
         description: event.description || '',
         start: startVal,
@@ -700,9 +731,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       };
       this.eventOwner = event.owner;
       this.externalOrganizer = event.external_organizer || '';
-      this.eventMembers = event.members || [];
+      this.eventMembers = this._inviteesOf(event);
       this._selectInviteesFrom(this.eventMembers);
-      this.myInviteStatus = isOwner ? null : ((event.members || []).find(m => String(m.user?.id) === currentUserId)?.status || null);
+      this.myInviteStatus = isOwner ? null : ((event.members || []).find(m => String(m.user.id) === currentUserId)?.status || null);
       this.showPanel = true;
       if (!restoring) this._recordOpenedEvent();
     },
@@ -722,8 +753,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     },
 
     // `restoring`: the URL already names this event and its date, so neither
-    // the history nor the calendar's date moves.
-    async openEventById(eventId, restoring = false) {
+    // the history nor the calendar's date moves. `originalStart`: the slot of
+    // one occurrence of a recurring event.
+    async openEventById(eventId, restoring = false, originalStart = null) {
       if (!isValidUuid(eventId)) return;
       const load = this._eventLoad = (this._eventLoad || 0) + 1;
       // Clear stale panel state up-front so a 404 / network failure can't
@@ -738,7 +770,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.showPanel = true;
       let event = null;
       try {
-        const resp = await fetch(`/api/v1/events/${eventId}`, { credentials: 'same-origin' });
+        const query = originalStart ? `?${new URLSearchParams({ original_start: originalStart })}` : '';
+        const resp = await fetch(`/api/v1/events/${eventId}${query}`, { credentials: 'same-origin' });
         if (resp.ok) event = await resp.json();
       } catch (e) {}
       if (load !== this._eventLoad) return;
@@ -803,7 +836,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // recurrence end (a date input) covers its whole final day.
       const tz = this._tz();
       const payload = {
-        calendar_id: this.form.calendar_id,
+        calendar: this.form.calendar_id,
         title: this.form.title.trim(),
         description: this.form.description,
         start: this.form.all_day ? this.form.start : window.wallClockToIso(this.form.start, tz),
@@ -812,34 +845,28 @@ window.calendarEventsMixin = function calendarEventsMixin() {
             ? this._allDayPayloadEnd(this.form.end)
             : window.wallClockToIso(this.form.end, tz))
           : null,
-        all_day: this.form.all_day,
+        is_all_day: this.form.all_day,
         location: this.form.location,
-        member_ids: this.selectedMembers.map(u => u.id),
+        members: this.selectedMembers.map(u => u.id),
         guests: this.selectedGuests.map(g => ({ email: g.email, name: g.name })),
         recurrence_rule: this.buildRecurrenceRule(tz),
       };
 
       try {
-        let url, method;
-        if (this.modalMode === 'create') {
-          url = '/api/v1/events';
-          method = 'POST';
-        } else {
-          url = `/api/v1/events/${this.form.uuid}`;
-          method = 'PUT';
-        }
-
-        // For recurring event edits, ask scope
-        if (this.modalMode === 'edit' && this._panelRaw?.is_recurring) {
-          const scope = await this.openScopeDialog('edit');
-          if (!scope) { this.saving = false; return; }
-          payload.scope = scope;
-          if (scope !== 'all') {
-            payload.original_start = this._panelRaw.original_start;
+        let url = '/api/v1/events';
+        let method = 'POST';
+        if (this.modalMode === 'edit') {
+          method = 'PATCH';
+          // A recurring event is written one occurrence, the following
+          // ones or the whole series at a time: the server never guesses.
+          const query = new URLSearchParams();
+          if (this._panelRaw?.is_recurring) {
+            const part = await this.openScopeDialog('edit');
+            if (!part) { this.saving = false; return; }
+            query.set('occurrences', part);
+            if (part !== 'all') query.set('original_start', this._panelRaw.original_start);
           }
-          // Use master UUID for API call
-          const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
-          url = `/api/v1/events/${targetUuid}`;
+          url = `/api/v1/events/${this.form.uuid}` + (query.size ? `?${query}` : '');
         }
 
         const resp = await fetch(url, {
@@ -857,20 +884,20 @@ window.calendarEventsMixin = function calendarEventsMixin() {
             this._panelRaw = saved;
             // Match openViewPanel(): all-day events keep date-only values to
             // avoid timezone-shifted datetimes leaking back into panel state.
-            const fmtStart = saved.all_day ? this.toLocalDate.bind(this) : this.toLocalDatetime.bind(this);
+            const fmtStart = saved.is_all_day ? this.toLocalDate.bind(this) : this.toLocalDatetime.bind(this);
             const savedStart = fmtStart(saved.start);
             this.form = {
               uuid: saved.uuid,
-              calendar_id: saved.calendar_id,
+              calendar_id: saved.calendar?.uuid || null,
               title: saved.title,
               description: saved.description || '',
               start: savedStart,
               end: saved.end
-                ? (saved.all_day
+                ? (saved.is_all_day
                   ? this._allDayFormEnd(savedStart, fmtStart(saved.end))
                   : fmtStart(saved.end))
                 : '',
-              all_day: saved.all_day,
+              all_day: saved.is_all_day,
               location: saved.location || '',
               recurrence_rule: saved.recurrence_rule || '',
               recurrence_simple: saved.recurrence_simple || null,
@@ -881,8 +908,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
             };
             this.eventOwner = saved.owner;
             this.externalOrganizer = saved.external_organizer || '';
-            this.eventMembers = saved.members;
-            this._selectInviteesFrom(saved.members);
+            this.eventMembers = this._inviteesOf(saved);
+            this._selectInviteesFrom(this.eventMembers);
 
           }
         }
@@ -901,12 +928,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
         this.deleting = true;
         try {
-          const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
-          let url = `/api/v1/events/${targetUuid}?scope=${scope}`;
-          if (scope !== 'all') {
-            url += `&original_start=${encodeURIComponent(this._panelRaw.original_start)}`;
-          }
-          const resp = await fetch(url, {
+          const query = new URLSearchParams({ occurrences: scope });
+          if (scope !== 'all') query.set('original_start', this._panelRaw.original_start);
+          const resp = await fetch(`/api/v1/events/${this.form.uuid}?${query}`, {
             method: 'DELETE',
             credentials: 'same-origin',
             headers: { 'X-CSRFToken': getCSRFToken() },
@@ -950,9 +974,12 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     // --- Respond ---
     async respondToInvitation(newStatus) {
       try {
-        const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
-        const resp = await fetch(`/api/v1/events/${targetUuid}/respond`, {
-          method: 'POST',
+        // An occurrence changed on its own carries its own invitees: the
+        // slot says which answer is meant.
+        const slot = this._panelRaw.original_start;
+        const query = slot ? `?${new URLSearchParams({ original_start: slot })}` : '';
+        const resp = await fetch(`/api/v1/events/${this.form.uuid}/response${query}`, {
+          method: 'PUT',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ status: newStatus }),
@@ -999,8 +1026,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // Persons and lists go through the server, which knows who is linked
       // to an account: that account is invited, never a duplicate by email.
       const body = item.kind === 'list'
-        ? { list_ids: [item.list.uuid] }
-        : { person_ids: [item.person.uuid] };
+        ? { lists: [item.list.uuid] }
+        : { persons: [item.person.uuid] };
       try {
         const resp = await fetch('/api/v1/events/invitees', {
           method: 'POST',
@@ -1110,13 +1137,13 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     openContextMenu(nativeEvent, rawEvent) {
       const currentUserId = String(document.body.dataset.userId);
       const isOwner = String(rawEvent.owner.id) === currentUserId;
-      const membership = (rawEvent.members || []).find(m => String(m.user?.id) === currentUserId);
+      const membership = (rawEvent.members || []).find(m => String(m.user.id) === currentUserId);
       const inviteStatus = (!isOwner && membership) ? membership.status : null;
 
       // Store event data in form for actions that need it
       this.ctxMenu.event = rawEvent;
       this.ctxMenu.isOwner = isOwner;
-      this.ctxMenu.isExternal = this.externalCalendars.some(c => c.uuid === rawEvent.calendar_id);
+      this.ctxMenu.isExternal = this.externalCalendars.some(c => c.uuid === rawEvent.calendar?.uuid);
       this.ctxMenu.inviteStatus = inviteStatus;
 
       // Set initial position at cursor before opening so the menu doesn't
@@ -1185,12 +1212,14 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     // --- Event card actions ---
     async handleEventCardAction(evt) {
-      const { action, eventId } = evt.detail;
+      // `start` is the slot of the occurrence the card showed, when it showed
+      // one: the action is about it, not about its whole series.
+      const { action, eventId, start } = evt.detail;
       if (!eventId) return;
       // Hide any open popover
       document.querySelectorAll('.event-card-popover').forEach(p => { p.style.display = 'none'; });
 
-      await this.openEventById(eventId);
+      await this.openEventById(eventId, false, start || null);
       if (!this._panelRaw) return;
 
       this.$nextTick(() => {
@@ -1210,9 +1239,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     panelDateDisplay() {
       const raw = this._panelRaw;
       if (!raw || !raw.start) return '';
-      const { start, end, all_day } = raw;
+      const { start, end, is_all_day: allDay } = raw;
       const dateStr = this._fmtDate(start);
-      if (all_day) {
+      if (allDay) {
         // FullCalendar stores `end` as the day AFTER the last covered day for
         // all-day events. Render the inclusive last day so a Mon-Tue event
         // doesn't show as Mon -> Wed.
@@ -1230,8 +1259,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     panelTimeLabel() {
       const raw = this._panelRaw;
       if (!raw) return '';
-      const { start, end, all_day } = raw;
-      if (all_day) return gettext('All day');
+      const { start, end, is_all_day: allDay } = raw;
+      if (allDay) return gettext('All day');
       if (!start) return '';
       const startTime = this._fmtTime(start);
       if (!end || this._sameDay(start, end)) {

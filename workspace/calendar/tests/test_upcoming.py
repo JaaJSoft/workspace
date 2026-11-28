@@ -15,11 +15,13 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.calendar import upcoming
 from workspace.calendar.models import Calendar, Event
+from workspace.calendar.services import recurrence_rule
 from workspace.calendar.services.recurrence_rule import apply_rule
-from workspace.calendar.upcoming import get_upcoming_for_user, get_upcoming_page
+from workspace.calendar.upcoming import get_upcoming_for_user
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
+
+from .listing import listed
 
 User = get_user_model()
 
@@ -222,12 +224,12 @@ class AllDayTimezoneWindowTests(TestCase):
         self.assertNotIn("yesterday all-day", titles)
 
 
-class UpcomingPageRecurrenceCacheTests(TestCase):
-    """The agenda endpoint expands one master into many occurrences.
+class AgendaRecurrenceCacheTests(TestCase):
+    """The agenda expands one series into many occurrences.
 
     describe() and to_simple_json() are pure functions of the rule text, so
-    they belong on the per-master cache make_virtual_occurrence already reads
-    - otherwise every occurrence on the page re-parses the same rule.
+    a series is serialized once and its occurrences reuse the answer -
+    otherwise every occurrence on the page re-parses the same rule.
     """
 
     def setUp(self):
@@ -247,13 +249,12 @@ class UpcomingPageRecurrenceCacheTests(TestCase):
         event.save()
 
     def test_derived_fields_are_not_recomputed_per_occurrence(self):
-        # Patch the name `upcoming` actually calls. `recurrence.describe` is a
-        # different binding of the same function, so patching it here would
-        # intercept nothing and the assertion would hold for any implementation.
+        # The serializer reads describe through the module, so this is the
+        # binding it calls.
         with patch.object(
-            upcoming, "describe", wraps=upcoming.describe
+            recurrence_rule, "describe", wraps=recurrence_rule.describe
         ) as mock_describe:
-            page, _ = get_upcoming_page(self.user, after=timezone.now(), limit=10)
+            page = listed(self.user, timezone.now(), limit=10)
         self.assertGreater(len([e for e in page if e["title"] == "Standup"]), 1)
         # Once for the single master, not once per occurrence.
         self.assertEqual(mock_describe.call_count, 1)

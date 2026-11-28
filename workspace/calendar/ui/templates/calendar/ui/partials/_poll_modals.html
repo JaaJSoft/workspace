@@ -476,8 +476,8 @@
             class="flex flex-wrap gap-1 mt-2"
             x-show="(currentPoll?.invitees || []).length > 0"
           >
-            <template x-for="invitee in (currentPoll?.invitees || [])" :key="invitee.uuid">
-              {% include "ui/partials/user_chip.html" with user_id_expr="invitee.user.id" username_expr="invitee.user.username" remove_expr="removePollInvitee(invitee.user.id)" %}
+            <template x-for="invitee in (currentPoll?.invitees || [])" :key="invitee.id">
+              {% include "ui/partials/user_chip.html" with user_id_expr="invitee.id" username_expr="invitee.username" remove_expr="removePollInvitee(invitee.id)" %}
             </template>
           </div>
         </div>
@@ -499,8 +499,8 @@
             ></span>
           </div>
           <div class="flex flex-wrap gap-1">
-            <template x-for="invitee in (currentPoll?.invitees || [])" :key="invitee.uuid">
-              {% include "ui/partials/user_chip.html" with user_id_expr="invitee.user.id" username_expr="invitee.user.username" %}
+            <template x-for="invitee in (currentPoll?.invitees || [])" :key="invitee.id">
+              {% include "ui/partials/user_chip.html" with user_id_expr="invitee.id" username_expr="invitee.username" %}
             </template>
           </div>
         </div>
@@ -510,7 +510,7 @@
       <template x-if="currentPoll?.status === 'closed'">
         <inline-alert type="success" icon="trophy" class="mb-4">
         <span class="font-medium text-base-content">{% translate "This poll has been finalized." %}</span>
-        <template x-if="currentPoll?.event_id">
+        <template x-if="currentPoll?.event">
           <span class="ml-1">{% translate "An event has been created." %}</span>
         </template>
         <template x-if="pollChosenSlot()">
@@ -521,11 +521,11 @@
             ></span>
           </p>
         </template>
-        <template slot="actions" x-if="currentPoll?.event_id">
+        <template slot="actions" x-if="currentPoll?.event">
           <button
             type="button"
             class="btn btn-xs btn-module gap-1"
-            @click="closePollDetail(); openEventById(currentPoll.event_id)"
+            @click="closePollDetail(); openEventById(currentPoll.event.uuid)"
           >
             <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
             {% translate "View event" %}

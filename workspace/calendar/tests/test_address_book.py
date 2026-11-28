@@ -112,7 +112,7 @@ class InviteeResolveApiTests(AddressBookFixture, APITestCase):
     url = "/api/v1/events/invitees"
 
     def test_requires_authentication(self):
-        resp = self.client.post(self.url, {"list_ids": []}, format="json")
+        resp = self.client.post(self.url, {"lists": []}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_requires_something_to_resolve(self):
@@ -122,13 +122,13 @@ class InviteeResolveApiTests(AddressBookFixture, APITestCase):
 
     def test_rejects_a_malformed_uuid(self):
         self.client.force_authenticate(self.user)
-        resp = self.client.post(self.url, {"person_ids": ["nope"]}, format="json")
+        resp = self.client.post(self.url, {"persons": ["nope"]}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_resolves_a_list(self):
         self.client.force_authenticate(self.user)
         resp = self.client.post(
-            self.url, {"list_ids": [str(self.family.uuid)]}, format="json"
+            self.url, {"lists": [str(self.family.uuid)]}, format="json"
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual([u["username"] for u in resp.data["users"]], ["bob"])

@@ -71,17 +71,17 @@ class EventRespondReplyTest(ReplyFixtureMixin, APITestCase):
     @patch("workspace.calendar.tasks.send_ics_reply.delay")
     def test_accept_sends_reply_email(self, mock_send):
         self.client.force_authenticate(self.user)
-        url = f"/api/v1/events/{self.event.pk}/respond"
-        resp = self.client.post(url, {"status": "accepted"}, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        url = f"/api/v1/events/{self.event.pk}/response"
+        resp = self.client.put(url, {"status": "accepted"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         mock_send.assert_called_once_with(str(self.event.pk), self.user.id, "accepted")
 
     @patch("workspace.calendar.tasks.send_ics_reply.delay")
     def test_decline_sends_reply_email(self, mock_send):
         self.client.force_authenticate(self.user)
-        url = f"/api/v1/events/{self.event.pk}/respond"
-        resp = self.client.post(url, {"status": "declined"}, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        url = f"/api/v1/events/{self.event.pk}/response"
+        resp = self.client.put(url, {"status": "declined"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         mock_send.assert_called_once_with(str(self.event.pk), self.user.id, "declined")
 
     @patch("workspace.calendar.tasks.send_ics_reply.delay")
@@ -90,9 +90,9 @@ class EventRespondReplyTest(ReplyFixtureMixin, APITestCase):
         self.event.source_message = None
         self.event.save()
         self.client.force_authenticate(self.user)
-        url = f"/api/v1/events/{self.event.pk}/respond"
-        resp = self.client.post(url, {"status": "accepted"}, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        url = f"/api/v1/events/{self.event.pk}/response"
+        resp = self.client.put(url, {"status": "accepted"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         mock_send.assert_not_called()
 
 

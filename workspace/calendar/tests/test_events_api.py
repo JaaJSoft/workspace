@@ -4,14 +4,17 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.utils import timezone as dj_timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.calendar import recurrence
 from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember
+from workspace.calendar.models_external import ExternalCalendar
 from workspace.calendar.search import search_events
+from workspace.calendar.services import recurrence_rule
 from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.users.services.settings import set_setting
 
@@ -36,27 +39,109 @@ class EventListTests(CalendarTestMixin, APITestCase):
         resp = self.client.get(self.url, self._range_params())
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_a_run_of_digits_as_a_date_is_a_400(self):
+    def test_a_date_that_cannot_be_read_is_a_400_naming_it(self):
         self.client.force_authenticate(self.owner)
-        digits = "9" * 30
-        for params in (
-            {"start": digits, "end": timezone.now().isoformat()},
-            {"after": digits},
-        ):
-            with self.subTest(params=params):
-                resp = self.client.get(self.url, params)
-                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        for name in ("start", "end"):
+            for value in ("9" * 30, "tomorrow"):
+                with self.subTest(name=name, value=value):
+                    resp = self.client.get(self.url, {name: value})
+                    self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                    self.assertEqual(list(resp.data), [name])
 
-    def test_requires_start_and_end_params(self):
+    def test_without_a_start_the_list_begins_now(self):
+        past = Event.objects.create(
+            calendar=self.calendar,
+            title="Yesterday",
+            start=timezone.now() - timedelta(days=1),
+            end=timezone.now() - timedelta(days=1) + timedelta(hours=1),
+            owner=self.owner,
+        )
         self.client.force_authenticate(self.owner)
         resp = self.client.get(self.url)
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        titles = [e["title"] for e in resp.data]
+        self.assertIn("Team Meeting", titles)
+        self.assertNotIn(past.title, titles)
 
-        resp = self.client.get(self.url, {"start": timezone.now().isoformat()})
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+    def test_the_list_is_paged(self):
+        day = timezone.now() + timedelta(days=3)
+        for hour in range(3):
+            Event.objects.create(
+                calendar=self.calendar,
+                title=f"Slot {hour}",
+                start=day + timedelta(hours=hour),
+                owner=self.owner,
+            )
+        self.client.force_authenticate(self.owner)
+        params = {
+            "start": day.isoformat(),
+            "end": (day + timedelta(days=1)).isoformat(),
+            "limit": 2,
+        }
+        first = self.client.get(self.url, {**params, "count": "true"})
+        self.assertEqual([e["title"] for e in first.data], ["Slot 0", "Slot 1"])
+        self.assertEqual(first["X-Has-More"], "true")
+        self.assertEqual(first["X-Total-Count"], "3")
+        second = self.client.get(self.url, {**params, "offset": 2})
+        self.assertEqual([e["title"] for e in second.data], ["Slot 2"])
+        self.assertEqual(second["X-Has-More"], "false")
 
-        resp = self.client.get(self.url, {"end": timezone.now().isoformat()})
+    def test_the_list_takes_a_fixed_number_of_queries(self):
+        """Whatever it holds: plain events, series, occurrences changed on
+        their own, invitees."""
+
+        def fill(prefix):
+            day = timezone.now() + timedelta(days=1)
+            plain = Event.objects.create(
+                calendar=self.calendar,
+                title=f"{prefix} plain",
+                start=day,
+                owner=self.owner,
+            )
+            series = Event(
+                calendar=self.calendar,
+                title=f"{prefix} weekly",
+                start=day,
+                end=day + timedelta(hours=1),
+                owner=self.owner,
+            )
+            apply_rule(series, "RRULE:FREQ=DAILY")
+            series.save()
+            changed = Event.objects.create(
+                calendar=self.calendar,
+                title=f"{prefix} moved",
+                start=day + timedelta(days=1, hours=2),
+                owner=self.owner,
+                recurrence_parent=series,
+                original_start=day + timedelta(days=1),
+            )
+            for event in (plain, series, changed):
+                EventMember.objects.create(event=event, user=self.member)
+                EventMember.objects.create(event=event, email=f"{prefix}@example.com")
+
+        self.client.force_authenticate(self.owner)
+        params = {**self._range_params(), "calendar": f"{self.calendar.uuid},none"}
+
+        def queries():
+            with CaptureQueriesContext(connection) as captured:
+                resp = self.client.get(self.url, params)
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            return len(captured), len(resp.data)
+
+        fill("a")
+        few_queries, few_rows = queries()
+        for prefix in "bcde":
+            fill(prefix)
+        many_queries, many_rows = queries()
+
+        self.assertGreater(many_rows, few_rows * 3)
+        self.assertEqual(many_queries, few_queries)
+
+    def test_a_list_with_no_end_cannot_be_counted(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(self.url, {"count": "true"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(resp.data), ["count"])
 
     def test_list_events_in_range(self):
         self.client.force_authenticate(self.owner)
@@ -93,7 +178,7 @@ class EventListTests(CalendarTestMixin, APITestCase):
         titles = [e["title"] for e in resp.data]
         self.assertIn("Team Meeting", titles)
 
-    def test_filter_by_calendar_ids(self):
+    def test_filter_by_calendar(self):
         other_cal = Calendar.objects.create(name="Other", owner=self.owner)
         Event.objects.create(
             calendar=other_cal,
@@ -103,14 +188,29 @@ class EventListTests(CalendarTestMixin, APITestCase):
             owner=self.owner,
         )
         self.client.force_authenticate(self.owner)
-        params = self._range_params()
-        params["calendar_ids"] = str(other_cal.uuid)
-        resp = self.client.get(self.url, params)
-        titles = [e["title"] for e in resp.data]
-        self.assertIn("Other Event", titles)
-        self.assertNotIn("Team Meeting", titles)
+        for params in (
+            {"calendar": str(other_cal.uuid)},
+            {"calendar_name": "other"},
+        ):
+            with self.subTest(params=params):
+                resp = self.client.get(self.url, {**self._range_params(), **params})
+                titles = [e["title"] for e in resp.data]
+                self.assertEqual(titles, ["Other Event"])
+        both = self.client.get(
+            self.url,
+            {
+                **self._range_params(),
+                "calendar": f"{other_cal.uuid},{self.calendar.uuid}",
+            },
+        )
+        self.assertEqual(
+            sorted(e["title"] for e in both.data), ["Other Event", "Team Meeting"]
+        )
 
-    def test_calendar_ids_cannot_reach_a_calendar_the_user_cannot_see(self):
+    def test_a_calendar_the_user_cannot_see_lists_nothing(self):
+        """Not even the event of it they are invited to: asking for a
+        calendar out of reach answers like asking for one that is not there,
+        by its uuid and by its name alike."""
         Event.objects.create(
             calendar=self.calendar,
             title="Private Appointment",
@@ -119,21 +219,62 @@ class EventListTests(CalendarTestMixin, APITestCase):
             owner=self.owner,
         )
         self.client.force_authenticate(self.member)
-        params = self._range_params()
-        params["calendar_ids"] = str(self.calendar.uuid)
-        resp = self.client.get(self.url, params)
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        titles = [e["title"] for e in resp.data]
-        self.assertNotIn("Private Appointment", titles)
-        # Invited events stay listed whatever the calendar filter says.
-        self.assertIn("Team Meeting", titles)
+        for params in (
+            {"calendar": str(self.calendar.uuid)},
+            {"calendar": str(uuid.uuid4())},
+            {"calendar_name": self.calendar.name},
+            {"calendar_name": "no such calendar"},
+        ):
+            with self.subTest(params=params):
+                resp = self.client.get(self.url, {**self._range_params(), **params})
+                self.assertEqual(resp.status_code, status.HTTP_200_OK)
+                self.assertEqual(resp.data, [])
 
-    def test_malformed_calendar_ids_is_rejected(self):
+    def test_calendar_none_lists_the_events_one_is_only_invited_to(self):
+        own = Calendar.objects.create(name="Mine", owner=self.member)
+        Event.objects.create(
+            calendar=own,
+            title="My Own",
+            start=timezone.now() + timedelta(hours=1),
+            owner=self.member,
+        )
+        self.client.force_authenticate(self.member)
+        invited = self.client.get(
+            self.url, {**self._range_params(), "calendar": "none"}
+        )
+        self.assertEqual([e["title"] for e in invited.data], ["Team Meeting"])
+        # The calendar the organizer filed it in is not the invitee's to see.
+        self.assertIsNone(invited.data[0]["calendar"])
+        both = self.client.get(
+            self.url, {**self._range_params(), "calendar": f"{own.uuid},none"}
+        )
+        self.assertEqual(
+            sorted(e["title"] for e in both.data), ["My Own", "Team Meeting"]
+        )
+
+    def test_malformed_calendar_is_rejected(self):
         self.client.force_authenticate(self.owner)
         params = self._range_params()
-        params["calendar_ids"] = f"{self.calendar.uuid},not-a-uuid"
+        params["calendar"] = f"{self.calendar.uuid},not-a-uuid"
         resp = self.client.get(self.url, params)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(resp.data), ["calendar"])
+
+    def test_declined_events_are_left_out_unless_asked_for(self):
+        EventMember.objects.filter(event=self.event, user=self.member).update(
+            status=EventMember.Status.DECLINED
+        )
+        self.client.force_authenticate(self.member)
+        hidden = self.client.get(self.url, self._range_params())
+        self.assertEqual(hidden.data, [])
+        shown = self.client.get(
+            self.url, {**self._range_params(), "include_declined": "true"}
+        )
+        self.assertEqual([e["title"] for e in shown.data], ["Team Meeting"])
+        refused = self.client.get(
+            self.url, {**self._range_params(), "include_declined": "maybe"}
+        )
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_all_day_event_in_range(self):
         Event.objects.create(
@@ -157,7 +298,7 @@ class EventCreateTests(CalendarTestMixin, APITestCase):
 
     def _event_data(self, **overrides):
         data = {
-            "calendar_id": str(self.calendar.uuid),
+            "calendar": str(self.calendar.uuid),
             "title": "New Event",
             "start": (timezone.now() + timedelta(days=2)).isoformat(),
             "end": (timezone.now() + timedelta(days=2, hours=1)).isoformat(),
@@ -178,7 +319,7 @@ class EventCreateTests(CalendarTestMixin, APITestCase):
 
     def test_create_event_with_members(self):
         self.client.force_authenticate(self.owner)
-        data = self._event_data(member_ids=[self.member.id])
+        data = self._event_data(members=[self.member.id])
         resp = self.client.post(self.url, data, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         member_usernames = [m["user"]["username"] for m in resp.data["members"]]
@@ -186,7 +327,7 @@ class EventCreateTests(CalendarTestMixin, APITestCase):
 
     def test_create_event_owner_excluded_from_members(self):
         self.client.force_authenticate(self.owner)
-        data = self._event_data(member_ids=[self.owner.id, self.member.id])
+        data = self._event_data(members=[self.owner.id, self.member.id])
         resp = self.client.post(self.url, data, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         member_usernames = [m["user"]["username"] for m in resp.data["members"]]
@@ -195,10 +336,10 @@ class EventCreateTests(CalendarTestMixin, APITestCase):
 
     def test_create_event_all_day(self):
         self.client.force_authenticate(self.owner)
-        data = self._event_data(all_day=True, end=None)
+        data = self._event_data(is_all_day=True, end=None)
         resp = self.client.post(self.url, data, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(resp.data["all_day"])
+        self.assertTrue(resp.data["is_all_day"])
 
     def test_create_event_missing_title(self):
         self.client.force_authenticate(self.owner)
@@ -210,15 +351,49 @@ class EventCreateTests(CalendarTestMixin, APITestCase):
     def test_create_event_calendar_not_owned(self):
         outsider_cal = Calendar.objects.create(name="Outsider Cal", owner=self.outsider)
         self.client.force_authenticate(self.owner)
-        data = self._event_data(calendar_id=str(outsider_cal.uuid))
+        data = self._event_data(calendar=str(outsider_cal.uuid))
         resp = self.client.post(self.url, data, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_create_event_nonexistent_calendar(self):
         self.client.force_authenticate(self.owner)
-        data = self._event_data(calendar_id=str(uuid.uuid4()))
+        data = self._event_data(calendar=str(uuid.uuid4()))
         resp = self.client.post(self.url, data, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_calendar_out_of_reach_answers_like_one_that_does_not_exist(self):
+        """Someone else's calendar, and one the caller only subscribed to."""
+        outsider_cal = Calendar.objects.create(name="Outsider Cal", owner=self.outsider)
+        subscribed = Calendar.objects.create(name="Subscribed", owner=self.outsider)
+        CalendarSubscription.objects.create(user=self.owner, calendar=subscribed)
+        self.client.force_authenticate(self.owner)
+
+        def refusal(calendar_uuid):
+            resp = self.client.post(
+                self.url, self._event_data(calendar=str(calendar_uuid)), format="json"
+            )
+            return resp.status_code, resp.content.replace(
+                str(calendar_uuid).encode(), b"<uuid>"
+            )
+
+        absent = refusal(uuid.uuid4())
+        self.assertEqual(absent[0], status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(refusal(outsider_cal.uuid), absent)
+        self.assertEqual(refusal(subscribed.uuid), absent)
+        self.assertFalse(Event.objects.filter(title="New Event").exists())
+
+    def test_create_event_in_an_external_calendar_is_refused(self):
+        external = Calendar.objects.create(name="Feed", owner=self.owner)
+        ExternalCalendar.objects.create(
+            calendar=external, url="https://example.com/feed.ics"
+        )
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            self.url, self._event_data(calendar=str(external.uuid)), format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("calendar", resp.data)
+        self.assertFalse(Event.objects.filter(calendar=external).exists())
 
 
 class EventDetailTests(CalendarTestMixin, APITestCase):
@@ -255,11 +430,15 @@ class EventDetailTests(CalendarTestMixin, APITestCase):
 
     def test_outsider_write_looks_like_a_missing_event(self):
         self.client.force_authenticate(self.outsider)
-        put = self.client.put(
+        patch = self.client.patch(
             self.url(self.event.uuid), {"title": "Hacked"}, format="json"
         )
         delete = self.client.delete(self.url(self.event.uuid))
-        self.assertEqual(put.status_code, status.HTTP_404_NOT_FOUND)
+        missing = self.client.patch(
+            self.url(uuid.uuid4()), {"title": "Hacked"}, format="json"
+        )
+        self.assertEqual(patch.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(patch.content, missing.content)
         self.assertEqual(delete.status_code, status.HTTP_404_NOT_FOUND)
         self.event.refresh_from_db()
         self.assertEqual(self.event.title, "Team Meeting")
@@ -274,7 +453,7 @@ class EventDetailTests(CalendarTestMixin, APITestCase):
 
     def test_update_event(self):
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(self.event.uuid),
             {"title": "Updated Meeting"},
             format="json",
@@ -284,7 +463,7 @@ class EventDetailTests(CalendarTestMixin, APITestCase):
 
     def test_update_event_partial_fields(self):
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(self.event.uuid),
             {"description": "Added description"},
             format="json",
@@ -297,19 +476,19 @@ class EventDetailTests(CalendarTestMixin, APITestCase):
     def test_update_event_change_calendar(self):
         new_cal = Calendar.objects.create(name="Personal", owner=self.owner)
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(self.event.uuid),
-            {"calendar_id": str(new_cal.uuid)},
+            {"calendar": str(new_cal.uuid)},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["calendar_id"], str(new_cal.uuid))
+        self.assertEqual(resp.data["calendar"]["uuid"], str(new_cal.uuid))
 
     def test_update_event_add_members(self):
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(self.event.uuid),
-            {"member_ids": [self.member.id, self.outsider.id]},
+            {"members": [self.member.id, self.outsider.id]},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -320,9 +499,9 @@ class EventDetailTests(CalendarTestMixin, APITestCase):
     def test_update_event_remove_members(self):
         self.client.force_authenticate(self.owner)
         # Remove all members
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(self.event.uuid),
-            {"member_ids": []},
+            {"members": []},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -330,7 +509,7 @@ class EventDetailTests(CalendarTestMixin, APITestCase):
 
     def test_update_event_not_owner_returns_403(self):
         self.client.force_authenticate(self.member)
-        resp = self.client.put(
+        resp = self.client.patch(
             self.url(self.event.uuid),
             {"title": "Hacked"},
             format="json",
@@ -354,59 +533,261 @@ class EventDetailTests(CalendarTestMixin, APITestCase):
 # ---------- Event Respond ----------
 
 
-class EventRespondTests(CalendarTestMixin, APITestCase):
-    """Tests for POST /api/v1/events/<id>/respond"""
+class EventResponseTests(CalendarTestMixin, APITestCase):
+    """PUT and DELETE /api/v1/events/<uuid>/response"""
 
     def url(self, event_id):
-        return f"/api/v1/events/{event_id}/respond"
+        return f"/api/v1/events/{event_id}/response"
+
+    def _status(self, user=None, event=None):
+        return EventMember.objects.get(
+            event=event or self.event, user=user or self.member
+        ).status
 
     def test_unauthenticated_rejected(self):
-        resp = self.client.post(
-            self.url(self.event.uuid),
-            {"status": "accepted"},
-            format="json",
+        resp = self.client.put(
+            self.url(self.event.uuid), {"status": "accepted"}, format="json"
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_accept_invitation(self):
+    def test_accept_then_decline(self):
         self.client.force_authenticate(self.member)
-        resp = self.client.post(
-            self.url(self.event.uuid),
-            {"status": "accepted"},
-            format="json",
-        )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["status"], "accepted")
-        membership = EventMember.objects.get(event=self.event, user=self.member)
-        self.assertEqual(membership.status, EventMember.Status.ACCEPTED)
+        for answer in ("accepted", "declined"):
+            with self.subTest(answer=answer):
+                resp = self.client.put(
+                    self.url(self.event.uuid), {"status": answer}, format="json"
+                )
+                self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+                self.assertEqual(resp.content, b"")
+                self.assertEqual(self._status(), answer)
 
-    def test_decline_invitation(self):
+    def test_answering_twice_changes_nothing_more(self):
         self.client.force_authenticate(self.member)
-        resp = self.client.post(
-            self.url(self.event.uuid),
-            {"status": "declined"},
-            format="json",
-        )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["status"], "declined")
+        for _ in range(2):
+            resp = self.client.put(
+                self.url(self.event.uuid), {"status": "accepted"}, format="json"
+            )
+            self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(self._status(), EventMember.Status.ACCEPTED)
 
-    def test_not_invited_returns_403(self):
+    def test_taking_an_answer_back_leaves_the_invitation_pending(self):
+        EventMember.objects.filter(event=self.event, user=self.member).update(
+            status=EventMember.Status.DECLINED
+        )
+        self.client.force_authenticate(self.member)
+        for _ in range(2):
+            resp = self.client.delete(self.url(self.event.uuid))
+            self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(self._status(), EventMember.Status.PENDING)
+
+    def test_someone_who_sees_the_event_without_being_invited_is_refused(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.put(
+            self.url(self.event.uuid), {"status": "accepted"}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_an_event_out_of_reach_answers_like_one_that_does_not_exist(self):
         self.client.force_authenticate(self.outsider)
-        resp = self.client.post(
-            self.url(self.event.uuid),
-            {"status": "accepted"},
-            format="json",
+        hidden = self.client.put(
+            self.url(self.event.uuid), {"status": "accepted"}, format="json"
         )
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        absent = self.client.put(
+            self.url(uuid.uuid4()), {"status": "accepted"}, format="json"
+        )
+        self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            (hidden.status_code, hidden.content), (absent.status_code, absent.content)
+        )
 
     def test_invalid_status_rejected(self):
         self.client.force_authenticate(self.member)
-        resp = self.client.post(
-            self.url(self.event.uuid),
-            {"status": "maybe"},
-            format="json",
+        for answer in ("maybe", "pending"):
+            with self.subTest(answer=answer):
+                resp = self.client.put(
+                    self.url(self.event.uuid), {"status": answer}, format="json"
+                )
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._status(), EventMember.Status.PENDING)
+
+    def test_an_occurrence_changed_on_its_own_takes_its_own_answer(self):
+        """Its invitees are its own rows: an answer given for its slot lands
+        on them, and the series keeps the answer it had."""
+        start = timezone.now() + timedelta(days=1)
+        series = Event(
+            calendar=self.calendar,
+            title="Weekly",
+            start=start,
+            end=start + timedelta(hours=1),
+            owner=self.owner,
         )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        apply_rule(series, "RRULE:FREQ=WEEKLY")
+        series.save()
+        EventMember.objects.create(event=series, user=self.member)
+        slot = start + timedelta(weeks=1)
+        changed = Event.objects.create(
+            calendar=self.calendar,
+            title="Weekly, moved",
+            start=slot + timedelta(hours=2),
+            owner=self.owner,
+            recurrence_parent=series,
+            original_start=slot,
+        )
+        EventMember.objects.create(event=changed, user=self.member)
+        self.client.force_authenticate(self.member)
+
+        resp = self.client.put(
+            self.url(series.uuid),
+            {"status": "declined"},
+            format="json",
+            query_params={"original_start": slot.isoformat()},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(self._status(event=changed), EventMember.Status.DECLINED)
+        self.assertEqual(self._status(event=series), EventMember.Status.PENDING)
+
+        # Another slot of the series is the series itself.
+        resp = self.client.put(
+            self.url(series.uuid),
+            {"status": "accepted"},
+            format="json",
+            query_params={"original_start": (slot + timedelta(weeks=1)).isoformat()},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(self._status(event=series), EventMember.Status.ACCEPTED)
+        self.assertEqual(self._status(event=changed), EventMember.Status.DECLINED)
+
+
+class ChangedOccurrenceVisibilityTests(CalendarTestMixin, APITestCase):
+    """An occurrence changed on its own carries its own invitees. Someone
+    invited to the series and taken off that occurrence does not see what
+    it became, in the list or one by one."""
+
+    def setUp(self):
+        super().setUp()
+        self.start = (timezone.now() + timedelta(days=1)).replace(microsecond=0)
+        self.series = Event(
+            calendar=self.calendar,
+            title="Weekly",
+            start=self.start,
+            end=self.start + timedelta(hours=1),
+            owner=self.owner,
+        )
+        apply_rule(self.series, "RRULE:FREQ=WEEKLY")
+        self.series.save()
+        EventMember.objects.create(event=self.series, user=self.member)
+        self.slot = self.start + timedelta(weeks=1)
+        self.changed = Event.objects.create(
+            calendar=self.calendar,
+            title="Salary review",
+            start=self.slot,
+            end=self.slot + timedelta(hours=1),
+            owner=self.owner,
+            recurrence_parent=self.series,
+            original_start=self.slot,
+        )
+
+    def _window(self):
+        return {
+            "start": self.start.isoformat(),
+            "end": (self.start + timedelta(weeks=3)).isoformat(),
+        }
+
+    def test_the_list_leaves_the_slot_empty_for_someone_taken_off_it(self):
+        self.client.force_authenticate(self.member)
+        for params in (self._window(), {"start": self.start.isoformat()}):
+            with self.subTest(params=params):
+                resp = self.client.get("/api/v1/events", {**params, "limit": 3})
+                self.assertEqual(resp.status_code, status.HTTP_200_OK)
+                self.assertNotIn("Salary review", resp.content.decode())
+                slots = [
+                    datetime.fromisoformat(e["original_start"])
+                    for e in resp.data
+                    if e["uuid"] == str(self.series.uuid)
+                ]
+                self.assertIn(self.start, slots)
+                self.assertNotIn(self.slot, slots)
+
+    def test_the_slot_answers_like_an_event_that_does_not_exist(self):
+        self.client.force_authenticate(self.member)
+        query = {"original_start": self.slot.isoformat()}
+        hidden = self.client.get(f"/api/v1/events/{self.series.uuid}", query)
+        by_row = self.client.get(f"/api/v1/events/{self.changed.uuid}")
+        absent = self.client.get(f"/api/v1/events/{uuid.uuid4()}", query)
+        self.assertEqual(absent.status_code, status.HTTP_404_NOT_FOUND)
+        for resp in (hidden, by_row):
+            self.assertEqual(
+                (resp.status_code, resp.content), (absent.status_code, absent.content)
+            )
+        card = self.client.get(
+            f"/calendar/events/{self.series.uuid}/card",
+            {"start": self.slot.isoformat()},
+        )
+        self.assertNotIn("Salary review", card.content.decode())
+
+    def test_someone_still_on_the_occurrence_sees_it(self):
+        EventMember.objects.create(event=self.changed, user=self.member)
+        self.client.force_authenticate(self.member)
+        listed = self.client.get("/api/v1/events", self._window())
+        self.assertIn("Salary review", [e["title"] for e in listed.data])
+        read = self.client.get(
+            f"/api/v1/events/{self.series.uuid}",
+            {"original_start": self.slot.isoformat()},
+        )
+        self.assertEqual(read.status_code, status.HTTP_200_OK)
+        self.assertEqual(read.data["title"], "Salary review")
+
+    def test_someone_invited_to_the_occurrence_alone_sees_it_in_both_readings(self):
+        """They do not see its series: the occurrence is theirs through its
+        own invitees, between two instants like from one on."""
+        EventMember.objects.create(event=self.changed, user=self.outsider)
+        self.client.force_authenticate(self.outsider)
+        for params in (self._window(), {"start": self.start.isoformat()}):
+            with self.subTest(params=params):
+                resp = self.client.get("/api/v1/events", {**params, "limit": 5})
+                self.assertEqual(
+                    [e["title"] for e in resp.data], ["Salary review"], resp.data
+                )
+
+    def test_an_occurrence_of_a_cancelled_series_is_listed_in_neither_reading(self):
+        Event.objects.filter(pk=self.series.pk).update(is_cancelled=True)
+        self.client.force_authenticate(self.owner)
+        for params in (self._window(), {"start": self.start.isoformat()}):
+            with self.subTest(params=params):
+                resp = self.client.get("/api/v1/events", {**params, "limit": 5})
+                titles = [e["title"] for e in resp.data]
+                self.assertNotIn("Salary review", titles)
+                self.assertNotIn("Weekly", titles)
+
+    def test_the_hover_card_names_the_slot_its_actions_are_about(self):
+        """Editing, deleting or answering from the card of one occurrence is
+        about that occurrence, so the card hands its slot to the page."""
+        self.client.force_login(self.owner)
+        other_slot = self.start + timedelta(weeks=2)
+        occurrence = self.client.get(
+            f"/calendar/events/{self.series.uuid}/card",
+            {"start": other_slot.isoformat()},
+        )
+        self.assertEqual(
+            datetime.fromisoformat(occurrence.context["occ_slot"]), other_slot
+        )
+        # The series opened as a whole, and an occurrence that is a row of
+        # its own (named by its uuid), need none.
+        for path in (
+            f"/calendar/events/{self.series.uuid}/card",
+            f"/calendar/events/{self.changed.uuid}/card",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).context["occ_slot"], "")
+
+    def test_the_owner_and_a_subscriber_of_the_calendar_see_it(self):
+        CalendarSubscription.objects.create(user=self.outsider, calendar=self.calendar)
+        for user in (self.owner, self.outsider):
+            with self.subTest(user=user.username):
+                self.client.force_authenticate(user)
+                listed = self.client.get("/api/v1/events", self._window())
+                self.assertIn("Salary review", [e["title"] for e in listed.data])
 
 
 # ---------- Search ----------
@@ -474,10 +855,10 @@ class AllDayApiContractTests(CalendarTestMixin, APITestCase):
         resp = self.client.post(
             self.url,
             {
-                "calendar_id": str(self.calendar.uuid),
+                "calendar": str(self.calendar.uuid),
                 "title": "Summit",
                 "start": "2026-08-05T14:30:00Z",
-                "all_day": True,
+                "is_all_day": True,
             },
             format="json",
         )
@@ -492,11 +873,11 @@ class AllDayApiContractTests(CalendarTestMixin, APITestCase):
         resp = self.client.post(
             self.url,
             {
-                "calendar_id": str(self.calendar.uuid),
+                "calendar": str(self.calendar.uuid),
                 "title": "Trip",
                 "start": "2026-08-05",
                 "end": "2026-08-07",
-                "all_day": True,
+                "is_all_day": True,
             },
             format="json",
         )
@@ -513,7 +894,7 @@ class AllDayApiContractTests(CalendarTestMixin, APITestCase):
         resp = self.client.post(
             self.url,
             {
-                "calendar_id": str(self.calendar.uuid),
+                "calendar": str(self.calendar.uuid),
                 "title": "Standup",
                 "start": "2026-08-05T09:00:00+02:00",
             },
@@ -533,7 +914,7 @@ class AllDayApiContractTests(CalendarTestMixin, APITestCase):
             owner=self.owner,
         )
         self.client.force_authenticate(self.owner)
-        resp = self.client.put(
+        resp = self.client.patch(
             f"{self.url}/{event.uuid}",
             {"start": "2026-08-06T10:15:00Z"},
             format="json",
@@ -671,10 +1052,11 @@ class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
         apply_rule(event, "RRULE:FREQ=DAILY")
         event.save()
         self._login_paris()
-        resp = self.client.put(
+        resp = self.client.patch(
             f"{self.url}/{event.uuid}",
             {"title": "Legacy daily renamed"},
             content_type="application/json",
+            query_params={"occurrences": "all"},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()
@@ -688,7 +1070,7 @@ class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
             owner=self.owner,
         )
         self._login_paris()
-        resp = self.client.put(
+        resp = self.client.patch(
             f"{self.url}/{event.uuid}",
             {"recurrence_rule": "RRULE:FREQ=DAILY"},
             content_type="application/json",
@@ -709,7 +1091,7 @@ class RecurrenceRuleApiTests(APITestCase):
         return self.client.post(
             "/api/v1/events",
             {
-                "calendar_id": str(self.cal.uuid),
+                "calendar": str(self.cal.uuid),
                 "title": "E",
                 "start": "2026-01-06T10:00:00Z",
                 "end": "2026-01-06T11:00:00Z",
@@ -739,8 +1121,8 @@ class RecurrenceRuleApiTests(APITestCase):
 
     def test_recurring_occurrence_from_range_endpoint_exposes_summary_and_simple(self):
         # The event modal reads a recurring occurrence's recurrence state off
-        # an occurrence dict (make_virtual_occurrence), not an Event through
-        # EventSerializer - both shapes must carry the same derived fields.
+        # the answer of its series with other times, not a row serialized
+        # on its own - it must carry the same derived fields.
         self._create("RRULE:FREQ=DAILY;INTERVAL=2")
         resp = self.client.get(
             "/api/v1/events",
@@ -788,16 +1170,16 @@ class RecurrenceRuleApiTests(APITestCase):
         self.assertEqual(occ["recurrence_simple"]["interval"], 2)
 
     def test_recurrence_summary_computed_once_per_master_not_per_occurrence(self):
-        # Pins the per-master cache: expanding a master that yields both a
-        # virtual occurrence and a materialized exception must call
-        # describe() exactly once, not once per occurrence - a regression
-        # here means make_exception_dict stopped reusing the master's cache.
+        # A series that yields both an occurrence of the rule and one
+        # changed on its own must call describe() exactly once, not once
+        # per occurrence: the changed one is another row, serialized on its
+        # own, and still reads the rule its series already described.
         create_resp = self._create("RRULE:FREQ=DAILY;INTERVAL=2")
         master = Event.objects.get(uuid=create_resp.json()["uuid"])
         self._create_exception(master, days_after_start=2)
 
         with patch.object(
-            recurrence, "describe", wraps=recurrence.describe
+            recurrence_rule, "describe", wraps=recurrence_rule.describe
         ) as mock_describe:
             resp = self.client.get(
                 "/api/v1/events",
@@ -825,7 +1207,7 @@ class RecurrenceRuleValidationTests(APITestCase):
         return self.client.post(
             "/api/v1/events",
             {
-                "calendar_id": str(self.cal.uuid),
+                "calendar": str(self.cal.uuid),
                 "title": "E",
                 "start": "2026-01-06T10:00:00Z",
                 "end": "2026-01-06T11:00:00Z",
@@ -843,20 +1225,23 @@ class RecurrenceRuleValidationTests(APITestCase):
     def test_update_rejects_an_unparseable_rule(self):
         created = self._create("RRULE:FREQ=DAILY;COUNT=3")
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
-        resp = self.client.put(
+        resp = self.client.patch(
             f"/api/v1/events/{created.json()['uuid']}",
             {"recurrence_rule": "RRULE:FREQ=NONSENSE"},
             format="json",
+            query_params={"occurrences": "all"},
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(list(resp.json()), ["recurrence_rule"])
 
     def test_a_blank_rule_still_clears_the_series(self):
         created = self._create("RRULE:FREQ=DAILY;COUNT=3")
         event_uuid = created.json()["uuid"]
-        resp = self.client.put(
+        resp = self.client.patch(
             f"/api/v1/events/{event_uuid}",
-            {"recurrence_rule": "", "scope": "all"},
+            {"recurrence_rule": ""},
             format="json",
+            query_params={"occurrences": "all"},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(Event.objects.get(uuid=event_uuid).is_recurring)

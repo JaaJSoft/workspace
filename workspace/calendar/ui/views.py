@@ -7,18 +7,18 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.calendar.models import (
     Calendar,
-    Event,
     EventMember,
     Poll,
     PollInvitee,
     PollVote,
 )
 from workspace.calendar.queries import (
+    reachable_calendars,
     visible_calendar_ids,
     visible_calendars,
-    visible_events_q,
 )
 from workspace.calendar.serializers import CalendarSerializer
+from workspace.calendar.services.event_listing import find_occurrence
 from workspace.common.prefetch import prefetchable
 from workspace.users.services.settings import get_setting
 
@@ -39,7 +39,7 @@ def _ensure_default_calendar(user):
 def index(request):
     _ensure_default_calendar(request.user)
 
-    owned, subscribed = visible_calendars(request.user)
+    owned, _subscribed = visible_calendars(request.user)
 
     # Count open polls where user is invited but hasn't voted
     invited_poll_ids = PollInvitee.objects.filter(
@@ -66,10 +66,11 @@ def index(request):
         "calendar/ui/index.html",
         {
             "owned_calendars": owned,
-            "calendars": {
-                "owned": CalendarSerializer(owned, many=True).data,
-                "subscribed": CalendarSerializer(subscribed, many=True).data,
-            },
+            "calendars": CalendarSerializer(
+                reachable_calendars(request.user).order_by("name", "uuid"),
+                many=True,
+                context={"request": request},
+            ).data,
             "prefs": prefs,
             "poll_count": poll_count,
         },
@@ -79,19 +80,19 @@ def index(request):
 @login_required
 def event_card(request, event_id):
     """Return a compact event card partial for popover display."""
-    event = (
-        Event.objects.filter(
-            visible_events_q(request.user),
-            uuid=event_id,
-            is_cancelled=False,
-        )
-        .select_related("calendar", "owner")
-        .prefetch_related("members__user")
-        .distinct()
-        .first()
-    )
-    if not event:
+    raw_start = request.GET.get("start")
+    slot = None
+    if raw_start:
+        try:
+            slot = parse_datetime(raw_start)
+        except ValueError:
+            slot = None
+    occurrence = find_occurrence(request.user, event_id, slot)
+    if occurrence is None or occurrence.row.is_cancelled:
         raise Http404
+    # An occurrence changed on its own is a row with its own times and
+    # invitees; one the rule gives is its series, at the slot asked for.
+    event = occurrence.row
     # Both the attendee list and the viewer's membership below read from
     # the members prefetch; building fresh querysets here would bypass the
     # cache and issue one query each.
@@ -99,18 +100,12 @@ def event_card(request, event_id):
     attending = [m for m in members if m.status != EventMember.Status.DECLINED]
     attendees = attending[:5]
 
-    # For recurring occurrences, override start/end with the occurrence's actual times
     occ_start = None
     occ_end = None
-    raw_start = request.GET.get("start")
-    if raw_start:
-        try:
-            occ_start = parse_datetime(raw_start)
-        except ValueError:
-            occ_start = None
-        if occ_start and event.start and event.end:
-            duration = event.end - event.start
-            occ_end = occ_start + duration
+    if occurrence.changed is None and occurrence.original_start is not None:
+        occ_start = occurrence.original_start
+        if event.end:
+            occ_end = occ_start + (event.end - event.start)
 
     is_owner = event.owner_id == request.user.id
     is_external = hasattr(event.calendar, "external_source")
@@ -137,6 +132,8 @@ def event_card(request, event_id):
             "invite_status": invite_status,
             "occ_start": occ_start,
             "occ_end": occ_end,
+            # What the card's actions name the occurrence by.
+            "occ_slot": occ_start.isoformat() if occ_start else "",
         },
     )
 

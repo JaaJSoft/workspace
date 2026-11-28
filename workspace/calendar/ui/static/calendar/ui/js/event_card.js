@@ -3,9 +3,9 @@
 window.calendarCard = window.createHoverCard({ className: 'event-card-popover', minSpace: 240 });
 
 /**
- * Show the card for a calendar event. Recurring virtual occurrences carry an
- * id of "masterUuid:isoDate" - the master is what the endpoint knows about,
- * the occurrence start is what tells it which instance to label.
+ * Show the card for a calendar event. One occurrence of a recurring event
+ * is named "seriesUuid:isoDate": the series is what the endpoint knows about,
+ * the slot is what tells it which occurrence to show.
  */
 window._eventCardShow = function(wrapper, eventId) {
   let fetchId = eventId;

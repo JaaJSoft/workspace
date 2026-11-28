@@ -13,8 +13,7 @@ EXDATE in UTC.
 from datetime import UTC, datetime
 from pathlib import Path
 
-from workspace.calendar.models import Event
-from workspace.calendar.recurrence import expand_recurring_events
+from .listing import listed
 
 EXPORTS = Path(__file__).resolve().parent / "ics"
 
@@ -60,10 +59,15 @@ def as_request(text):
 
 def occurrence_starts(calendar):
     """Every occurrence start of *calendar*'s series in March and April 2026."""
-    masters = Event.objects.filter(
-        calendar=calendar, recurrence_parent__isnull=True, is_recurring=True
+    events = listed(
+        calendar.owner,
+        datetime(2026, 3, 1, tzinfo=UTC),
+        datetime(2026, 5, 1, tzinfo=UTC),
+        tz=UTC,
+        declined=True,
     )
-    occurrences = expand_recurring_events(
-        masters, datetime(2026, 3, 1, tzinfo=UTC), datetime(2026, 5, 1, tzinfo=UTC)
+    return sorted(
+        datetime.fromisoformat(event["start"])
+        for event in events
+        if event["is_recurring"] and event["calendar"]["uuid"] == str(calendar.uuid)
     )
-    return sorted(datetime.fromisoformat(occ["start"]) for occ in occurrences)

@@ -48,7 +48,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
           }
         } else {
           const resp = await fetch(`/api/v1/calendars/${uuid}`, {
-            method: 'PUT',
+            method: 'PATCH',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
             body: JSON.stringify({ name: name.trim(), color }),
@@ -175,36 +175,6 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
     },
 
     // --- External Calendars ---
-    _loadExternalCalendars() {
-      fetch('/api/v1/external-calendars', { credentials: 'same-origin' })
-        .then(r => r.ok ? r.json() : [])
-        .then(data => {
-          this.externalCalendars = data;
-          // Make newly loaded external calendars visible by default
-          const saved = localStorage.getItem('calendarVisible');
-          if (!saved) {
-            data.forEach(c => { this.visibleCalendars[c.uuid] = true; });
-            this.visibleCalendars = { ...this.visibleCalendars };
-          } else {
-            // Ensure new external calendars get visible if not yet tracked
-            let changed = false;
-            data.forEach(c => {
-              if (!(c.uuid in this.visibleCalendars)) {
-                this.visibleCalendars[c.uuid] = true;
-                changed = true;
-              }
-            });
-            if (changed) {
-              this.visibleCalendars = { ...this.visibleCalendars };
-              this._saveVisibility();
-            }
-          }
-          if (this.calendar) this.calendar.refetchEvents();
-          this.refetchAgenda();
-        })
-        .catch(() => {});
-    },
-
     createExternalCalendar() {
       const defaultColor = this.calendarColors[(this.ownedCalendars.length + this.externalCalendars.length) % this.calendarColors.length];
       this.externalForm = { name: '', url: '', color: defaultColor };
@@ -221,11 +191,11 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
 
       this.savingExternal = true;
       try {
-        const resp = await fetch('/api/v1/external-calendars', {
+        const resp = await fetch('/api/v1/calendars', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ name: (name.trim() || gettext('External calendar')), url: url.trim(), color }),
+          body: JSON.stringify({ name: (name.trim() || gettext('External calendar')), source_url: url.trim(), color }),
         });
         if (resp.ok) {
           const ext = await resp.json();
@@ -255,7 +225,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       });
       if (!ok) return;
 
-      const resp = await fetch(`/api/v1/external-calendars/${ext.external_source.uuid}`, {
+      const resp = await fetch(`/api/v1/calendars/${ext.uuid}`, {
         method: 'DELETE',
         credentials: 'same-origin',
         headers: { 'X-CSRFToken': getCSRFToken() },
@@ -273,7 +243,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       if (this.syncingExternal[ext.uuid]) return;
       this.syncingExternal = { ...this.syncingExternal, [ext.uuid]: true };
       try {
-        await fetch(`/api/v1/external-calendars/${ext.external_source.uuid}/sync`, {
+        await fetch(`/api/v1/calendars/${ext.uuid}/sync`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'X-CSRFToken': getCSRFToken() },

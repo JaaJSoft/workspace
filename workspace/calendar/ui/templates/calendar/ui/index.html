@@ -157,7 +157,7 @@
                   <span class="agenda-date-weekday" x-text="group.weekday"></span>
                 </div>
                 <ul class="agenda-events">
-                  <template x-for="event in group.events" :key="event.uuid">
+                  <template x-for="event in group.events" :key="_occurrenceKey(event)">
                     <li>
                       <button
                         type="button"
@@ -165,7 +165,7 @@
                         :class="agendaEventClasses(event)"
                         @click="openViewPanel(event)"
                         @contextmenu.prevent="(e) => { window.calendarCard.scheduleHide($el); openContextMenu(e, event); }"
-                        @mouseenter="_hasHover && !ctxMenu.open && window._eventCardShow($el, event.uuid)"
+                        @mouseenter="_hasHover && !ctxMenu.open && window._eventCardShow($el, _occurrenceKey(event))"
                         @mouseleave="_hasHover && window.calendarCard.scheduleHide($el)"
                       >
                         <span class="agenda-event-time">

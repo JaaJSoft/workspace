@@ -607,17 +607,32 @@ Returns mail account UUIDs owned by the user. Use for filtering messages: `MailM
 #### Calendar - `workspace.calendar.queries`
 
 ```python
-from workspace.calendar.queries import visible_calendar_ids, visible_calendars, visible_events_q
+from workspace.calendar.queries import (
+    reachable_calendars, undeclined_events, visible_calendar_ids, visible_calendars, visible_events_q,
+)
+from workspace.calendar.services.event_listing import EventListing, find_occurrence
 
 # For calendar-level queries - all visible IDs (owned incl. external + subscribed):
 cal_ids = visible_calendar_ids(user)
+
+# The same calendars as one queryset, what the API lists and reads one from:
+calendars = reachable_calendars(user)
 
 # For UI display - split owned (excl. external) / subscribed querysets:
 owned, subscribed = visible_calendars(user)
 
 # For event-level queries (owned calendars + subscribed calendars + event membership):
 events = Event.objects.filter(visible_events_q(user), title__icontains=query)
+events = undeclined_events(events, user)      # without the invitations the user declined
+
+# What a person sees over time, recurring series expanded into occurrences:
+rows = EventListing(user, start=window_start, end=window_end)[:1000]   # each row has .data
+
+# One event, or with a slot one occurrence of a series - None when out of reach:
+occurrence = find_occurrence(user, event_uuid, original_start)
 ```
+
+An occurrence changed on its own is a row with its own invitees: `EventListing` and `find_occurrence` only show it to someone who can see that row, so a person invited to the series and taken off one occurrence finds its slot empty. Never draw the exceptions of a visible series without asking `visible_events_q` again.
 
 #### Files - `workspace.files.queries`
 

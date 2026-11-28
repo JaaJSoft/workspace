@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, timedelta
 from unittest.mock import patch
 
@@ -45,15 +46,15 @@ def _closed_while_validating(serializer_class, poll):
 def _slot_removed_before_lock(slot):
     """Delete *slot* as the vote takes the poll lock - what the owner's edit
     removing it looks like when it commits after the view read the request."""
-    from workspace.calendar.views import polls as poll_views
+    from workspace.calendar.services import polls as poll_service
 
-    real_lock = poll_views._lock_open_poll
+    real_lock = poll_service._lock_open_poll
 
     def lock(poll):
         PollSlot.objects.filter(pk=slot.pk).delete()
         return real_lock(poll)
 
-    return patch.object(poll_views, "_lock_open_poll", lock)
+    return patch.object(poll_service, "_lock_open_poll", lock)
 
 
 class PollTestMixin:
@@ -100,7 +101,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         tomorrow = (timezone.now() + timedelta(days=1)).isoformat()
         day_after = (timezone.now() + timedelta(days=2)).isoformat()
         resp = self.client.post(
-            "/api/v1/polls",
+            "/api/v1/calendar/polls",
             {
                 "title": "Team lunch",
                 "slots": [
@@ -113,7 +114,34 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["title"], "Team lunch")
         self.assertEqual(len(resp.data["slots"]), 2)
-        self.assertIn("share_token", resp.data)
+        poll = Poll.objects.get(uuid=resp.data["uuid"])
+        self.assertTrue(
+            resp.data["share_url"].endswith(
+                f"/calendar/polls/shared/{poll.share_token}"
+            )
+        )
+        # The answer of a create is the object a read answers.
+        read = self.client.get(f"/api/v1/calendar/polls/{poll.uuid}")
+        self.assertEqual(read.data, resp.data)
+
+    def test_create_poll_with_invitees(self):
+        self.client.force_authenticate(user=self.owner)
+        tomorrow = (timezone.now() + timedelta(days=1)).isoformat()
+        day_after = (timezone.now() + timedelta(days=2)).isoformat()
+        resp = self.client.post(
+            "/api/v1/calendar/polls",
+            {
+                "title": "Team lunch",
+                "slots": [{"start": tomorrow}, {"start": day_after}],
+                "invitees": [self.voter.id, self.owner.id],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            [user["username"] for user in resp.data["invitees"]], ["voter"]
+        )
+        self.assertTrue(Notification.objects.filter(recipient=self.voter).exists())
 
     def test_create_poll_with_description_and_end_times(self):
         self.client.force_authenticate(user=self.owner)
@@ -121,7 +149,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         end1 = (timezone.now() + timedelta(days=1, hours=2)).isoformat()
         start2 = (timezone.now() + timedelta(days=2)).isoformat()
         resp = self.client.post(
-            "/api/v1/polls",
+            "/api/v1/calendar/polls",
             {
                 "title": "Meeting",
                 "description": "Weekly sync",
@@ -143,7 +171,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         for start in ("soon", "", 12, None, "2026-02-30T10:00:00Z"):
             with self.subTest(start=start):
                 resp = self.client.post(
-                    "/api/v1/polls",
+                    "/api/v1/calendar/polls",
                     {
                         "title": "When?",
                         "slots": [
@@ -163,7 +191,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         earlier = "2026-06-01T10:00:00+02:00"
         later = "2026-06-01T09:00:00Z"
         resp = self.client.post(
-            "/api/v1/polls",
+            "/api/v1/calendar/polls",
             {"title": "When?", "slots": [{"start": later}, {"start": earlier}]},
             format="json",
         )
@@ -175,7 +203,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
     def test_create_poll_requires_min_2_slots(self):
         self.client.force_authenticate(user=self.owner)
         resp = self.client.post(
-            "/api/v1/polls",
+            "/api/v1/calendar/polls",
             {
                 "title": "Bad poll",
                 "slots": [{"start": timezone.now().isoformat()}],
@@ -186,7 +214,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
 
     def test_create_poll_requires_auth(self):
         resp = self.client.post(
-            "/api/v1/polls",
+            "/api/v1/calendar/polls",
             {
                 "title": "Nope",
                 "slots": [
@@ -200,58 +228,96 @@ class PollCRUDTests(PollTestMixin, APITestCase):
             resp.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
         )
 
+    def _titles(self, user, **params):
+        self.client.force_authenticate(user=user)
+        resp = self.client.get("/api/v1/calendar/polls", params)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return [poll["title"] for poll in resp.data]
+
     def test_list_polls(self):
-        self.client.force_authenticate(user=self.owner)
         Poll.objects.create(title="P1", created_by=self.owner)
         Poll.objects.create(title="P2", created_by=self.voter)
-        resp = self.client.get("/api/v1/polls")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(self._titles(self.owner), ["P1"])
 
-    def test_list_polls_filter_status_closed(self):
-        self.client.force_authenticate(user=self.owner)
-        Poll.objects.create(title="Open", created_by=self.owner, status="open")
-        Poll.objects.create(title="Closed", created_by=self.owner, status="closed")
-        resp = self.client.get("/api/v1/polls?status=closed")
-        self.assertEqual(len(resp.data), 1)
-        self.assertEqual(resp.data[0]["title"], "Closed")
-
-    def test_list_polls_filter_status_all(self):
-        self.client.force_authenticate(user=self.owner)
-        Poll.objects.create(title="Open", created_by=self.owner, status="open")
-        Poll.objects.create(title="Closed", created_by=self.owner, status="closed")
-        resp = self.client.get("/api/v1/polls?status=all")
-        self.assertEqual(len(resp.data), 2)
-
-    def test_list_polls_filter_shared(self):
-        """Polls where user voted or is invited but didn't create."""
-        self.client.force_authenticate(user=self.voter)
+    def test_a_listed_poll_is_the_object_a_read_answers(self):
         poll, slot1, _ = self._make_poll_with_slots()
         PollVote.objects.create(slot=slot1, user=self.voter, choice="yes")
-        resp = self.client.get("/api/v1/polls?filter=shared")
-        self.assertEqual(len(resp.data), 1)
-        self.assertEqual(resp.data[0]["title"], "Test poll")
+        PollInvitee.objects.create(poll=poll, user=self.voter)
+        self.client.force_authenticate(user=self.owner)
+        listed = self.client.get("/api/v1/calendar/polls").data
+        read = self.client.get(f"/api/v1/calendar/polls/{poll.uuid}").data
+        self.assertEqual(listed, [read])
+        self.assertEqual(read["participant_count"], 1)
 
-    def test_list_polls_filter_shared_via_invite(self):
-        """Polls where user is invited (no vote yet) appear in shared filter."""
-        self.client.force_authenticate(user=self.voter)
+    def test_listing_polls_takes_a_fixed_number_of_queries(self):
+        for number in range(3):
+            poll, slot1, _ = self._make_poll_with_slots(title=f"P{number}")
+            PollVote.objects.create(slot=slot1, user=self.voter, choice="yes")
+            PollInvitee.objects.create(poll=poll, user=self.voter)
+        self.client.force_authenticate(user=self.owner)
+        # The polls, their slots, their invitees, their votes.
+        with self.assertNumQueries(4):
+            resp = self.client.get("/api/v1/calendar/polls")
+        self.assertEqual(len(resp.data), 3)
+
+    def test_the_list_is_paged_newest_first(self):
+        for number in range(3):
+            Poll.objects.create(title=f"P{number}", created_by=self.owner)
+        self.client.force_authenticate(user=self.owner)
+        first = self.client.get("/api/v1/calendar/polls", {"limit": 2})
+        self.assertEqual([poll["title"] for poll in first.data], ["P2", "P1"])
+        self.assertEqual(first["X-Has-More"], "true")
+        rest = self.client.get("/api/v1/calendar/polls", {"limit": 2, "offset": 2})
+        self.assertEqual([poll["title"] for poll in rest.data], ["P0"])
+        self.assertEqual(rest["X-Has-More"], "false")
+
+    def test_list_polls_filter_status(self):
+        Poll.objects.create(title="Open", created_by=self.owner, status="open")
+        Poll.objects.create(title="Closed", created_by=self.owner, status="closed")
+        self.assertEqual(self._titles(self.owner, status="closed"), ["Closed"])
+        self.assertEqual(self._titles(self.owner, status="open"), ["Open"])
+        self.assertEqual(
+            sorted(self._titles(self.owner, status="open,closed")), ["Closed", "Open"]
+        )
+        # No status asked for is no filter on it.
+        self.assertEqual(sorted(self._titles(self.owner)), ["Closed", "Open"])
+
+    def test_a_filter_value_that_cannot_be_read_is_refused(self):
+        self.client.force_authenticate(user=self.owner)
+        for params in ({"status": "all"}, {"scope": "theirs"}):
+            with self.subTest(params=params):
+                resp = self.client.get("/api/v1/calendar/polls", params)
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(list(resp.data), list(params))
+
+    def test_list_polls_scope_shared(self):
+        """Polls where user voted or is invited but didn't create."""
+        poll, slot1, _ = self._make_poll_with_slots()
+        PollVote.objects.create(slot=slot1, user=self.voter, choice="yes")
+        Poll.objects.create(title="Mine", created_by=self.voter)
+        self.assertEqual(self._titles(self.voter, scope="shared"), ["Test poll"])
+        self.assertEqual(self._titles(self.voter, scope="mine"), ["Mine"])
+        self.assertEqual(
+            sorted(self._titles(self.voter, scope="all")), ["Mine", "Test poll"]
+        )
+        self.assertEqual(sorted(self._titles(self.voter)), ["Mine", "Test poll"])
+
+    def test_list_polls_scope_shared_via_invite(self):
+        """Polls where user is invited (no vote yet) appear in the shared scope."""
         poll, _, _ = self._make_poll_with_slots()
         PollInvitee.objects.create(poll=poll, user=self.voter)
-        resp = self.client.get("/api/v1/polls?filter=shared")
-        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(self._titles(self.voter, scope="shared"), ["Test poll"])
 
-    def test_list_polls_filter_shared_excludes_own(self):
-        """Own polls don't appear in shared filter even if voted."""
-        self.client.force_authenticate(user=self.owner)
+    def test_list_polls_scope_shared_excludes_own(self):
+        """Own polls don't appear in the shared scope even if voted."""
         poll, slot1, _ = self._make_poll_with_slots()
         PollVote.objects.create(slot=slot1, user=self.owner, choice="yes")
-        resp = self.client.get("/api/v1/polls?filter=shared")
-        self.assertEqual(len(resp.data), 0)
+        self.assertEqual(self._titles(self.owner, scope="shared"), [])
 
     def test_get_poll_detail(self):
         self.client.force_authenticate(user=self.voter)
         poll, _, _ = self._make_poll_with_slots()
-        resp = self.client.get(f"/api/v1/polls/{poll.uuid}")
+        resp = self.client.get(f"/api/v1/calendar/polls/{poll.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["title"], "Test poll")
         self.assertEqual(len(resp.data["slots"]), 2)
@@ -266,7 +332,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
             poll=poll,
         )
         self.client.force_authenticate(user=self.owner)
-        resp = self.client.get(f"/api/v1/polls/{poll.uuid}")
+        resp = self.client.get(f"/api/v1/calendar/polls/{poll.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         notif.refresh_from_db()
         self.assertIsNotNone(notif.read_at)
@@ -275,7 +341,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         self.client.force_authenticate(user=self.owner)
         poll = Poll.objects.create(title="Old title", created_by=self.owner)
         resp = self.client.patch(
-            f"/api/v1/polls/{poll.uuid}",
+            f"/api/v1/calendar/polls/{poll.uuid}",
             {"title": "New title"},
             format="json",
         )
@@ -293,7 +359,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
 
         new_start = (timezone.now() + timedelta(days=3)).isoformat()
         resp = self.client.patch(
-            f"/api/v1/polls/{poll.uuid}",
+            f"/api/v1/calendar/polls/{poll.uuid}",
             {
                 "slots": [
                     {"uuid": str(slot1.uuid), "start": slot1.start.isoformat()},
@@ -329,7 +395,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
 
         # Remove slot3, keep slot1 and slot2
         resp = self.client.patch(
-            f"/api/v1/polls/{poll.uuid}",
+            f"/api/v1/calendar/polls/{poll.uuid}",
             {
                 "slots": [
                     {"uuid": str(slot1.uuid), "start": slot1.start.isoformat()},
@@ -361,7 +427,7 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         PollVote.objects.create(slot=slot1, user=bystander, choice="yes")
 
         resp = self.client.patch(
-            f"/api/v1/polls/{poll.uuid}",
+            f"/api/v1/calendar/polls/{poll.uuid}",
             {
                 "slots": [
                     {"uuid": str(slot1.uuid), "start": slot1.start.isoformat()},
@@ -379,24 +445,27 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         self.client.force_authenticate(user=self.voter)
         poll = Poll.objects.create(title="Not yours", created_by=self.owner)
         resp = self.client.patch(
-            f"/api/v1/polls/{poll.uuid}",
+            f"/api/v1/calendar/polls/{poll.uuid}",
             {"title": "Hacked"},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        poll.refresh_from_db()
+        self.assertEqual(poll.title, "Not yours")
 
     def test_delete_poll(self):
         self.client.force_authenticate(user=self.owner)
         poll = Poll.objects.create(title="Delete me", created_by=self.owner)
-        resp = self.client.delete(f"/api/v1/polls/{poll.uuid}")
+        resp = self.client.delete(f"/api/v1/calendar/polls/{poll.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Poll.objects.filter(uuid=poll.uuid).exists())
 
     def test_cannot_delete_others_poll(self):
         self.client.force_authenticate(user=self.voter)
         poll = Poll.objects.create(title="Not yours", created_by=self.owner)
-        resp = self.client.delete(f"/api/v1/polls/{poll.uuid}")
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        resp = self.client.delete(f"/api/v1/calendar/polls/{poll.uuid}")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Poll.objects.filter(pk=poll.pk).exists())
 
 
 # ── Authenticated Votes ──────────────────────────────────────────
@@ -410,11 +479,11 @@ class PollVoteTests(PollTestMixin, APITestCase):
     def test_authenticated_vote(self):
         self.client.force_authenticate(user=self.voter)
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/vote",
+            f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
             {
                 "votes": [
-                    {"slot_id": str(self.slot1.uuid), "choice": "yes"},
-                    {"slot_id": str(self.slot2.uuid), "choice": "no"},
+                    {"slot": str(self.slot1.uuid), "choice": "yes"},
+                    {"slot": str(self.slot2.uuid), "choice": "no"},
                 ],
             },
             format="json",
@@ -426,9 +495,9 @@ class PollVoteTests(PollTestMixin, APITestCase):
         self.client.force_authenticate(user=self.voter)
         PollVote.objects.create(slot=self.slot1, user=self.voter, choice="no")
         self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/vote",
+            f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
             {
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
             },
             format="json",
         )
@@ -439,9 +508,9 @@ class PollVoteTests(PollTestMixin, APITestCase):
         self.client.force_authenticate(user=self.voter)
         other_poll, other_slot, _ = self._make_poll_with_slots(title="Other")
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/vote",
+            f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
             {
-                "votes": [{"slot_id": str(other_slot.uuid), "choice": "yes"}],
+                "votes": [{"slot": str(other_slot.uuid), "choice": "yes"}],
             },
             format="json",
         )
@@ -453,23 +522,24 @@ class PollVoteTests(PollTestMixin, APITestCase):
         self.poll.save()
         self.client.force_authenticate(user=self.voter)
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/vote",
+            f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
             {
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
             },
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertFalse(PollVote.objects.exists())
 
     def test_a_vote_racing_the_finalize_is_refused_like_a_late_one(self):
         self.client.force_authenticate(user=self.voter)
         with _closed_while_validating(VoteSubmitSerializer, self.poll):
             resp = self.client.post(
-                f"/api/v1/polls/{self.poll.uuid}/vote",
-                {"votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}]},
+                f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
+                {"votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}]},
                 format="json",
             )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertFalse(PollVote.objects.filter(user=self.voter).exists())
 
     def test_a_slot_removed_during_the_vote_is_skipped_and_the_rest_lands(self):
@@ -477,11 +547,11 @@ class PollVoteTests(PollTestMixin, APITestCase):
         removed_uuid = self.slot2.uuid
         with _slot_removed_before_lock(self.slot2):
             resp = self.client.post(
-                f"/api/v1/polls/{self.poll.uuid}/vote",
+                f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
                 {
                     "votes": [
-                        {"slot_id": str(self.slot1.uuid), "choice": "yes"},
-                        {"slot_id": str(removed_uuid), "choice": "no"},
+                        {"slot": str(self.slot1.uuid), "choice": "yes"},
+                        {"slot": str(removed_uuid), "choice": "no"},
                     ],
                 },
                 format="json",
@@ -499,9 +569,9 @@ class PollVoteTests(PollTestMixin, APITestCase):
 
     def test_vote_requires_auth(self):
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/vote",
+            f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
             {
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
             },
             format="json",
         )
@@ -519,9 +589,9 @@ class PollVoteTests(PollTestMixin, APITestCase):
         )
         self.client.force_authenticate(user=self.voter)
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/vote",
+            f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
             {
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
             },
             format="json",
         )
@@ -532,11 +602,11 @@ class PollVoteTests(PollTestMixin, APITestCase):
     def test_vote_response_includes_counts(self):
         self.client.force_authenticate(user=self.voter)
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/vote",
+            f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
             {
                 "votes": [
-                    {"slot_id": str(self.slot1.uuid), "choice": "yes"},
-                    {"slot_id": str(self.slot2.uuid), "choice": "maybe"},
+                    {"slot": str(self.slot1.uuid), "choice": "yes"},
+                    {"slot": str(self.slot2.uuid), "choice": "maybe"},
                 ],
             },
             format="json",
@@ -556,11 +626,11 @@ class GuestVoteTests(PollTestMixin, APITestCase):
 
     def test_guest_vote_via_shared_link(self):
         resp = self.client.post(
-            f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}/vote",
             {
                 "guest_name": "Alice",
                 "guest_email": "alice@ext.com",
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
             },
             format="json",
         )
@@ -571,10 +641,10 @@ class GuestVoteTests(PollTestMixin, APITestCase):
 
     def _guest_vote(self, client, name, choice, **extra):
         return client.post(
-            f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}/vote",
             {
                 "guest_name": name,
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": choice}],
+                "votes": [{"slot": str(self.slot1.uuid), "choice": choice}],
                 **extra,
             },
             format="json",
@@ -609,11 +679,11 @@ class GuestVoteTests(PollTestMixin, APITestCase):
 
     def test_guest_vote_generates_token_when_empty(self):
         resp = self.client.post(
-            f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}/vote",
             {
                 "guest_name": "Carol",
                 "voter_token": "",
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
             },
             format="json",
         )
@@ -631,21 +701,23 @@ class GuestVoteTests(PollTestMixin, APITestCase):
     def test_guest_vote_restores_on_get(self):
         """The voter cookie brings a guest's previous votes back."""
         self.client.post(
-            f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}/vote",
             {
                 "guest_name": "Eve",
                 "guest_email": "eve@test.com",
                 "votes": [
-                    {"slot_id": str(self.slot1.uuid), "choice": "yes"},
-                    {"slot_id": str(self.slot2.uuid), "choice": "maybe"},
+                    {"slot": str(self.slot1.uuid), "choice": "yes"},
+                    {"slot": str(self.slot2.uuid), "choice": "maybe"},
                 ],
             },
             format="json",
         )
-        resp = self.client.get(f"/api/v1/polls/shared/{self.poll.share_token}")
+        resp = self.client.get(f"/api/v1/calendar/polls/shared/{self.poll.share_token}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["my_votes"][str(self.slot1.uuid)], "yes")
-        self.assertEqual(resp.data["my_votes"][str(self.slot2.uuid)], "maybe")
+        self.assertEqual(
+            {vote["slot"]: vote["choice"] for vote in resp.data["votes"]},
+            {str(self.slot1.uuid): "yes", str(self.slot2.uuid): "maybe"},
+        )
         self.assertEqual(resp.data["my_guest_name"], "Eve")
         self.assertEqual(resp.data["my_guest_email"], "eve@test.com")
         self.assertTrue(all(v["is_mine"] for v in resp.data["votes"]))
@@ -653,16 +725,18 @@ class GuestVoteTests(PollTestMixin, APITestCase):
     def test_shared_payload_marks_only_the_callers_votes_as_mine(self):
         self._stored_guest_vote()
         self._guest_vote(self.client, "Eve", "maybe")
-        resp = self.client.get(f"/api/v1/polls/shared/{self.poll.share_token}")
+        resp = self.client.get(f"/api/v1/calendar/polls/shared/{self.poll.share_token}")
         mine = {v["name"]: v["is_mine"] for v in resp.data["votes"]}
         self.assertEqual(mine, {"Eve": True, "Grace": False})
 
     def test_poll_payloads_never_expose_guest_tokens_or_emails(self):
         vote = self._stored_guest_vote()
         self.client.force_authenticate(user=self.voter)
-        detail = self.client.get(f"/api/v1/polls/{self.poll.uuid}")
+        detail = self.client.get(f"/api/v1/calendar/polls/{self.poll.uuid}")
         self.client.force_authenticate(user=None)
-        shared = self.client.get(f"/api/v1/polls/shared/{self.poll.share_token}")
+        shared = self.client.get(
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}"
+        )
         for resp in (detail, shared):
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
             body = resp.content.decode()
@@ -710,7 +784,7 @@ class GuestVoteTests(PollTestMixin, APITestCase):
 
     def test_shared_poll_shows_anonymous_visitors_only_display_names(self):
         users = self._public_payload_fixture()
-        resp = self.client.get(f"/api/v1/polls/shared/{self.poll.share_token}")
+        resp = self.client.get(f"/api/v1/calendar/polls/shared/{self.poll.share_token}")
         self._assert_public_payload(resp, users)
 
     def test_guest_vote_response_shows_only_display_names(self):
@@ -723,11 +797,12 @@ class GuestVoteTests(PollTestMixin, APITestCase):
     def test_shared_get_ignores_a_voter_token_query_parameter(self):
         vote = self._stored_guest_vote()
         resp = self.client.get(
-            f"/api/v1/polls/shared/{self.poll.share_token}",
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}",
             {"voter_token": vote.voter_token},
         )
-        self.assertNotIn("my_votes", resp.data)
-        self.assertNotIn("my_guest_email", resp.data)
+        self.assertFalse(any(v["is_mine"] for v in resp.data["votes"]))
+        self.assertEqual(resp.data["my_guest_name"], "")
+        self.assertEqual(resp.data["my_guest_email"], "")
 
     def test_guest_cannot_overwrite_another_guests_votes_by_sending_their_token(self):
         vote = self._stored_guest_vote()
@@ -737,60 +812,64 @@ class GuestVoteTests(PollTestMixin, APITestCase):
         self.assertEqual(vote.guest_name, "Grace")
         self.assertEqual(PollVote.objects.filter(guest_name="Mallory").count(), 1)
 
-    def test_guest_vote_get_without_token_has_no_my_votes(self):
+    def test_a_visitor_who_never_voted_has_no_vote_of_their_own(self):
+        self._stored_guest_vote()
         resp = self.client.get(
-            f"/api/v1/polls/shared/{self.poll.share_token}",
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertNotIn("my_votes", resp.data)
+        self.assertEqual([v["is_mine"] for v in resp.data["votes"]], [False])
+        self.assertEqual(resp.data["my_guest_name"], "")
+        self.assertEqual(resp.data["my_guest_email"], "")
 
     def test_shared_link_get(self):
         resp = self.client.get(
-            f"/api/v1/polls/shared/{self.poll.share_token}",
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["title"], "Test poll")
 
     def test_shared_link_invalid_token(self):
-        resp = self.client.get("/api/v1/polls/shared/nonexistent")
+        resp = self.client.get("/api/v1/calendar/polls/shared/nonexistent")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_guest_cannot_vote_on_closed_poll(self):
         self.poll.status = Poll.Status.CLOSED
         self.poll.save()
         resp = self.client.post(
-            f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}/vote",
             {
                 "guest_name": "Late",
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
             },
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertFalse(PollVote.objects.exists())
 
     def test_a_guest_vote_racing_the_finalize_is_refused_like_a_late_one(self):
         with _closed_while_validating(GuestVoteSubmitSerializer, self.poll):
             resp = self.client.post(
-                f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+                f"/api/v1/calendar/polls/shared/{self.poll.share_token}/vote",
                 {
                     "guest_name": "Late",
-                    "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                    "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
                 },
                 format="json",
             )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertFalse(PollVote.objects.filter(guest_name="Late").exists())
 
     def test_a_slot_removed_during_a_guest_vote_is_skipped_and_the_rest_lands(self):
         removed_uuid = self.slot2.uuid
         with _slot_removed_before_lock(self.slot2):
             resp = self.client.post(
-                f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+                f"/api/v1/calendar/polls/shared/{self.poll.share_token}/vote",
                 {
                     "guest_name": "Racer",
                     "votes": [
-                        {"slot_id": str(self.slot1.uuid), "choice": "yes"},
-                        {"slot_id": str(removed_uuid), "choice": "no"},
+                        {"slot": str(self.slot1.uuid), "choice": "yes"},
+                        {"slot": str(removed_uuid), "choice": "no"},
                     ],
                 },
                 format="json",
@@ -808,10 +887,10 @@ class GuestVoteTests(PollTestMixin, APITestCase):
 
     def test_guest_vote_rate_limit(self):
         cache.clear()
-        url = f"/api/v1/polls/shared/{self.poll.share_token}/vote"
+        url = f"/api/v1/calendar/polls/shared/{self.poll.share_token}/vote"
         payload = {
             "guest_name": "Spammer",
-            "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+            "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
         }
         for _ in range(10):
             resp = self.client.post(url, payload, format="json")
@@ -822,10 +901,10 @@ class GuestVoteTests(PollTestMixin, APITestCase):
 
     def _vote_from(self, forwarded_for):
         return self.client.post(
-            f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+            f"/api/v1/calendar/polls/shared/{self.poll.share_token}/vote",
             {
                 "guest_name": "Spammer",
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                "votes": [{"slot": str(self.slot1.uuid), "choice": "yes"}],
             },
             format="json",
             HTTP_X_FORWARDED_FOR=forwarded_for,
@@ -875,8 +954,8 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         PollInvitee.objects.create(poll=self.poll, user=self.voter)
         self.client.force_authenticate(user=self.owner)
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/finalize",
-            {"slot_id": str(self.slot.uuid)},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot": str(self.slot.uuid)},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -913,8 +992,8 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         Calendar.objects.create(name="B inbox", owner=self.owner, mail_account=account)
         self.client.force_authenticate(user=self.owner)
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/finalize",
-            {"slot_id": str(self.slot.uuid)},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot": str(self.slot.uuid)},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -929,8 +1008,8 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         PollVote.objects.create(slot=self.slot, user=no_voter, choice="no")
         self.client.force_authenticate(user=self.owner)
         self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/finalize",
-            {"slot_id": str(self.slot.uuid)},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot": str(self.slot.uuid)},
             format="json",
         )
         notif = Notification.objects.get(recipient=no_voter)
@@ -938,7 +1017,7 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         self.assertIsNone(notif.event_id)
         self.assertIn(f"poll={self.poll.pk}", notif.url)
         self.client.force_authenticate(user=no_voter)
-        resp = self.client.get(f"/api/v1/polls/{self.poll.uuid}")
+        resp = self.client.get(f"/api/v1/calendar/polls/{self.poll.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         notif.refresh_from_db()
         self.assertIsNotNone(notif.read_at)
@@ -946,8 +1025,8 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
     def test_finalize_sets_chosen_slot(self):
         self.client.force_authenticate(user=self.owner)
         self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/finalize",
-            {"slot_id": str(self.slot.uuid)},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot": str(self.slot.uuid)},
             format="json",
         )
         self.poll.refresh_from_db()
@@ -959,8 +1038,8 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         PollVote.objects.create(slot=self.slot, user=no_voter, choice="no")
         self.client.force_authenticate(user=self.owner)
         self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/finalize",
-            {"slot_id": str(self.slot.uuid)},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot": str(self.slot.uuid)},
             format="json",
         )
         self.poll.refresh_from_db()
@@ -973,8 +1052,8 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         PollVote.objects.create(slot=self.slot, user=maybe_voter, choice="maybe")
         self.client.force_authenticate(user=self.owner)
         self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/finalize",
-            {"slot_id": str(self.slot.uuid)},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot": str(self.slot.uuid)},
             format="json",
         )
         self.poll.refresh_from_db()
@@ -985,22 +1064,46 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
     def test_only_creator_can_finalize(self):
         self.client.force_authenticate(user=self.voter)
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/finalize",
-            {"slot_id": str(self.slot.uuid)},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot": str(self.slot.uuid)},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.poll.refresh_from_db()
+        self.assertEqual(self.poll.status, Poll.Status.OPEN)
+
+    def test_a_slot_of_another_poll_is_refused_like_one_that_does_not_exist(self):
+        _, foreign, _ = self._make_poll_with_slots(title="Other")
+        self.client.force_authenticate(user=self.owner)
+
+        def refusal(slot_uuid):
+            resp = self.client.post(
+                f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+                {"slot": str(slot_uuid)},
+                format="json",
+            )
+            return resp.status_code, resp.content.replace(
+                str(slot_uuid).encode(), b"<uuid>"
+            )
+
+        absent = refusal(uuid.uuid4())
+        self.assertEqual(absent[0], status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(refusal(foreign.uuid), absent)
+        self.poll.refresh_from_db()
+        self.assertEqual(self.poll.status, Poll.Status.OPEN)
+        self.assertFalse(Event.objects.exists())
 
     def test_cannot_finalize_closed_poll(self):
         self.poll.status = Poll.Status.CLOSED
         self.poll.save()
         self.client.force_authenticate(user=self.owner)
         resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/finalize",
-            {"slot_id": str(self.slot.uuid)},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot": str(self.slot.uuid)},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertFalse(Event.objects.exists())
 
     def test_a_concurrent_finalize_creates_no_second_event(self):
         """The other finalize closes the poll after this one read it as open;
@@ -1009,16 +1112,16 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         self.client.force_authenticate(user=self.owner)
         with _closed_while_validating(PollFinalizeSerializer, self.poll):
             resp = self.client.post(
-                f"/api/v1/polls/{self.poll.uuid}/finalize",
-                {"slot_id": str(self.slot.uuid)},
+                f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+                {"slot": str(self.slot.uuid)},
                 format="json",
             )
         # The 404 rolled back the request's transaction, the stand-in for the
         # other finalize's close included.
         Poll.objects.filter(pk=self.poll.pk).update(status=Poll.Status.CLOSED)
         already_closed = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/finalize",
-            {"slot_id": str(self.slot.uuid)},
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot": str(self.slot.uuid)},
             format="json",
         )
         self.assertEqual(
@@ -1035,115 +1138,114 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
 
 
 class PollInviteTests(PollTestMixin, APITestCase):
+    """The invitees of a poll are one field of it: a PATCH names them all."""
+
     def setUp(self):
         super().setUp()
         self.poll, self.slot1, self.slot2 = self._make_poll_with_slots()
 
-    def test_invite_user(self):
-        self.client.force_authenticate(user=self.owner)
-        resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.voter.id]},
+    def _invite(self, *users, by=None):
+        self.client.force_authenticate(user=by or self.owner)
+        return self.client.patch(
+            f"/api/v1/calendar/polls/{self.poll.uuid}",
+            {"invitees": [user.id for user in users]},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(
-            PollInvitee.objects.filter(poll=self.poll, user=self.voter).exists()
+
+    def _invited(self):
+        return set(
+            PollInvitee.objects.filter(poll=self.poll).values_list("user_id", flat=True)
         )
-        self.assertEqual(len(resp.data["invitees"]), 1)
+
+    def test_invite_user(self):
+        resp = self._invite(self.voter)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._invited(), {self.voter.id})
+        self.assertEqual(
+            [user["username"] for user in resp.data["invitees"]], ["voter"]
+        )
         notif = Notification.objects.get(recipient=self.voter)
         self.assertEqual(notif.poll_id, self.poll.pk)
 
     def test_invite_excludes_creator(self):
-        self.client.force_authenticate(user=self.owner)
-        resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.owner.id]},
-            format="json",
-        )
+        resp = self._invite(self.owner)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertFalse(
-            PollInvitee.objects.filter(poll=self.poll, user=self.owner).exists()
-        )
+        self.assertEqual(self._invited(), set())
 
-    def test_invite_duplicate_is_idempotent(self):
+    def test_inviting_again_changes_nothing(self):
         PollInvitee.objects.create(poll=self.poll, user=self.voter)
-        self.client.force_authenticate(user=self.owner)
-        resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.voter.id]},
-            format="json",
-        )
+        resp = self._invite(self.voter)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(
             PollInvitee.objects.filter(poll=self.poll, user=self.voter).count(), 1
         )
+        self.assertFalse(Notification.objects.filter(recipient=self.voter).exists())
 
     def test_reinviting_notifies_only_the_new_invitees(self):
         PollInvitee.objects.create(poll=self.poll, user=self.voter)
         newcomer = User.objects.create_user(username="newcomer", password="x")
-        self.client.force_authenticate(user=self.owner)
 
-        resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.voter.id, newcomer.id]},
-            format="json",
-        )
+        resp = self._invite(self.voter, newcomer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._invited(), {self.voter.id, newcomer.id})
         self.assertFalse(Notification.objects.filter(recipient=self.voter).exists())
         self.assertTrue(Notification.objects.filter(recipient=newcomer).exists())
 
+    def test_a_patch_that_names_no_invitees_leaves_them_alone(self):
+        PollInvitee.objects.create(poll=self.poll, user=self.voter)
+        self.client.force_authenticate(user=self.owner)
+        resp = self.client.patch(
+            f"/api/v1/calendar/polls/{self.poll.uuid}",
+            {"title": "Renamed"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._invited(), {self.voter.id})
+
     def test_a_failed_notification_leaves_nobody_invited(self):
         # Otherwise a retry skips them as already invited and never tells them.
-        self.client.force_authenticate(user=self.owner)
         self.client.raise_request_exception = False
 
         with patch(
-            "workspace.calendar.views.polls.notify_in_languages",
+            "workspace.calendar.services.polls.notify_in_languages",
             side_effect=RuntimeError("push down"),
         ):
-            resp = self.client.post(
-                f"/api/v1/polls/{self.poll.uuid}/invite",
-                {"user_ids": [self.voter.id]},
-                format="json",
-            )
+            resp = self._invite(self.voter)
 
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         self.assertFalse(PollInvitee.objects.filter(poll=self.poll).exists())
 
     def test_only_creator_can_invite(self):
-        self.client.force_authenticate(user=self.voter)
-        resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.owner.id]},
-            format="json",
-        )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        resp = self._invite(self.owner, by=self.voter)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._invited(), set())
 
     def test_cannot_invite_to_closed_poll(self):
         self.poll.status = Poll.Status.CLOSED
         self.poll.save()
-        self.client.force_authenticate(user=self.owner)
-        resp = self.client.post(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.voter.id]},
-            format="json",
-        )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        resp = self._invite(self.voter)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(self._invited(), set())
 
-    def test_remove_invitee(self):
-        PollInvitee.objects.create(poll=self.poll, user=self.voter)
+    def test_a_closed_poll_can_still_be_renamed(self):
+        self.poll.status = Poll.Status.CLOSED
+        self.poll.save()
         self.client.force_authenticate(user=self.owner)
-        resp = self.client.delete(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.voter.id]},
+        resp = self.client.patch(
+            f"/api/v1/calendar/polls/{self.poll.uuid}",
+            {"title": "Renamed"},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertFalse(
-            PollInvitee.objects.filter(poll=self.poll, user=self.voter).exists()
-        )
+        self.assertEqual(resp.data["title"], "Renamed")
+
+    def test_remove_invitee(self):
+        PollInvitee.objects.create(poll=self.poll, user=self.voter)
+        resp = self._invite()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._invited(), set())
+        self.assertEqual(resp.data["invitees"], [])
 
     def test_remove_invitee_deletes_their_votes(self):
         PollInvitee.objects.create(poll=self.poll, user=self.voter)
@@ -1151,12 +1253,7 @@ class PollInviteTests(PollTestMixin, APITestCase):
         PollVote.objects.create(slot=self.slot2, user=self.voter, choice="maybe")
         self.assertEqual(PollVote.objects.filter(user=self.voter).count(), 2)
 
-        self.client.force_authenticate(user=self.owner)
-        self.client.delete(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.voter.id]},
-            format="json",
-        )
+        self._invite()
         self.assertEqual(PollVote.objects.filter(user=self.voter).count(), 0)
 
     def test_remove_invitee_only_deletes_votes_for_that_poll(self):
@@ -1167,12 +1264,7 @@ class PollInviteTests(PollTestMixin, APITestCase):
         other_poll, other_slot, _ = self._make_poll_with_slots(title="Other")
         PollVote.objects.create(slot=other_slot, user=self.voter, choice="yes")
 
-        self.client.force_authenticate(user=self.owner)
-        self.client.delete(
-            f"/api/v1/polls/{self.poll.uuid}/invite",
-            {"user_ids": [self.voter.id]},
-            format="json",
-        )
+        self._invite()
         # Vote on other poll should still exist
         self.assertTrue(
             PollVote.objects.filter(slot=other_slot, user=self.voter).exists()

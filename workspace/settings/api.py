@@ -112,11 +112,10 @@ SPECTACULAR_SETTINGS = {
         },
         {
             "name": "Calendar",
-            "description": "Calendars and events.",
-        },
-        {
-            "name": "Calendar - External",
-            "description": "Subscriptions to external ICS calendar feeds.",
+            "description": (
+                "Calendars, the ones filled from an external ICS feed included, "
+                "and events."
+            ),
         },
         {
             "name": "Calendar - Polls",

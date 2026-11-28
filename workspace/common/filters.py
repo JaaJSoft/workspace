@@ -90,6 +90,12 @@ class _ValuesField(forms.Field):
         ]
 
 
+def without_none(values):
+    """The values of a ``MultiValueFilter`` a ``method`` was handed, and
+    whether the word ``none`` was among them."""
+    return [value for value in values if value is not _NO_VALUE], _NO_VALUE in values
+
+
 @extend_schema_field({"type": "array", "items": {"type": "string"}})
 class MultiValueFilter(django_filters.Filter):
     """One filter, several values: ``tag=a&tag=b`` or ``tag=a,b``, matching

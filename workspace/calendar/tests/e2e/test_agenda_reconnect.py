@@ -96,7 +96,7 @@ class AgendaReconnectTests(PlaywrightTestCase):
         )
         # What the stream script dispatches each time the stream reopens.
         with self.page.expect_response(
-            lambda r: "/api/v1/events?" in r.url and "after=" in r.url
+            lambda r: "/api/v1/events?" in r.url and "end=" not in r.url
         ):
             self.page.evaluate("window.dispatchEvent(new CustomEvent('sse:reconnect'))")
         # Two frames: one for Alpine to render the swap, one to sample it.
